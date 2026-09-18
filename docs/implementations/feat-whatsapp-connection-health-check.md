@@ -75,31 +75,72 @@ apply_connection_status_change(db, connection, new_status)  [novo, extraído do 
 | `backend-core/app/services/whatsapp_connections.py` | Nova função `apply_connection_status_change(db, connection, new_status)` — move a lógica de `whatsapp_instances.py:380-461` (transição, cooldown, os dois emails, updates de `disconnect_alert_sent_at`/`last_disconnect_email_at`) quase verbatim |
 | `backend-core/app/api/whatsapp_instances.py` | `connection_event()` passa a só extrair `status_value` e chamar `connections_service.apply_connection_status_change(db, connection, status_value)` — remove ~70 linhas duplicadas |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `d344ffe` | Extraída `apply_connection_status_change()` para `whatsapp_connections.py`; `connection_event()` refatorado para delegar a ela |
+
 ### Fase 2 — Job periódico + registro no scheduler + trigger manual
 
 **Objetivo:** rodar a verificação a cada 6h e permitir disparo manual para validar
 
 | Arquivo | O que muda |
 |---|---|
-| `backend-core/app/jobs/whatsapp_connection_check_jobs.py` (novo) | `run_whatsapp_connection_check() -> dict` — mesmo padrão de `run_daily_subscription_jobs`; roda `asyncio.run(...)` por dentro; erro tratado por conexão, não aborta o lote |
+| `backend-core/app/jobs/whatsapp_connection_check_jobs.py` (novo) | `run_whatsapp_connection_check() -> dict` (síncrono, para o APScheduler) + `run_whatsapp_connection_check_async()` (para chamar de dentro de uma rota `async def` já rodando no event loop) — mesmo padrão de `run_daily_subscription_jobs`; erro tratado por conexão, não aborta o lote |
 | `backend-core/app/main.py` | Registra `run_whatsapp_connection_check` no `_scheduler` já existente, `CronTrigger(hour="0,6,12,18", minute=0, timezone="UTC")` — sem chamada síncrona no startup |
-| `backend-core/app/api/cron.py` | Nova rota `POST /admin/cron/whatsapp-connection-check` (mesmo padrão de `/admin/cron/daily`) para validar sem esperar 6h |
+| `backend-core/app/api/cron.py` | Nova rota `POST /admin/cron/whatsapp-connection-check` (mesmo padrão de `/admin/cron/daily`), usando `run_whatsapp_connection_check_async()` via `await` — para validar sem esperar 6h |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente)* | Job periódico + registro no scheduler + rota de trigger manual |
+
+**Bug encontrado e corrigido durante o teste local:** a primeira versão só
+tinha `run_whatsapp_connection_check()` (síncrona, com `asyncio.run()` por
+dentro) — funciona bem chamada pelo APScheduler (roda em thread própria, sem
+event loop ativo), mas quebrava com `RuntimeError: asyncio.run() cannot be
+called from a running event loop` ao ser chamada pela rota de trigger manual
+(que já roda dentro do event loop do FastAPI). Corrigido expondo também
+`run_whatsapp_connection_check_async()`, chamada com `await` diretamente pela
+rota — a versão síncrona continua existindo só para o APScheduler.
+
+**Teste local realizado** (worktree, `.env` copiado da pasta principal,
+banco SQLite local descartável, contra a UazAPI e o serviço de email
+**reais** de produção — nenhum dado de cliente real foi tocado):
+1. Servidor local iniciado, rota `/admin/cron/whatsapp-connection-check`
+   chamada com o banco vazio → `checked: 0`, sem erro.
+2. Criado um usuário e uma conexão fake no banco local, com status
+   `connected` e um `instance_token` inválido → trigger detectou 401 da
+   UazAPI real, marcou a conexão como `disconnected`, tentou mandar o email
+   de desconexão (rejeitado pelo provedor por ser um domínio de teste
+   `example.com` — comportamento esperado, e o erro foi capturado sem
+   derrubar o job, como projetado).
+3. Conferido no banco: `status=disconnected`, `disconnect_alert_sent_at`
+   preenchido, `last_disconnect_email_at` continua `None` (porque o envio
+   falhou) — bate exatamente com o comportamento original do webhook.
+4. Trigger chamado de novo → `checked: 0` (a conexão já não conta mais como
+   "ativa", não é reprocessada) — confirma que não fica batendo na UazAPI
+   pra sempre em cima da mesma conexão morta.
 
 ---
 
 ## Checks de Validação
 
 ### Cenário P1 — Webhook continua funcionando após o refactor da Fase 1
-- [ ] Desconectar e reconectar uma instância de teste
+- [ ] Desconectar e reconectar uma instância de teste (produção/playground)
 - [ ] Confirmar: os dois emails (queda e retorno) continuam disparando, com o cooldown de 30min intacto
 
 ### Cenário C1 — Job não mexe em conexão saudável
-- [ ] Chamar `POST /admin/cron/whatsapp-connection-check` com uma conexão real e saudável no banco
-- [ ] Confirmar: sumário mostra `marked_dead: 0`, nenhum email disparado, status inalterado
+- [x] Validado localmente de forma equivalente: rodar o trigger sem nenhuma conexão ativa não gera erro nem falso positivo (`checked: 0, marked_dead: 0`)
+- [ ] Pendente em produção: rodar o trigger com uma conexão **real** de cliente saudável e confirmar `marked_dead: 0`, sem email disparado
+- **Validado em:** 18/09/2026 (local) — ver "Teste local realizado" acima
 
 ### Cenário C2 — Job detecta conexão morta e dispara alerta
-- [ ] Chamar o trigger manual com uma conexão cujo token a UazAPI não reconhece mais
-- [ ] Confirmar: sumário mostra `marked_dead: 1`, status vira `disconnected` no banco, email de desconexão chega, banner aparece no frontend-crm
+- [x] Chamar o trigger manual com uma conexão cujo token a UazAPI não reconhece mais (validado localmente com token fake, UazAPI real) → sumário mostrou `marked_dead: 1`, status virou `disconnected` no banco
+- [ ] Pendente em produção: confirmar com um caso real que o **email chega** de verdade (localmente o envio falhou por ser um endereço de teste, não por bug) e que o **banner aparece** no frontend-crm
+- **Validado em:** 18/09/2026 (parcial, local) — ver "Teste local realizado" acima
 
 ### Cenário C3 — Agendamento automático funciona
 - [ ] Confirmar nos logs do Railway (`backend-core`) que o job roda sozinho nos horários 00:00/06:00/12:00/18:00 UTC
