@@ -95,7 +95,7 @@ apply_connection_status_change(db, connection, new_status)  [novo, extraído do 
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | Job periódico + registro no scheduler + rota de trigger manual |
+| 1 | `67652ae` | Job periódico + registro no scheduler + rota de trigger manual |
 
 **Bug encontrado e corrigido durante o teste local:** a primeira versão só
 tinha `run_whatsapp_connection_check()` (síncrona, com `asyncio.run()` por
