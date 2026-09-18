@@ -147,6 +147,33 @@ banco SQLite local descartável, contra a UazAPI e o serviço de email
 
 ---
 
+## Fase 3 — Diagnóstico + Fix: logs "info" não apareciam no Railway (18/09/2026)
+
+### Problema identificado
+
+Após o deploy da Fase 2, nenhum log `logger.info(...)` do serviço aparecia no
+Railway — nem a linha de sucesso do APScheduler, nem os logs do job novo
+(`whatsapp_connection_check_jobs.py`). `backend-core` nunca chamava
+`logging.basicConfig()` em lugar nenhum — o logger raiz do Python fica no
+nível padrão (`WARNING`), então `.info()` é descartado silenciosamente;
+só `.warning()`/`.error()` apareciam. Isso é um gap pré-existente do
+serviço (não introduzido por esta implementação), mas impedia justamente a
+validação do Cenário C3.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-core/app/main.py` | `logging.basicConfig(level=logging.INFO)` adicionado no topo do módulo |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(pendente)* | fix: logging.basicConfig(INFO) para logs info aparecerem no Railway |
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Hoje o job só detecta conexões que estavam "ativas" no banco e morreram — não tenta redescobrir conexões marcadas como `disconnected` que voltaram a ficar vivas sem passar pelo webhook. Se isso virar um problema real, dá pra estender o escopo da query.

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -5,6 +7,8 @@ from app.api import api_router
 from app.db import Base, SessionLocal, engine, ensure_ai_profile_columns, ensure_auth_otp_lockouts_send_columns, ensure_auth_otp_lockouts_table, ensure_auth_otps_table, ensure_google_calendar_columns, ensure_plan_limits_columns, ensure_presentation_variant_direto_backfill, ensure_smtp_columns, ensure_subscription_columns, ensure_user_columns, ensure_user_extra_columns, ensure_whatsapp_connections_columns, ensure_whatsapp_connections_table, ensure_whatsapp_connections_unique_agent_index
 import app.models  # noqa: F401
 from app.seed import seed_initial_data
+
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="CRM AutoDigital Core")
 
