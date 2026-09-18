@@ -170,7 +170,7 @@ validação do Cenário C3.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(pendente)* | fix: logging.basicConfig(INFO) para logs info aparecerem no Railway |
+| 1 | `c09ff15` | fix: logging.basicConfig(INFO) para logs info aparecerem no Railway |
 
 ---
 
