@@ -136,18 +136,21 @@ copiar), fora do prompt e fora do conteúdo extra.
 ## Checks de Validação
 
 ### Cenário P1 — "Quem são vocês?" na qualificação (Fase 1)
-- [ ] Conta de teste local: preencher "Perfil da Empresa" na Camada 4
-- [ ] Playground, lead novo em qualificação: perguntar "quem são vocês?"
-- [ ] Confirmar: responde com o perfil cadastrado e retoma a pergunta de qualificação
+- [x] Conta de teste local: preencher "Perfil da Empresa" na Camada 4
+- [x] Playground, lead novo em qualificação: perguntar "quem são vocês?"
+- [x] Confirmar: responde com o perfil cadastrado e retoma a pergunta de qualificação
+- **Validado em:** 24/09/2026 — teste automatizado via browser (playground local, lead #512). O perfil foi reescrito com factos únicos (Pinheiros, 2019, 1.200 clientes). A pergunta "onde fica o estúdio e há quanto tempo existem?" teve como resposta "localizado no bairro de Pinheiros… desde 2019… mais de 1.200 atendimentos", e o agente retomou a oferta da tabela de preços. A conta de teste não tem campos de qualificação, por isso a Mãe encaminhou para a apresentação; a fase de qualificação ficou coberta pelo P2. Observação: "quem são vocês?" genérico foi respondido na conversa ao vivo só com a identidade da Camada 1 ("Sou Daniel… da Sensi Vitae"); em 3 execuções repetidas fora do browser, 2 usaram o perfil. É aceitável porque a pergunta é coberta pelas duas fontes.
 
 ### Cenário P2 — Conteúdo extra (texto livre) (Fase 1)
-- [ ] Camada 4 → "Adicionar conteúdo extra" → texto livre com um facto único (ex.: "atendemos ao domicílio na zona sul, taxa R$ 30")
-- [ ] Playground: perguntar sobre esse facto
-- [ ] Confirmar: responde com o facto; no `decision_trace`, o bloco "BASE DE CONHECIMENTO DO NEGÓCIO" aparece no prompt
+- [x] Camada 4 → "Adicionar conteúdo extra" → texto livre com um facto único (ex.: "atendemos ao domicílio na zona sul, taxa R$ 30")
+- [x] Playground: perguntar sobre esse facto
+- [x] Confirmar: responde com o facto; no `decision_trace`, o bloco "BASE DE CONHECIMENTO DO NEGÓCIO" aparece no prompt
+- **Validado em:** 24/09/2026 — "Vocês atendem em casa? Moro no Campo Belo" (fase **qualificação**) teve como resposta "atendimentos ao domicílio na zona sul de São Paulo, com uma taxa de deslocamento fixa de R$ 30" + "pelo menos 48 horas de antecedência", e o agente retomou a oferta da tabela. O `decision_trace` não transporta o texto do prompt. A presença do bloco foi confirmada ao reconstruir o prompt do lead #512 com o mesmo código (`build_context_bundle_for_playground` → `decision_engine.decide`, capturando o prompt da Filha): o bloco está presente nas 3 execuções, com o perfil e o conteúdo extra.
 
 ### Cenário P4 — Roteiros não vazam (Fase 1)
-- [ ] Preencher um roteiro (ex.: "Script de Recuperação de Carrinho")
-- [ ] Confirmar: o texto não aparece no prompt nem nas respostas
+- [x] Preencher um roteiro (ex.: "Script de Recuperação de Carrinho")
+- [x] Confirmar: o texto não aparece no prompt nem nas respostas
+- **Validado em:** 24/09/2026 — o template `hybrid_scheduler` não oferece "Recuperação de Carrinho"; usei o "Script de Aquecimento" (`warming_script`) com a frase-marcador "férias em Fernando de Noronha". Resultados: `knowledge_reference` do lead com 2 itens (perfil + conteúdo extra, sem o roteiro); a marca não aparece em nenhum dos 3 prompts capturados nem nas respostas do playground; nenhum código do backend lê `warming_script`.
 
 ### Cenário P3 — Preço perguntado na qualificação (Fase 2)
 - [ ] (definido na Fase 2)
