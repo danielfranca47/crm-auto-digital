@@ -131,20 +131,23 @@ dentro da worktree (ou dos comandos já instalados na pasta principal).
 ## Checks de Validação
 
 ### Cenário P1 — Painel numa conversa nova
-- [ ] Numa conversa nova, rodar `/discovery-status`
-- [ ] Confirmar: lista as investigações da Fase 2 com meta, estado e o que falta decidir
+- [x] Numa conversa nova, rodar `/discovery-status`
+- [x] Confirmar: lista as investigações da Fase 2 com meta, estado e o que falta decidir
+- **Validado em:** 23/09/2026 — executado nesta conversa, seguindo o texto do comando (não numa conversa nova). Encontrou as 4 investigações, as metas em RASCUNHO (pede validação) e nenhuma inconsistência entre o radar e os arquivos; recomendou aprofundar primeiro uma investigação M2.
 
 ### Cenário P2 — Aprofundar uma investigação
-- [ ] Rodar `/discovery-aprofundar rag-busca-vetorial-conhecimento`
-- [ ] Confirmar: documento preenchido com evidência no código (arquivo:linha), mercado com fontes, 2–3 opções, RICE e veredito proposto
+- [x] Rodar `/discovery-aprofundar rag-busca-vetorial-conhecimento`
+- [x] Confirmar: documento preenchido com evidência no código (arquivo:linha), mercado com fontes, 2–3 opções, RICE e veredito proposto
+- **Validado em:** 23/09/2026 — commit `c2c6234`. 4 pesquisas (limite 6), 6 fontes, RICE 0.27, veredito proposto stand-by com gatilho. A medição em produção foi bloqueada pelo modo automático (acesso a produção) e ficou em "Em aberto" + pergunta ao utilizador — comportamento correto do processo.
 
 ### Cenário P3 — Decidir
 - [ ] Rodar `/discovery-decidir` com um veredito "stand-by" e outro "implementations"
 - [ ] Confirmar: stand-by fica no radar com gatilho; implementations gera o stub `Aguardando Plan Mode`
 
 ### Cenário P4 — Recuperação dos comandos
-- [ ] Comparar `.claude/commands/discovery-*.md` com os blocos em `docs/ops/local-dev.md`
-- [ ] Confirmar: conteúdo idêntico
+- [x] Comparar `.claude/commands/discovery-*.md` com os blocos em `docs/ops/local-dev.md`
+- [x] Confirmar: conteúdo idêntico
+- **Validado em:** 23/09/2026 — comparação por script: os 4 comandos IDENTICO.
 
 ---
 
