@@ -16,7 +16,10 @@
 
 | Investigação | Meta | Status | Origem |
 |---|---|---|---|
-| — | | | |
+| [conhecimento-fora-fase-apresentacao](conhecimento-fora-fase-apresentacao.md) | M2 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
+| [alucinacao-escape-hatch-cobertura](alucinacao-escape-hatch-cobertura.md) | M2 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
+| [prompt-caching-custo-tokens](prompt-caching-custo-tokens.md) | M4 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
+| [rag-busca-vetorial-conhecimento](rag-busca-vetorial-conhecimento.md) | M4 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
 
 ## Stand-by (gatilhos)
 
@@ -28,4 +31,4 @@
 
 | Tema | Motivo | Data |
 |---|---|---|
-| — | | |
+| Migrar para banco vetorial dedicado (Pinecone, Qdrant, pgvector) | Base de conhecimento pequena (~2 mil tokens por cliente); se um dia houver RAG, o SQLite tem extensão própria (`sqlite-vec`) sem trocar de banco. Reabrir só via `rag-busca-vetorial-conhecimento` | 2026-09-23 |

@@ -1,0 +1,107 @@
+Daniel:
+Certo. Vamos falar agora sobre vendas, sobre um agente de de vendas. Eh, o que que Qual seria a arquitetura, né? Você falou, por exemplo, um juiz é totalmente diferente, né, de reconhecer padrões, mas vamos falar de um processo de vendas, né? Como é que a IA ela deve eh fazer para ela Quais são os modelos de arquitetura, né, para que consiga-se ter a inteligência artificial para vender? 
+
+Gemini:
+Num processo de vendas, a arquitetura precisa combinar capacidade de processamento de linguagem com integração de sistemas.
+
+A base é um modelo de linguagem avançado, configurado para atuar como agente conversacional, responsável pelo diálogo fluido e persuasivo.
+
+Para que ele funcione, essa IA é conectada a uma base de conhecimento, geralmente via RAG, contendo especificações de produtos, preços e políticas, garantindo respostas precisas.
+
+O terceiro pilar é a integração com o CRM. Isso permite que o agente identifique o cliente, acesse o histórico de interações e registre novas informações em tempo real, personalizando a abordagem.
+
+Por fim, são inseridas árvores de decisão ou fluxos lógicos que guiam o agente pelas etapas da venda, desde a qualificação do lead, passando pelo contorno de objeções, até o fechamento.
+
+Basicamente, a arquitetura transforma dados estruturados em conversação estratégica, guiada por um objetivo comercial específico.
+
+Daniel:
+como é que ela é utilizada? Porque eles têm coisas que há informações em que a ao cliente ou líder, ele pode perguntar a qualquer momento e a gente lá no fluxo de vendas pode aquele dado para o para o para o agente utilizar, né? Como é que isso seria acessível para que ele consiga acessar a qualquer momento e também não gere uma overdose de informações? Para que ele possa ficar consultando e alucinando. 
+
+Gemini:
+Para evitar sobrecarga e alucinação, você usa um sistema de busca vetorial. Em vez de carregar o modelo com tudo, os dados ficam numa base externa.
+
+Quando o cliente faz uma pergunta, o sistema busca apenas o trecho relevante e injeta essa informação no contexto do momento, como uma consulta rápida.
+
+Para travar a alucinação, você define regras estritas na instrução do agente, limitando a resposta apenas aos dados fornecidos e ordenando que ele declare que não sabe, caso a informação não esteja presente. É assim que se mantém a precisão.
+
+
+Daniel:
+setor aí busca vetorial, né? Como é que funciona para você colocar um sistema com busca vetorial? Porque atualmente eu tenho um, só que aí ele, ele tá no SQLite, né? Eu não sei se ele tá programado assim na questão de busca vetorial. Como é que eu faço para mim perguntar, né, para o meu Claude Code, para que ele cheque se a arquitetura ela tá correspondendo aí, se identifique, né, gargalos, de possíveis pontos de alucinação, identifique também possíveis pontos de melhoria alinhados a essa proposta de arquitetura aí? 
+
+
+Gemini:
+Para checar seu sistema, você deve fornecer o código de recuperação e o esquema do banco.
+
+Peça para o Claude verificar três coisas: primeiro, se o SQLite está realmente fazendo busca vetorial por similaridade, ou se está apenas filtrando por texto exato.
+
+Segundo, para identificar gargalos de performance, avaliando o tempo de resposta da consulta e o consumo de memória ao carregar os embeddings.
+
+Por fim, peça um diagnóstico de alucinação, checando se as instruções do agente obrigam ele a admitir o desconhecimento quando a busca vetorial não retorna um resultado com alta confiança.
+
+Com isso resolvido, ele pode sugerir a migração para um banco vetorial dedicado, como Pinecone, Qdrant ou pgvector.
+
+
+DAniel:
+questão aí das que você falou sobre a busca vetorial, né? Eh, como é que eu faço para checar se o Cláudio ele já ele já trabalha dessa forma? Né? E você citou aí algo também logo em em seguida, né? Você falou aí essas plataformas, eu não entendi para que que elas servem.
+
+O Claude em
+
+E também você falou aí em relação às outras questões aí que eu não tô lembrado agora, repete aí para mim.
+
+Gemini:
+O Claude funciona processando os dados que você envia, mas ele não faz a busca vetorial sozinho. Você precisa garantir que seu código envie os dados já recuperados da base.
+
+Quanto às plataformas, Pinecone, Qdrant e pgvector são bancos de dados especializados.Eles servem para armazenar os vetores e fazer o cálculo de similaridade ultra rápido, o que o SQLite não faz com eficiência.
+
+Para recapitular, peça para o seu assistente checar se a busca está comparando vetores, se há gargalos na resposta e se o modelo tem a instrução clara de admitir o erro caso não encontre dados confiáveis.
+
+Daniel:
+Entendi. Eh, mas aí o SQ Light, então, ele não é possível realizar a busca vetorial a partir dele? E como é que faz pra gente identificar quais são as características da busca vetorial para o o o a busca não vetorial? Que que é o oposto de busca não vetorial? Porque o que acontece, eu sei que a tua mente acontece é que eles saem várias informações lá no no prompt. Ah, você é o agente V, o teu endereço é esse, o telefone é esse, ah as informações são essas, né? E aí eu acho, eu não tenho certeza se ele tá, vamos dizer assim, ele ele já não não tá alucinando tanto, né? Mas às vezes, sim, ele alucina, né? E aí, eh às vezes, eu pergunto uma informação, ele não responde. Eu só quero mesmo cuidar para economizar token, sabe? A questão de busca vetorial também é pode ser extremamente acessível, enfim. Queria saber acerca mais disso aí, o que que é o oposto da busca vetorial. 
+
+Gemini:
+O SQLite até pode fazer busca vetorial com extensões, mas é limitado.
+
+O oposto da busca vetorial é a busca lexical, ou por palavras-chave. Funciona como o "Control+F": se o texto não tiver exatamente o termo que você digitou, o sistema não acha nada.
+
+O que você descreveu no seu prompt é o método de "contexto estático". Colocar tudo lá dentro gasta muitos tokens e força a IA a processar um volume enorme de dados irrelevantes, o que aumenta a chance de alucinação por distração.
+
+Para resolver isso, peça ao seu assistente de código para implementar uma arquitetura de RAG — Recuperação de Informação. O objetivo é transformar aquele seu banco SQLite num sistema onde a IA só lê o que é estritamente necessário para responder a pergunta daquele momento, economizando tokens e mantendo a precisão.
+
+Daniel:
+Entendi. É tudo que a gente tá falando aqui vai ser passado depois para ela, tá? Eu vou exportar essa conversa para que ela possa, é, ver as necessidades e fazer as verificações, tá? Só para te ficar ciente disso. E acerca aí da da da aplicação do SQLite com a busca vetorial, é, bom, atualmente eu lembro que que existe lá um um campo que eu coloco, que é intenção de IA, né? E nessa intenção de IA, eu acho que ele sim busca por intenção de palavra-chave, né? Ele tenta buscar similaridade, né? Mas eu acho que não é a chamada busca vetorial. Eu queria que tu, para me ajudar a me entender melhor, é, tentasse, é, citar um desenho, né, de uma arquitetura de busca vetorial versus a não vetorial, né? O que que, como é que é cada uma delas para que eu possa tentar me recordar aqui de cabeça e quais delas estão, é, atuais lá. 
+
+
+Gemini:
+Para visualizar a diferença, imagine o caminho da informação.
+
+Na busca não vetorial, a pergunta do cliente vai direto ao banco. O sistema tenta bater palavra por palavra. Se o cliente perguntar do "valor da parcela", mas no banco estiver escrito "preço da mensalidade", a busca falha. É rígido e limitado pelo vocabulário exato.
+
+Na busca vetorial, o fluxo ganha etapas. A pergunta do cliente passa primeiro por um modelo que traduz o significado para uma lista de números, o vetor. Em seguida, o sistema não busca palavras, mas calcula a proximidade matemática desse vetor com os vetores que já estão salvos no banco, que representam as informações que você cadastrou.
+
+Dessa forma, mesmo que o cliente use outras palavras, se o sentido for o mesmo do que está no banco, o sistema reconhece a intenção e puxa o dado correto, sem depender de termos exatos. É isso que dá flexibilidade e ajuda a evitar que o robô se perca ou tente adivinhar coisas além do que está na sua base.
+
+Daniel:
+É possível visualizar no código, ah, como é que eu, vamos dizer assim, consigo, eu, é possível que eu bata o olho no, no código, do prompt, ou de algumas, é, instrução de orquestrador, né, que tem lá, tem vários arquivos em Python lá. Como é que eu faço para mim identifi car o padrão, para saber se essa busca, ela tá vetorial ou não? 
+
+Gemini:
+Você identifica rápido olhando o padrão de importação e as chamadas de função.
+
+Proure por termos como "embedding", que indicam a conversão de texto para números, ou nomes de bibliotecas como "chromadb", "pinecone", ou funções como "similarity_search".
+
+Se você vir o código montando uma string gigante e passando ela direto para o modelo como contexto, isso confirma a busca não vetorial. A busca vetorial sempre vai ter uma etapa intermediária de cálculo de distância entre vetores.
+
+Daniel:
+Pois é. É, eu lembro quando eu tava desenvolvendo que sempre eu não não não tinha o o conhecimento desse termo, né? Mas sempre eu alertava pra pra IA, pro Cloud, no caso, pra ele desenvolver um sistema inteligente que não dependa do engessamento de palavras-chave. Era algo que ele me sugeria bastante, né? Desde o de do começo do desenvolvimento que começou com a com a com o Codex da OpenAI, na época, né, muito limitado. E aí, parece que esse padrão, ele se repetiu, né? Eu acho que o próprio Cloud aprendeu com a documentação feita pela Codex de que era suge- suposto isso e ele ia me sugerindo, né, toda vez mais. Toda vez eu corrigia, né, falando que eu queria só um que eu queria um sistema mais inteligente, que não dependesse de de palavras-chave engessadas, cadastramento, né, de muitas palavras-chave, a não ser que seja uma ação mesmo bem pontual e específica que o usuário queira colocar lá, né? Tem Tem algumas lá, né? Tipo, stop, pare, né? Algumas dessas assim. Mas aí, é, voltando, né, aqui ao ao tema, ao posicionamento inteligente, é porque, justamente, o sistema vai atender outros idiomas, né, diferentes perfis de clientes, pode ser que, é, palavras existam sinônimas uma das outras, e é pra não gerar sobrecarga, né, pra atender vários nichos de, etc. E também pra não gerar, é, overdose de tokens com longo prazo, né? Enfim, 
+
+Gemini:
+Você descreveu a evolução natural do desenvolvimento com IA. Essa transição do controle rígido por palavras-chave para a compreensão semântica é exatamente o que garante a escalabilidade que você busca.
+
+Ao focar na intenção, você resolve o problema dos sinônimos, elimina a barreira de diferentes idiomas e, acima de tudo, economiza uma quantidade enorme de tokens, já que não precisa mais listar todas as variações possíveis no prompt.
+
+Para o próximo passo, essa base conceitual vai permitir que você implemente um roteamento inteligente, onde o sistema identifica o contexto e direciona o fluxo de forma dinâmica, mantendo a conversa nos trilhos sem precisar de supervisão constante.
+
+Daniel:
+Eu não sei ainda se isso já foi implementado ou não, aí é que tá, né? Lembra que essa conversa aqui vai ser encaminhada para o Cloud Coach, né? Então, é o Cloud que vai fazer essas verificações, tá? Eu não sei o estado atual, se realmente tá em busca vetorial ou não.
+
+Gemini:
+Perfeito. Essa exportação vai dar ao seu sistema a referência exata do que precisa ser auditado e otimizado.

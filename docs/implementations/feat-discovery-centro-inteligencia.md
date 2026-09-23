@@ -79,11 +79,46 @@ Fora do escopo: agente periódico automático (ver "Ajustes Possíveis").
 | `CLAUDE.md` | Subsecção "Discovery" + linha na tabela de documentação |
 | `docs/plans/_guia-analise-planos.md` | Indicação de que itens podem vir da discovery |
 | `docs/implementations/README.md` | Idem |
-| `.claude/commands/discovery-*.md` (pasta principal, gitignored) | 4 comandos |
+| `.claude/commands/discovery-*.md` (gitignored) | 4 comandos — ver nota abaixo |
+
+**Nota — onde estão os comandos agora:** a sessão está isolada na worktree e não
+pode escrever na pasta principal, por isso os 4 comandos foram criados em
+`.claude/commands/` **da worktree**. Na graduação, depois do `ExitWorktree`,
+instalá-los na pasta principal recriando-os a partir dos blocos de
+`docs/ops/local-dev.md` (o mesmo prompt de recuperação que a secção descreve).
+Até lá, só funcionam numa sessão aberta dentro da worktree.
+
+#### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `205594c` | Pasta `docs/discovery/` (README, guia, template, metas em rascunho, radar, levantamentos) + comandos em `local-dev.md` + CLAUDE.md e guias de plans/implementations |
 
 ### Fase 2 — Primeiro levantamento (ensaio real)
 
 **Objetivo:** processar a conversa com o Gemini com o fluxo novo.
+
+| Arquivo | O que muda |
+|---|---|
+| `docs/discovery/levantamentos/2026-09-23-busca-vetorial-gemini.txt` | Conversa com o Gemini, copiada sem alterações da raiz de `docs/` (o original, não rastreado, é apagado da pasta principal na graduação) |
+| `docs/discovery/rag-busca-vetorial-conhecimento.md` | Investigação `Levantado` (M4) |
+| `docs/discovery/conhecimento-fora-fase-apresentacao.md` | Investigação `Levantado` (M2) |
+| `docs/discovery/prompt-caching-custo-tokens.md` | Investigação `Levantado` (M4) |
+| `docs/discovery/alucinacao-escape-hatch-cobertura.md` | Investigação `Levantado` (M2) |
+| `docs/discovery/_radar.md` | 4 investigações + "banco vetorial dedicado" em Descartados |
+| `docs/implementations/fix-categorias-conhecimento-orfas.md` | Bug confirmado → `Aguardando Plan Mode` (decisão do utilizador) |
+
+### Relatório das Fases 1 e 2 — o que mudou na prática
+
+**Antes:** uma análise como a da conversa com o Gemini ficava solta em `docs/`
+("analisar depois"), sem forma de separar o que é bug, o que é dúvida e o que
+não se aplica, e sem metas escritas para dizer o que é prioritário.
+**Agora:** existe `docs/discovery/` com processo, metas do produto (em rascunho)
+e um painel. A conversa com o Gemini já foi processada: 1 bug foi para
+implementations, 4 dúvidas viraram investigações e 1 sugestão (banco vetorial
+dedicado) foi descartada com o motivo registado.
+**Para validar:** Cenários P1–P4, abaixo. P1–P3 precisam de uma sessão aberta
+dentro da worktree (ou dos comandos já instalados na pasta principal).
 
 ---
 
