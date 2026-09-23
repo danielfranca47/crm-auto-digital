@@ -108,6 +108,12 @@ Até lá, só funcionam numa sessão aberta dentro da worktree.
 | `docs/discovery/_radar.md` | 4 investigações + "banco vetorial dedicado" em Descartados |
 | `docs/implementations/fix-categorias-conhecimento-orfas.md` | Bug confirmado → `Aguardando Plan Mode` (decisão do utilizador) |
 
+#### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a3be117` | Levantamento guardado, 4 investigações, radar preenchido, stub do fix de categorias órfãs |
+
 ### Relatório das Fases 1 e 2 — o que mudou na prática
 
 **Antes:** uma análise como a da conversa com o Gemini ficava solta em `docs/`
