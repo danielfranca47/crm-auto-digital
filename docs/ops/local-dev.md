@@ -47,7 +47,8 @@ worktree recém-criada, o passo acima provavelmente foi esquecido.
 
 `.claude/` inteiro está no `.gitignore` (linha 42), então os slash commands definidos em
 `.claude/commands/*.md` (`/statusdev`, `/statusplans`, `/statusplans-verificar`,
-`/statusplans-avancar`) **não acompanham** o repositório quando ele é clonado ou puxado
+`/statusplans-avancar`, `/discovery-status`, `/discovery-levantar`,
+`/discovery-aprofundar`, `/discovery-decidir`) **não acompanham** o repositório quando ele é clonado ou puxado
 noutro computador — existem só na máquina onde foram criados.
 
 **Sintoma a reconhecer:** num dispositivo novo, digitar `/statusplans` (ou qualquer um
@@ -380,6 +381,179 @@ trocar) antes de completá-lo com o diagnóstico do Plan Mode.
 
 Não entre em Plan Mode nesta resposta para nenhum item — isso só acontece quando o
 usuário escolher explicitamente por qual começar.
+```
+
+### `/discovery-status` — painel de `docs/discovery/` (só leitura)
+
+**O que é:** mostra o que está pronto para decidir, verifica gatilhos de stand-by e lembra se as metas do produto ainda estão em rascunho.
+
+**Onde entra no processo:** ponto de entrada do fluxo de discovery (ver `docs/discovery/_guia-discovery.md`) — não altera nada.
+
+**Arquivo:** `.claude/commands/discovery-status.md`
+
+```markdown
+---
+description: Painel não-técnico de docs/discovery/ — o que está pronto para decidir, gatilhos de stand-by, metas por validar. Só leitura
+---
+
+Leia `docs/discovery/_radar.md`, `docs/discovery/_metas-produto.md` e todos os
+`docs/discovery/*.md` que não começam com `_` nem são `README.md`. Não leia código-fonte,
+exceto para verificar gatilhos de stand-by (ponto 3).
+
+Responda em linguagem não-técnica (o usuário não é programador):
+
+1. **Metas** — se `_metas-produto.md` ainda estiver marcado como RASCUNHO, comece por
+   aqui: mostre as metas numa tabela curta e peça validação.
+2. **Prontas para decisão** — tabela: tema (1 frase), meta, score RICE, veredito
+   proposto, perguntas pendentes. Ordene por score. Se houver perguntas de negócio,
+   liste-as numeradas para o usuário responder de uma vez.
+3. **Stand-by** — para cada gatilho, verifique se já disparou (quando for verificável:
+   banco local, código, docs). Diga "disparou" / "não disparou" / "não verificável
+   daqui".
+4. **Em investigação / Levantadas** — quantas e qual aprofundar a seguir (a ligada à
+   meta mais prioritária), com o comando pronto: `/discovery-aprofundar <slug>`.
+5. **Inconsistências** — radar desalinhado com os arquivos (investigação sem linha no
+   radar ou o contrário). Só aponte; não corrija.
+
+Feche com a próxima ação recomendada numa frase.
+
+Não crie, edite nem apague nenhum arquivo nesta resposta.
+```
+
+### `/discovery-levantar` — levantamento → investigações (passo 1 de 3)
+
+**O que é:** recebe um material bruto (conversa, relatório, feedback), guarda-o em `docs/discovery/levantamentos/`, verifica cada afirmação no código e faz a triagem: bug confirmado vai direto para `docs/implementations/` (Aguardando Plan Mode), incerteza vira investigação `Levantado`.
+
+**Onde entra no processo:** Passos 1 e 2 de `docs/discovery/_guia-discovery.md`.
+
+**Arquivo:** `.claude/commands/discovery-levantar.md`
+
+```markdown
+---
+description: Divide um levantamento (conversa, relatório, feedback) em investigações de discovery — bugs confirmados vão direto para implementations. Passo 1 do fluxo de discovery
+---
+
+Leia `docs/discovery/_guia-discovery.md` e siga os **Passos 1 e 2** (levantamento →
+gaps → triagem) sobre o material indicado a seguir: $ARGUMENTS
+
+Se `$ARGUMENTS` estiver vazio, pergunte ao usuário qual é o levantamento (caminho de
+arquivo ou texto colado) e pare.
+
+1. **Guardar o levantamento** em `docs/discovery/levantamentos/AAAA-MM-DD-<tema>.<ext>`
+   (data de hoje). Se o material foi colado como texto, salve-o num `.md`. Se é um
+   arquivo noutra pasta do repo, mova com `git mv` (ou mova e depois `git add`, se não
+   era rastreado). Não edite o conteúdo original.
+2. **Verificar cada afirmação no código** antes de a aceitar — cite arquivo:linha.
+   Leia também `docs/discovery/_radar.md`: não recrie investigação que já exista, esteja
+   em stand-by ou em "Descartados" (a não ser que o levantamento traga facto novo —
+   nesse caso diga qual).
+3. **Triagem**, conforme a tabela do Passo 2 do guia:
+   - Bug confirmado + solução óbvia → `docs/implementations/<slug>.md` com
+     `**Status:** Aguardando Plan Mode`, no mesmo formato reduzido que o
+     `/statusplans-avancar` usa (Motivação / Área do sistema / Próximo passo), com
+     `**Origem:**` apontando para o levantamento.
+   - Já existe / não se aplica → sem arquivo; só no resumo ao usuário.
+   - Incerteza → `docs/discovery/<slug>.md` a partir de
+     `docs/discovery/_template-investigacao.md`, `**Status:** Levantado`, preenchendo
+     **só** as secções marcadas com (L). Não aprofunde agora — isso é o
+     `/discovery-aprofundar`.
+4. **Atualizar `docs/discovery/_radar.md`** (secção "Em investigação / Levantadas").
+5. **Commit único** seguindo as regras do `CLAUDE.md` (`docs:` + `git add` nos arquivos
+   específicos + corpo listando cada arquivo). Sem push.
+
+**Resumo ao usuário** (linguagem não-técnica): tabela com cada gap → destino
+(implementations / investigação / já existe / não se aplica) e porquê numa frase.
+Feche sugerindo qual investigação aprofundar primeiro (a de meta mais prioritária em
+`_metas-produto.md`) com o comando pronto: `/discovery-aprofundar <slug>`.
+```
+
+### `/discovery-aprofundar` — investigação completa de um tema (passo 2 de 3)
+
+**O que é:** preenche uma investigação com evidência no código, pesquisa de mercado com fontes, opções de solução, pontuação RICE e veredito proposto.
+
+**Onde entra no processo:** Passos 3 e 4 de `docs/discovery/_guia-discovery.md`.
+
+**Arquivo:** `.claude/commands/discovery-aprofundar.md`
+
+```markdown
+---
+description: Investigação completa de um tema de docs/discovery/ — código, mercado (com fontes), opções de solução, RICE e veredito proposto. Passo 2 do fluxo de discovery
+---
+
+Leia `docs/discovery/_guia-discovery.md` (Passos 3 e 4) e
+`docs/discovery/_metas-produto.md`, depois aprofunde a investigação
+`docs/discovery/$ARGUMENTS.md`.
+
+Se `$ARGUMENTS` estiver vazio, leia `docs/discovery/_radar.md`, sugira a investigação
+`Levantado` ligada à meta mais prioritária e pergunte se é essa — não comece sem
+confirmação.
+
+1. Mude o status para `Em investigação`.
+2. Preencha, pela ordem do template: **Evidência no código** (arquivo:linha + medições
+   quando possível), **Como o mercado faz** (2–4 referências via WebSearch, cada uma em
+   "Fontes"), **Opções de solução** (2–3, sempre incluindo "não fazer nada / adiar"),
+   **Recomendação**, **Pontuação RICE** (com justificativa de cada valor),
+   **Veredito proposto** (com gatilho se for stand-by), **Perguntas ao utilizador**
+   (só negócio/experiência) e **Em aberto**.
+3. Respeite o limite de tempo do guia (~6 pesquisas web, leitura de código focada). Se
+   não couber, registe em "Em aberto" e proponha dividir.
+4. Mude o status para `Pronta para decisão` e mova a linha no `_radar.md` para
+   "Prontas para decisão" (meta, score, veredito proposto, perguntas pendentes).
+5. Commit único (`docs:`), sem push.
+
+**Resposta ao usuário** (não-técnica, curta): a pergunta, o que se descobriu, a
+recomendação e o veredito proposto — e, se houver, as perguntas de negócio. Não despeje
+o documento inteiro no chat. Feche lembrando que pode decidir agora com
+`/discovery-decidir` ou acumular mais investigações e decidir em lote depois.
+
+Não crie código de produto nem arquivos em `docs/implementations/` ou `docs/plans/`
+nesta resposta — isso só acontece no `/discovery-decidir`.
+```
+
+### `/discovery-decidir` — aplica os vereditos (passo 3 de 3)
+
+**O que é:** aplica os vereditos dados pelo usuário: promove para `implementations/` ou `plans/`, marca stand-by com gatilho ou descarta.
+
+**Onde entra no processo:** Passo 5 de `docs/discovery/_guia-discovery.md`.
+
+**Arquivo:** `.claude/commands/discovery-decidir.md`
+
+```markdown
+---
+description: Aplica os vereditos do usuário sobre investigações de docs/discovery/ — promove para implementations ou plans, marca stand-by com gatilho, ou descarta. Passo 3 do fluxo de discovery
+---
+
+Leia `docs/discovery/_guia-discovery.md` (Passo 5) e `docs/discovery/_radar.md`.
+
+**Pré-requisito:** vereditos explícitos do usuário nesta conversa, por investigação
+(ex.: "rag → stand-by, faq-fora → implementations"). Vereditos do usuário:
+$ARGUMENTS
+
+Se não houver vereditos explícitos, mostre a secção "Prontas para decisão" do radar com
+o veredito proposto de cada uma e pergunte — **não aplique nada por conta própria**. Um
+veredito "stand-by" sem gatilho não é válido: proponha um gatilho mensurável e peça
+confirmação.
+
+Para cada investigação decidida:
+
+- **Implementations** → crie `docs/implementations/<slug>.md` com
+  `**Status:** Aguardando Plan Mode`, no formato reduzido do `/statusplans-avancar`
+  (Motivação / Área do sistema / Próximo passo), levando da investigação a evidência,
+  a solução recomendada e as fontes, e com `**Origem:** docs/discovery (investigação
+  <slug>, graduada em AAAA-MM-DD)`. Remova o arquivo de discovery (`git rm`).
+- **Plans** → acrescente o item ao arquivo de `docs/plans/` da área (ou crie
+  `<area>-melhorias-futuras.md`), com o problema, a recomendação, o esforço estimado e
+  as fontes. Remova o arquivo de discovery.
+- **Stand-by** → mantenha o arquivo, status `Stand-by`, gatilho preenchido; mova a
+  linha do radar para "Stand-by (gatilhos)".
+- **Descartar** → remova o arquivo; acrescente uma linha em "Descartados" do radar
+  (tema, motivo, data).
+
+Atualize o `_radar.md` e faça um **commit único** (`docs:`), sem push.
+
+**Resumo ao usuário:** tabela investigação → destino. Se algo foi para implementations,
+feche perguntando se quer iniciar o Plan Mode de algum agora — não entre em Plan Mode
+sem essa escolha.
 ```
 
 ### Manutenção desta seção

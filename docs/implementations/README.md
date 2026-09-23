@@ -39,6 +39,11 @@ momento — todos os anteriores já foram graduados (ver `docs/architecture/`).
 > gastar tokens investigando código em vários itens de um sprint de uma vez. Para
 > retomar um desses, basta pedir para continuar aquele arquivo — o Passo 0 roda nesse
 > momento, usando a Motivação já escrita como ponto de partida.
+>
+> O mesmo formato é usado pelos comandos de discovery (`/discovery-levantar` para bugs
+> confirmados, `/discovery-decidir` para investigações promovidas — ver
+> [`docs/discovery/`](../discovery/)); nesse caso a linha `**Origem:**` aponta para o
+> levantamento ou para a investigação.
 
 ---
 

@@ -292,6 +292,7 @@ Os arquivos abaixo descrevem a estrutura **atual** de cada área do sistema. Ler
 | [`docs/prompts_llms.md`](docs/prompts_llms.md) | Mapa técnico de todos os prompts reais do sistema: variáveis injetadas, blocos condicionais, regras críticas por prompt |
 
 **Intenções futuras e roadmaps:** [`docs/plans/`](docs/plans/)
+**Investigações antes de decidir (discovery) e metas do produto:** [`docs/discovery/`](docs/discovery/)
 **Setup e operação:** [`docs/ops/`](docs/ops/)
 
 ---
@@ -464,6 +465,10 @@ Todo pedido de nova funcionalidade ou correção não-trivial segue este ciclo o
 - **Cada fase tem exactamente 1 commit.** O hash é registado no .md logo após o commit.
 - **O commit não é o fim da fase.** Nunca terminar a resposta só com o commit — escrever o relatório em linguagem simples e perguntar sobre teste automatizado (com prompt de retomada pronto) é parte obrigatória do fecho da fase, não um passo opcional do guia.
 - Um arquivo de implementação com `Status: Em andamento` significa que há testes pendentes — não iniciar nova etapa sobreposta sem validar primeiro.
+
+### Discovery — antes de plans/implementations
+
+Quando um pedido ou levantamento traz **incerteza** (não se sabe se o problema é real, quão grande é, ou qual a melhor solução), o tema passa primeiro por [`docs/discovery/`](docs/discovery/): evidência no código + como o mercado faz + opções de solução + pontuação RICE ligada a [`_metas-produto.md`](docs/discovery/_metas-produto.md) → veredito do utilizador (implementations / plans / stand-by com gatilho / descartar). Bug confirmado com solução clara **não** passa pela discovery — vai direto para o Plan Mode. Processo: [`docs/discovery/_guia-discovery.md`](docs/discovery/_guia-discovery.md); comandos `/discovery-status`, `/discovery-levantar`, `/discovery-aprofundar`, `/discovery-decidir`.
 
 ### Arquivos de referência
 

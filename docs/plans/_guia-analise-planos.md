@@ -13,6 +13,12 @@ O utilizador pediu algo como:
 - "O que devemos implementar agora?"
 - "Revisa os docs/plans e prioriza"
 
+> **Origem dos itens:** além de ideias escritas direto aqui, itens podem chegar de
+> `docs/discovery/` com veredito "Plans" — já trazem evidência, fontes e meta ligada
+> (`docs/discovery/_metas-produto.md`). Usar as metas como critério adicional no
+> Passo 5 (Priorização). Temas ainda com incerteza sobre o problema ou a solução
+> devem ir para a discovery, não para cá.
+
 ---
 
 ## Passo 1 — Inventário
