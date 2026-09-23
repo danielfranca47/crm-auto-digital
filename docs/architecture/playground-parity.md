@@ -64,6 +64,7 @@ Esta é a **única fonte de enriquecimento**. Qualquer campo novo que afete o co
 |-----|----------------|--------|
 | B1  | `knowledge_items` | Filtrado por `active_in_funnel = 1` em `_load_knowledge_items()` |
 | B2  | `knowledge_items["business_info"]` | `_load_business_info(user_id)` |
+| B2b | `knowledge_reference` | `_load_knowledge_reference(user_id)` — categorias de referência sem bloco próprio + conteúdo extra sem categoria. Ver [`knowledge-base.md`](knowledge-base.md#base-de-conhecimento-de-referência--knowledge_reference). `routes/executor.py` copia o campo para o contexto real |
 | B3  | `generated_prompt_parts` | Elevado de `ai_profile["generated_prompt_parts"]` para raiz do bundle |
 | B4  | `lead_detected_language` | Elevado de `lead["detected_language"]`, fallback `"all"` |
 | B5  | `calendar_busy_slots` | `_load_calendar_busy_slots(user_id)` — só quando `ai_profile.agent_mode == "agenda"` e o bundle ainda não o tem. Ver [`agenda.md`](agenda.md) |
@@ -85,6 +86,7 @@ Esta é a **única fonte de enriquecimento**. Qualquer campo novo que afete o co
 | `knowledge_items` | `_load_knowledge_items()` no builder | — (não carregado no builder) | **Sim (B1 + B2)** |
 | `knowledge_media` | `_load_knowledge_media()` no builder | — | Não |
 | `business_info` | — | — | **Sim (B2, injetado em knowledge_items)** |
+| `knowledge_reference` | — | — | **Sim (B2b)** |
 | `generated_prompt_parts` | — | — | **Sim (B3)** |
 | `lead_detected_language` | — | — | **Sim (B4)** |
 | `calendar_busy_slots` | — | — | **Sim (B5)** |

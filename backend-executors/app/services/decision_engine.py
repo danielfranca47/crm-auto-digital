@@ -1208,6 +1208,39 @@ def _build_business_info_block(context: Dict[str, Any]) -> str:
     return f"\nINFORMAÇÕES DO NEGÓCIO (disponíveis em qualquer fase):\n{biz}\n"
 
 
+def _build_knowledge_reference_block(context: Dict[str, Any]) -> str:
+    """Base de conhecimento de referência (context["knowledge_reference"], montada por
+    _load_knowledge_reference no backend-crm): factos que o lead pode perguntar em qualquer
+    fase — perfil da empresa, políticas, FAQs sem bloco próprio e conteúdo extra do
+    utilizador. Uma única instrução semântica: a LLM decide o que é relevante para a
+    pergunta, em vez de uma regra "usar APENAS quando X" por categoria."""
+    sections = []
+    for item in context.get("knowledge_reference") or []:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        heading = str(item.get("heading") or "").strip() or "Informação adicional"
+        sections.append(f"## {heading}\n{content}")
+    if not sections:
+        return ""
+    return (
+        "\nBASE DE CONHECIMENTO DO NEGÓCIO (informação oficial, cadastrada pelo operador):\n"
+        + "\n\n".join(sections)
+        + "\n\nCOMO USAR A BASE DE CONHECIMENTO:\n"
+        "- Consulte-a quando o lead perguntar algo que ela cobre, ou quando precisar dela para "
+        "responder com precisão. Responda com as suas palavras, no tom da conversa, usando só o "
+        "trecho que responde à pergunta.\n"
+        "- É material de consulta, não um roteiro: o objetivo da fase atual continua o mesmo. "
+        "Depois de responder, retome o que a fase pede.\n"
+        "- Se a resposta não estiver nesta base nem no resto do contexto, diga que vai confirmar "
+        "com a equipa — uma resposta inventada custa a confiança do lead.\n"
+        "- Exemplo ✅: lead pergunta \"vocês atendem online?\" durante a qualificação → responde "
+        "com o que a base diz sobre o formato e volta à pergunta de qualificação pendente.\n"
+    )
+
+
 def _build_training_examples_block(context: Dict[str, Any], phase: str) -> str:
     """
     Gera bloco de exemplos de treino classificados pelo operador para a fase atual.
@@ -3006,7 +3039,7 @@ CONTEXTO:
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
-{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_training_examples_block(context, "qualification")}"""
+{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_knowledge_reference_block(context)}{_build_training_examples_block(context, "qualification")}"""
     _qual_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "qualification", mother_decision.signals))
     _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _inject_generated_parts(_qual_prompt, context, "qualification")
@@ -3649,6 +3682,7 @@ def _build_child_prompt_apresentation(
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
+        + _build_knowledge_reference_block(context)
         + _build_training_examples_block(context, "apresentation")
     )
     _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
@@ -3984,6 +4018,7 @@ def _build_child_prompt_follow_up(
         + _build_training_examples_block(context, "followup")
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
+        + _build_knowledge_reference_block(context)
     )
     _followup_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "follow-up", mother_decision.signals))
     _followup_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "followup", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
@@ -4103,6 +4138,7 @@ def _build_child_prompt_closing(
         + _build_training_examples_block(context, "closing")
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
+        + _build_knowledge_reference_block(context)
     )
     # _inject_generated_parts não é chamado aqui para evitar duplicação do tone_rules
     # (já injectado via _build_tone_block). training_examples e custom_instructions são
@@ -4237,6 +4273,7 @@ def _build_child_prompt_pre_agendamento(
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
+        + _build_knowledge_reference_block(context)
     )
     return _pre_prompt
 
@@ -4423,6 +4460,7 @@ def _build_child_prompt_agendamento(
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
+        + _build_knowledge_reference_block(context)
     )
     return _sched_prompt
 

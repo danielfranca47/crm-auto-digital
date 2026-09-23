@@ -58,6 +58,32 @@ O `ContextBundle` resultante (`knowledge_items["service_pricing_table"]`) pode c
 tabelas concatenadas — usado no bloco "MODO COMERCIAL" da fase de apresentação (ver
 [`pipeline-phases.md`](pipeline-phases.md#estágio-de-aquecimento-e-appointment_mode-só-hybrid_scheduler)).
 
+## Base de conhecimento de referência — `knowledge_reference`
+
+Categorias de **referência** (factos que o lead pode perguntar a qualquer momento) sem bloco
+próprio no `decision_engine`, mais o **conteúdo extra** sem categoria (texto livre e uploads da
+Camada 4), chegam à LLM num bloco único:
+
+- **Carregamento:** `_load_knowledge_reference()` (`orchestrator.py`) — categorias em
+  `_REFERENCE_ONLY_CATEGORIES` (`company_profile`, `professional_bio`, `pre_meeting_faq`,
+  `scheduling_policy`, `price_policy`, `competitive_differentials`) + itens com `category`
+  vazia. **Todos** os itens activos com texto (não só o mais recente por categoria); guiadas
+  primeiro, extra depois. Teto de `_KNOWLEDGE_REFERENCE_MAX_CHARS` (40 000 caracteres — o
+  gatilho de `docs/discovery/rag-busca-vetorial-conhecimento.md`); acima disso trunca e loga
+  `knowledge_reference truncada`. Formato: `[{"heading", "content"}]`, heading = rótulo da
+  categoria (+ título quando diferente) ou o título do item extra.
+- **Paridade:** campo `knowledge_reference` do `ContextBundle`, preenchido em
+  `enrich_context_bundle()` (B2b, ver [`playground-parity.md`](playground-parity.md)).
+- **Injecção:** `_build_knowledge_reference_block()` (`decision_engine.py`), sempre ao lado de
+  `_build_business_info_block()` — qualificação, apresentação, follow-up, fecho,
+  pré-agendamento e agendamento. **Uma** instrução semântica para o bloco inteiro (consultar
+  quando o lead pergunta algo coberto, responder só com o trecho relevante, retomar o objetivo
+  da fase, "vou confirmar com a equipa" se não estiver lá) — em vez de uma regra "usar APENAS
+  quando X" por categoria.
+
+Categorias já lidas por bloco próprio (`objections_faq`, `service_faq`, `service_pricing_table`,
+etc., ver abaixo) **não** entram em `knowledge_reference`, para não duplicar texto no prompt.
+
 ## Instrução ao LLM — `backend-executors/app/services/decision_engine.py`
 
 Os dois blocos que já liam `service_pricing_table` (qualificação em modo comercial e filha de

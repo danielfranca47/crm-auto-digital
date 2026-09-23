@@ -653,6 +653,7 @@ def whatsapp_execution_context(
         "metadata": bundle.metadata,
         "knowledge_items": bundle.knowledge_items or {},
         "knowledge_media": bundle.knowledge_media or {},
+        "knowledge_reference": bundle.knowledge_reference or [],
         "lead_detected_language": bundle.lead_detected_language or "all",
         "generated_prompt_parts": bundle.generated_prompt_parts or {},
         "training_examples": training_examples,

@@ -56,6 +56,8 @@ ContextBundle {
                         asked_questions_json, last_question_text)
   knowledge_items  — base de conhecimento do usuário (dict por categoria)
   knowledge_media  — chaves das categorias que têm mídia (set)
+  knowledge_reference — base de referência sem bloco próprio + conteúdo extra
+                        ([{heading, content}], ver docs/architecture/knowledge-base.md)
   training_examples — exemplos classificados pelo operador no Playground (bom/ruim por fase)
   generated_prompt_parts — blocos gerados pelo meta-prompter (few-shot por fase,
                            tone_rules, qualification_phrasing, objection_rewrites,
@@ -855,6 +857,7 @@ Blocos que só aparecem no prompt quando certas condições são atendidas:
 | `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | apresentation |
 | `standard_knowledge_block` | `not commercial_injection` + `knowledge_items` não vazio | apresentation |
 | `followup_knowledge_block` | `knowledge_items` com social_proof/objections_faq/service_faq | followup |
+| `_build_knowledge_reference_block` ("BASE DE CONHECIMENTO DO NEGÓCIO" + "COMO USAR") | `context["knowledge_reference"]` não vazio | qualification, apresentation, followup, closing, pre-agendamento, agendamento (sempre ao lado de `business_info`) |
 | `VARIANT_RULE cart_recovery` | `followup_variant=cart_recovery` | followup |
 | `VARIANT_RULE hybrid_scheduler` | `followup_variant=hybrid_scheduler` | followup |
 | `FOLLOWUP_PRIORITY_RULE` (tick) | `is_followup_tick=True` | followup |

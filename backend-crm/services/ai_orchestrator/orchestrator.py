@@ -237,6 +237,8 @@ class ContextBundle(BaseModel):
     qualification_state: Optional[Dict[str, Any]] = None
     knowledge_items: Optional[Dict[str, str]] = None
     knowledge_media: Optional[Dict[str, List]] = None
+    # Base de conhecimento de referência — [{"heading", "content"}], ver _load_knowledge_reference
+    knowledge_reference: Optional[List[Dict[str, str]]] = None
     training_examples: Optional[Dict[str, Any]] = None
     # Estrutura: { "qualification": { "good": [...], "bad": [...] }, "apresentation": {...}, ... }
     generated_prompt_parts: Optional[Dict[str, Any]] = None
@@ -528,6 +530,67 @@ def _load_knowledge_items(user_id: int) -> Dict[str, str]:
     return knowledge_by_category
 
 
+# Categorias de referência (factos que o agente consulta quando o lead pergunta) sem
+# bloco próprio no decision_engine — entram no bloco único "Base de conhecimento"
+# (knowledge_reference), junto com o conteúdo extra sem categoria (texto livre e
+# uploads). Chave → rótulo exibido na Camada 4 (frontend-crm/src/types/agente.ts).
+_REFERENCE_ONLY_CATEGORIES: Dict[str, str] = {
+    "company_profile": "Perfil da Empresa",
+    "professional_bio": "Bio do Profissional",
+    "pre_meeting_faq": "FAQ Pré-Reunião",
+    "scheduling_policy": "Política de Agendamento",
+    "price_policy": "Política de Preço",
+    "competitive_differentials": "Diferenciação Competitiva",
+}
+
+# Teto de segurança do bloco: um upload grande (PDF, site) não pode encher o prompt de
+# uma vez. Mesmo valor do gatilho da investigação de busca vetorial
+# (docs/discovery/rag-busca-vetorial-conhecimento.md) — acima disto, recuperar só os
+# trechos relevantes passa a compensar.
+_KNOWLEDGE_REFERENCE_MAX_CHARS = 40_000
+
+
+def _load_knowledge_reference(user_id: int) -> List[Dict[str, str]]:
+    """Carrega a base de conhecimento de referência: categorias de _REFERENCE_ONLY_CATEGORIES
+    + itens sem categoria (texto livre / uploads), todos os itens activos (não só o mais
+    recente por categoria). Categorias guiadas primeiro, depois o conteúdo extra.
+
+    Retorna [{"heading": str, "content": str}], limitado a _KNOWLEDGE_REFERENCE_MAX_CHARS."""
+    placeholders = ",".join("?" * len(_REFERENCE_ONLY_CATEGORIES))
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            f"""
+            SELECT title, category, content_text FROM knowledge_items
+             WHERE user_id = ? AND active_in_funnel = 1
+               AND trim(coalesce(content_text, '')) != ''
+               AND (category IS NULL OR trim(category) = '' OR category IN ({placeholders}))
+             ORDER BY (category IS NULL OR trim(category) = ''), updated_at DESC, id DESC
+            """,
+            (user_id, *_REFERENCE_ONLY_CATEGORIES.keys()),
+        ).fetchall()
+
+    items: List[Dict[str, str]] = []
+    total_chars = 0
+    for row in rows:
+        title = (row["title"] or "").strip()
+        label = _REFERENCE_ONLY_CATEGORIES.get((row["category"] or "").strip())
+        if label:
+            heading = f"{label} — {title}" if title and title != label else label
+        else:
+            heading = title or "Informação adicional"
+        content = row["content_text"].strip()
+        if total_chars + len(content) > _KNOWLEDGE_REFERENCE_MAX_CHARS:
+            logger.warning(
+                "knowledge_reference truncada: user_id=%s excede %d caracteres (%d itens incluídos de %d)",
+                user_id, _KNOWLEDGE_REFERENCE_MAX_CHARS, len(items), len(rows),
+            )
+            break
+        total_chars += len(content)
+        items.append({"heading": heading, "content": content})
+    return items
+
+
 def _load_knowledge_media(user_id: int) -> Dict[str, list]:
     """Carrega mídias do knowledge agrupadas por categoria (espelho do executor.py)."""
     knowledge_media: Dict[str, list] = {}
@@ -650,6 +713,13 @@ def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
         knowledge_items = dict(bundle.knowledge_items or {})
         knowledge_items["business_info"] = business_info_text
         updates["knowledge_items"] = knowledge_items
+
+    # B2b — knowledge_reference (categorias de referência sem bloco próprio + conteúdo
+    # extra sem categoria), injectado pelo decision_engine em todas as fases de conversa
+    if bundle.knowledge_reference is None:
+        knowledge_reference = _load_knowledge_reference(user_id)
+        if knowledge_reference:
+            updates["knowledge_reference"] = knowledge_reference
 
     # B3 — generated_prompt_parts (sobe do ai_profile para o nível raiz do contexto)
     if bundle.generated_prompt_parts is None:

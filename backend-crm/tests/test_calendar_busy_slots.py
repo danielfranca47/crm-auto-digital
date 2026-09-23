@@ -42,6 +42,16 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             enabled INTEGER,
             sort_order INTEGER
         );
+
+        CREATE TABLE knowledge_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            title TEXT,
+            content_text TEXT,
+            category TEXT,
+            active_in_funnel INTEGER,
+            updated_at TEXT
+        );
         """
     )
     conn.commit()
