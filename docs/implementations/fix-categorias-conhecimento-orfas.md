@@ -35,6 +35,17 @@ Dois problemas confirmados na triagem:
    `service_pricing_table` (`_MULTI_ITEM_CATEGORIES`, linha 465). No banco local,
    `company_profile` já tem 2 itens ativos.
 
+**Impacto medido em produção (23/09/2026, consulta só de leitura):** 16 dos 25 itens
+de conhecimento ativos (~58% do texto) estão em categorias órfãs, espalhados pelos 3
+clientes: cliente 2 → 3 de 7 itens; cliente 3 → 6 de 8 itens (~83% do texto);
+cliente 4 → 7 de 10 itens. Categorias órfãs com conteúdo real: `company_profile`,
+`professional_bio`, `pre_meeting_faq`, `scheduling_policy`, `price_policy`,
+`competitive_differentials`, `urgency_offer`, `cart_recovery_scripts`,
+`nurture_content`, `warming_script`, `session_preview`, `fit_questions`,
+`handoff_briefing_template`, `post_session_followup`, `pre_session_material`,
+`referral_script`. O problema 2 (itens duplicados na mesma categoria) **não ocorre**
+hoje em produção — prioridade menor que o problema 1.
+
 Comportamento desejado: todo o conteúdo que o utilizador pode cadastrar chega ao
 agente na fase em que faz sentido, ou a categoria deixa de ser oferecida no ecrã.
 

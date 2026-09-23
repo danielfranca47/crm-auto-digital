@@ -1,7 +1,7 @@
 # Centro de Discovery (`docs/discovery/`)
 
 **Branch:** `feat/discovery-centro-inteligencia` (na sessão: `worktree-feat+discovery-centro-inteligencia`)
-**Status:** Em andamento
+**Status:** Todos os cenários validados (23/09/2026) — pendente: graduação (inclui instalar os comandos na pasta principal e apagar o `.txt` original da raiz de `docs/`)
 
 ---
 
@@ -141,8 +141,9 @@ dentro da worktree (ou dos comandos já instalados na pasta principal).
 - **Validado em:** 23/09/2026 — commit `c2c6234`. 4 pesquisas (limite 6), 6 fontes, RICE 0.27, veredito proposto stand-by com gatilho. A medição em produção foi bloqueada pelo modo automático (acesso a produção) e ficou em "Em aberto" + pergunta ao utilizador — comportamento correto do processo.
 
 ### Cenário P3 — Decidir
-- [ ] Rodar `/discovery-decidir` com um veredito "stand-by" e outro "implementations"
-- [ ] Confirmar: stand-by fica no radar com gatilho; implementations gera o stub `Aguardando Plan Mode`
+- [x] Rodar `/discovery-decidir` com um veredito "stand-by" e outro "implementations"
+- [x] Confirmar: stand-by fica no radar com gatilho; implementations gera o stub `Aguardando Plan Mode`
+- **Validado em:** 23/09/2026 — veredito "stand-by" do utilizador aplicado à investigação RAG (commit `5a778dd`): arquivo mantido com status Stand-by e linha no radar com gatilho e última verificação. O caminho "implementations" não teve investigação pronta para testar pelo `/discovery-decidir`; o mesmo formato de stub foi exercitado pela triagem do `/discovery-levantar` (`fix-categorias-conhecimento-orfas.md`, commit `a3be117`) — aceite como cobertura suficiente.
 
 ### Cenário P4 — Recuperação dos comandos
 - [x] Comparar `.claude/commands/discovery-*.md` com os blocos em `docs/ops/local-dev.md`
@@ -157,3 +158,13 @@ dentro da worktree (ou dos comandos já instalados na pasta principal).
   pendentes e verificar gatilhos de stand-by sem intervenção. Só depois de
   validar a qualidade das investigações feitas à mão; exige adaptar a regra de
   git (sem push automático) para um agente que corre sozinho.
+- **Base de dados de inteligência** (ideia do utilizador, 23/09/2026): guardar
+  os estudos feitos num banco para recapitular e acompanhar a evolução
+  (ex.: histórico de medições dos gatilhos, scores ao longo do tempo, vereditos
+  tomados). Hoje os arquivos + o git já guardam isto, mas sem consulta fácil.
+  Candidato a primeira investigação "de processo" da própria discovery.
+- **Análise de conversas reais** (autorizada pelo utilizador): usar o conteúdo
+  de produção (conversas e conhecimento) nas investigações para medir a
+  efetividade do agente com casos reais — ex.: na investigação
+  `conhecimento-fora-fase-apresentacao`, contar quantas vezes o agente disse
+  "vou confirmar com a equipa".

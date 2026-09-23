@@ -1,10 +1,10 @@
 # Metas do Produto
 
-> **Estado: RASCUNHO — a validar pelo utilizador.** Proposto pelo Claude em
-> 23/09/2026 a partir de `docs/marketing/plano-tatico-20-clientes-60-dias.md`,
+> **Estado: validado pelo utilizador em 23/09/2026** (metas e ordem de
+> prioridade). Base: `docs/marketing/plano-tatico-20-clientes-60-dias.md`,
 > `docs/marketing/pricing-strategy.md`, `docs/plans/scale-enterprise-roadmap.md`
-> e `docs/plans/motor-llm-otimizacoes.md`. Enquanto esta linha existir, o
-> `/discovery-status` lembra que as metas precisam de validação.
+> e `docs/plans/motor-llm-otimizacoes.md`. Se o Claude propuser alterações, este
+> estado volta a "rascunho — a validar" até nova validação.
 >
 > Âncora de toda a priorização em `docs/discovery/`: cada investigação diz a que
 > meta serve. Revisão rara — só quando a estratégia comercial mudar.
