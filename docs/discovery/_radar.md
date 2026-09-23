@@ -10,7 +10,7 @@
 
 | Investigação | Meta | Score RICE | Veredito proposto | Perguntas pendentes |
 |---|---|---|---|---|
-| — | | | | |
+| [rag-busca-vetorial-conhecimento](rag-busca-vetorial-conhecimento.md) | M4 | 0.27 | Stand-by (gatilho: cliente com >40 mil caracteres de conhecimento) | 2 (catálogos grandes? consulta a produção?) |
 
 ## Em investigação / Levantadas
 
@@ -19,7 +19,6 @@
 | [conhecimento-fora-fase-apresentacao](conhecimento-fora-fase-apresentacao.md) | M2 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
 | [alucinacao-escape-hatch-cobertura](alucinacao-escape-hatch-cobertura.md) | M2 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
 | [prompt-caching-custo-tokens](prompt-caching-custo-tokens.md) | M4 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
-| [rag-busca-vetorial-conhecimento](rag-busca-vetorial-conhecimento.md) | M4 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
 
 ## Stand-by (gatilhos)
 
