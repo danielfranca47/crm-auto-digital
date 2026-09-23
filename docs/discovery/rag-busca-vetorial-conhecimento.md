@@ -1,6 +1,6 @@
 # Busca vetorial (RAG) para a base de conhecimento
 
-**Status:** Pronta para decisão
+**Status:** Stand-by (decidido pelo utilizador em 23/09/2026)
 **Origem:** `levantamentos/2026-09-23-busca-vetorial-gemini.txt` — recomendação do Gemini de trocar o "contexto estático" por busca vetorial
 **Meta ligada:** M4 — Custo por cliente sustentável (secundária: M2)
 **Área do sistema:** backend-crm (orchestrator, knowledge), backend-executors (decision_engine)
@@ -42,9 +42,13 @@ estamos perto desse ponto?
      (`_evaluate_narrative_knowledge_dedup`, `decision_engine.py:1020`).
 - **Isto já faz parte do que o RAG promete** (enviar só o relevante), só que com um
   critério mais grosseiro: a categoria inteira em vez do trecho exato.
-- **Tamanho (banco local, 23/09/2026):** 3 utilizadores com conhecimento ativo; o
-  maior tem 8 itens / ~7 mil caracteres (~2 mil tokens); a maior categoria isolada
-  tem ~5 mil caracteres. **Produção não medida** (ver "Em aberto").
+- **Tamanho em produção (23/09/2026, consulta só de leitura autorizada):** 3 clientes,
+  25 itens ativos; o maior cliente tem **2.580 caracteres (~650 tokens)**; o maior
+  item isolado tem 712 caracteres. No banco local o maior tem ~7 mil caracteres.
+  Ambos muito abaixo do gatilho.
+- **Achado lateral:** 16 dos 25 itens de produção (~58% do texto) estão em
+  categorias que a IA nunca lê — ver
+  `docs/implementations/fix-categorias-conhecimento-orfas.md`.
 - **Modelo:** `gpt-4o-mini` por padrão (`backend-executors/app/core/config.py:17`),
   janela de ~128 mil tokens; OpenRouter opcional por perfil
   (`app/services/llm_service.py:57`). A maior base local ocupa ~1,5% da janela.
@@ -94,32 +98,30 @@ poupar tokens, o caminho mais barato é o cache de prompt (outra investigação)
 |---|---|---|---|---|
 | 1 | 1 | 0.8 | 3 | **0.27** |
 
-- **R = 1:** nenhum cliente conhecido tem base grande (banco local).
-- **I = 1:** a poupança de tokens com bases de ~2 mil tokens é mínima para M4, e o
+- **R = 1:** nenhum cliente ativo tem base grande (produção: máx. ~650 tokens).
+- **I = 1:** a poupança de tokens com bases deste tamanho é mínima para M4, e o
   ganho de qualidade (M2) só aparece com bases grandes.
-- **C = 0.8:** medido no banco local e confirmado no código; produção não medida.
+- **C = 0.8:** medido em produção e confirmado no código; mantém-se abaixo de 1
+  porque há um cliente com catálogo grande em vista (ver Perguntas).
 - **E = 3:** ingestão + embeddings, busca na montagem do prompt, testes.
 
-## Veredito proposto
+## Veredito
 
-**Stand-by** — não compensa com o tamanho atual das bases; volta à mesa se alguma base crescer.
+**Stand-by** (decidido pelo utilizador em 23/09/2026) — não compensa com o tamanho atual das bases; volta à mesa se alguma base crescer.
 **Gatilho de revisão:** algum cliente com mais de **40 mil caracteres (~10 mil
 tokens) de conhecimento ativo**, OU relatos de respostas erradas em que a informação
 certa estava cadastrada e foi enviada ao agente (sinal de "lost in the middle").
 
 ## Perguntas ao utilizador
 
-1. Algum cliente atual ou em negociação tem um **catálogo grande** (centenas de
-   produtos ou serviços) ou quer carregar documentos longos (PDFs, site inteiro)?
-   Se sim, o gatilho pode já estar perto.
-2. Autorizas uma **consulta só de leitura** ao banco de produção, com números
-   agregados (tamanho da base por cliente, sem ler conteúdo)? O modo automático
-   bloqueou-a, corretamente, por ser acesso a produção.
+1. ~~Algum cliente atual ou em negociação tem catálogo grande?~~ **Sim** (resposta de
+   23/09/2026), mas a base ainda não está em produção. **Quando esse cliente for
+   ativado, verificar o gatilho logo depois de cadastrar o conhecimento.**
+2. ~~Consulta só de leitura a produção?~~ **Autorizada e feita** (23/09/2026).
 
 ## Em aberto
 
-- Tamanho real das bases em **produção** (depende da pergunta 2). Se algum cliente
-  já passar do gatilho, o veredito muda.
+Nada.
 
 ## Fontes
 

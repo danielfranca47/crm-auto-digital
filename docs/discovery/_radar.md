@@ -10,7 +10,7 @@
 
 | Investigação | Meta | Score RICE | Veredito proposto | Perguntas pendentes |
 |---|---|---|---|---|
-| [rag-busca-vetorial-conhecimento](rag-busca-vetorial-conhecimento.md) | M4 | 0.27 | Stand-by (gatilho: cliente com >40 mil caracteres de conhecimento) | 2 (catálogos grandes? consulta a produção?) |
+| — | | | | |
 
 ## Em investigação / Levantadas
 
@@ -24,7 +24,7 @@
 
 | Investigação | Gatilho de revisão | Última verificação |
 |---|---|---|
-| — | | |
+| [rag-busca-vetorial-conhecimento](rag-busca-vetorial-conhecimento.md) | Cliente com >40 mil caracteres de conhecimento ativo, OU respostas erradas com a informação certa cadastrada e enviada. Verificar ao ativar o cliente com catálogo grande (em negociação) | 2026-09-23 — produção: máx. 2.580 caracteres (não disparou) |
 
 ## Descartados (não reabrir sem facto novo)
 
