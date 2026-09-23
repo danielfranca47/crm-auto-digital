@@ -100,6 +100,24 @@ nova). O backend-crm tem erros de recolha antigos quando corre inteiro (testes q
 substituem o `fastapi` e um erro do pydantic em `InboundWebhookPayload`), sem
 relação com esta fase; os testes do orchestrator passam quando corridos isolados.
 
+#### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `224d23e` | `knowledge_reference` (orchestrator + executor + decision_engine), testes, docs |
+
+#### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** o perfil da empresa, a bio do profissional, a FAQ pré-reunião, as
+políticas de agendamento e de preço, a diferenciação competitiva e tudo o que era
+adicionado como "conteúdo extra" (texto livre ou upload) ficavam guardados, mas a IA
+nunca os via. Perguntas sobre isso ficavam sem resposta ou eram improvisadas.
+**Agora:** esse conteúdo chega à IA em todas as fases da conversa, num bloco único,
+com a instrução de o usar quando o lead pergunta algo que ele cobre e depois retomar
+o objetivo da fase. Os roteiros (recuperação de carrinho, aquecimento, etc.)
+continuam de fora, de propósito: vão para o Fluxo de Venda na Fase 3.
+**Para validar:** Cenários P1, P2 e P4, abaixo.
+
 ### Fase 2 — Consolidar (remover a ambiguidade)
 
 **Objetivo:** as categorias de Referência já lidas passam para o mesmo bloco único;
