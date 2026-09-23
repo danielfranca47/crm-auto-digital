@@ -26,5 +26,7 @@ qualificação ou fecho, o agente responde com o conhecimento cadastrado — ou 
   apresentação mesmo com qualificação incompleta ("PRIORIDADE 1B",
   `decision_engine.py:2499`). Se a Mãe errar a classificação, o lead fica sem
   resposta.
-- **Hipótese, não confirmada:** falta medir com que frequência isso acontece
-  (playground e logs de produção do worker backend-executors).
+- **Hipótese, não confirmada:** falta medir com que frequência isso acontece.
+  Leitura de conversas reais de produção autorizada pelo utilizador (ver
+  `_guia-discovery.md`, Passo 3): contar respostas "vou confirmar com a equipa" nas
+  fases de qualificação e fecho e verificar se a resposta estava na base.

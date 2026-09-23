@@ -71,10 +71,18 @@ levantamento com 8 gaps não gasta tokens a investigar todos de uma vez.
 Uma investigação por vez. Status passa para `Em investigação` no início e para
 `Pronta para decisão` no fim.
 
-1. **Evidência no código** — como funciona hoje, com arquivo:linha. Quando
-   possível, medir (tamanho de dados, frequência no banco local, logs de produção
-   via Railway — ver memória `reference-railway-production-access`). Um número
-   vale mais que uma opinião.
+1. **Evidência no código e nos dados reais** — como funciona hoje, com
+   arquivo:linha. Quando possível, medir: tamanho de dados, frequências, e
+   **conversas reais de produção** para medir a efetividade do agente (ex.:
+   quantas vezes disse "vou confirmar com a equipa"). Um número vale mais que uma
+   opinião.
+   - **Produção:** o utilizador autorizou (23/09/2026) leituras de produção para
+     investigações, incluindo conteúdo. Sempre **só leitura** (SQLite com
+     `?mode=ro`) via `railway ssh -s backend-crm`; logs de decisão da IA no serviço
+     `worker backend-executors` (ver memória `reference-railway-production-access`).
+     O modo automático pode pedir confirmação a cada acesso — é esperado.
+   - **Privacidade:** nos arquivos de discovery só entram números agregados e
+     trechos anonimizados — nunca nomes, telefones ou conversas identificáveis.
 2. **Como o mercado faz** — 2 a 4 referências (plataformas concorrentes ou de
    referência, documentação técnica, artigos de engenharia), via WebSearch. Cada
    afirmação com link em "Fontes". Adaptar ao nosso contexto: o que funciona para

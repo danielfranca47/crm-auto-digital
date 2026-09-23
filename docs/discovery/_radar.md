@@ -19,6 +19,7 @@
 | [conhecimento-fora-fase-apresentacao](conhecimento-fora-fase-apresentacao.md) | M2 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
 | [alucinacao-escape-hatch-cobertura](alucinacao-escape-hatch-cobertura.md) | M2 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
 | [prompt-caching-custo-tokens](prompt-caching-custo-tokens.md) | M4 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
+| [base-dados-inteligencia-estudos](base-dados-inteligencia-estudos.md) | — (processo) | Levantado | Sugestão do utilizador na graduação da discovery |
 
 ## Stand-by (gatilhos)
 

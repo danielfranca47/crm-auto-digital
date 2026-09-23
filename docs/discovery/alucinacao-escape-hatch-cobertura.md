@@ -23,6 +23,8 @@ temos forma de saber quando ele inventou ou quando pediu ajuda à equipa?
   pré-agendamento.
 - Também há regras "NUNCA prometa descontos… não presentes em knowledge_items"
   (`decision_engine.py:2982`).
+- Medição possível com conversas reais de produção (leitura autorizada pelo
+  utilizador — ver `_guia-discovery.md`, Passo 3).
 - **Não se sabe** se há métrica/painel de quantas vezes o escape hatch dispara, nem
   forma de detetar alucinação depois do facto. Há também o risco de ele disparar
   **demais** quando a informação existe mas não foi carregada na fase (ver
