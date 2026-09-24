@@ -115,7 +115,7 @@ nunca os via. Perguntas sobre isso ficavam sem resposta ou eram improvisadas.
 **Agora:** esse conteúdo chega à IA em todas as fases da conversa, num bloco único,
 com a instrução de o usar quando o lead pergunta algo que ele cobre e depois retomar
 o objetivo da fase. Os roteiros (recuperação de carrinho, aquecimento, etc.)
-continuam de fora, de propósito: vão para o Fluxo de Venda na Fase 3.
+continuam de fora, de propósito: vão para o Fluxo de Venda na Fase 4.
 **Para validar:** Cenários P1, P2 e P4, abaixo.
 
 ### Fase 2 — Consolidar (remover a ambiguidade)
@@ -123,9 +123,72 @@ continuam de fora, de propósito: vão para o Fluxo de Venda na Fase 3.
 **Objetivo:** as categorias de Referência já lidas passam para o mesmo bloco único;
 saem as instruções "usar APENAS quando…" por categoria (`decision_engine.py`,
 apresentação e follow-up), mantendo as notas de mídia e as narrativas. Qualificação e
-fecho passam a ter FAQs e preços. Medir o tamanho do prompt antes/depois.
+fecho passam a ter as FAQs; o preço na qualificação fica como estava (ver decisão abaixo).
+Medir o tamanho do prompt antes/depois.
 
-### Fase 3 — Limpar a Camada 4
+**Decisão no Plan Mode (24/09/2026):** a qualificação retém preço e oferta desde
+22/04/2026 (commit `6a05d31`: "preços são exclusivos da fase de apresentação"). O
+utilizador decidiu que isto **não é uma regra fixa**: depende do processo de venda de
+cada cliente. A Fase 2 mantém o comportamento atual e a Fase 3 transforma-o numa opção.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | `_REFERENCE_CATEGORIES` com as 9 categorias já lidas; itens com `category`; tabela estruturada renderizada |
+| `backend-executors/app/services/decision_engine.py` | `_build_knowledge_reference_block(exclude_categories)`; saem os blocos "usar APENAS" (apresentação, modo comercial sob pedido, follow-up); exclusões por fase (`_QUALIFICATION_WITHHELD_CATEGORIES`, mídia na apresentação, `_COMMERCIAL_INJECTION_CATEGORIES`, tabela no agendamento); notas de mídia genéricas; regra de pagamento presencial do modo comercial; qualificação responde com "custom_instructions e a base de conhecimento"; instrução geral cobre objeções |
+| `backend-executors/tests/test_knowledge_reference_block.py` | Exclusões, qualificação (FAQ sim, preço não), fases seguintes sem "usar APENAS", agendamento sem tabela duplicada, follow-up sem promessa de mídia |
+| `backend-executors/tests/test_apresentation_ondemand_commercial_knowledge.py` | Reescrito: tabela pelo bloco único em qualquer template, 1 só vez no turno comercial, nota de mídia |
+| `backend-executors/tests/test_narrative_knowledge_dedup.py` | FAQs passam a vir por `knowledge_reference` |
+| `backend-crm/tests/test_knowledge_reference.py` | Categorias novas, `category`, tabela renderizada |
+| `docs/architecture/knowledge-base.md`, `pipeline-phases.md`, `docs/prompts_llms.md` | Tabela de exclusões por fase, mapa de blocos |
+
+**Tamanho do prompt (conta de teste, antes → depois, em caracteres):**
+
+| Fase | Antes | Depois | "usar APENAS" | FAQ do Serviço | Tabela de preços |
+|---|---|---|---|---|---|
+| Qualificação | 13 083 | 13 857 | 0 → 0 | não → **sim** | não → não (retida) |
+| Apresentação | 17 025 | 16 773 | 3 → 0 | sim | sim |
+| Follow-up | 11 911 | 12 203 | 1 → 0 | sim | não → **sim** |
+| Fecho | 10 730 | 11 592 | 0 | não → **sim** | não → **sim** |
+| Pré-agendamento | 10 939 | 11 801 | 0 | não → **sim** | não → **sim** |
+| Agendamento | 12 018 | 12 714 | 0 | não → **sim** | sim (1 vez) |
+
+**Testes:** 22 no bloco, 7 no comercial sob pedido e 10 no orchestrator, todos a passar.
+A suíte completa do backend-executors tem 72 falhas antes e depois, a mesma lista (as 73
+referidas na Fase 1 eram 72 nesta máquina). No backend-crm, `test_inbound_orchestrator_flag`
+falha igual no commit da Fase 1 (erro antigo do pydantic em `InboundWebhookPayload`).
+
+#### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `a1ad9ad` | Bloco único com todas as categorias de referência, exclusões por fase, testes, docs |
+
+#### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a IA recebia o conhecimento de duas formas diferentes. Uma parte vinha num
+bloco único e outra vinha em pedaços, cada um com a sua regra ("usar APENAS se o lead
+pedir o preço", "usar APENAS quando levantar uma objeção"…). Essas regras só existiam na
+apresentação e no follow-up. A qualificação, o fecho e o agendamento não viam as FAQs,
+a garantia nem as objeções. Com mídia configurada, o follow-up dizia à IA que ia enviar
+um ficheiro que nunca era enviado.
+**Agora:** todo o conhecimento vem num só bloco, com uma só instrução, em todas as
+fases. Cada fase só deixa de fora o que já recebe por outro caminho: a tabela no
+agendamento, porque já lá está para calcular a duração; o que tem imagem ou ficheiro na
+apresentação, porque o ficheiro é a resposta. Os preços continuam retidos na qualificação,
+como hoje, até à Fase 3. O prompt da apresentação ficou um pouco mais pequeno. As outras
+fases cresceram entre 300 e 900 caracteres, que é o conhecimento que lhes faltava.
+**Para validar:** Cenário P3, abaixo.
+
+### Fase 3 — "Preço na qualificação" passa a ser escolha do utilizador
+
+**Objetivo:** na Camada 2, cada utilizador escolhe o que o agente faz quando o lead
+pergunta o preço durante a qualificação: "responder quando perguntado" ou "deixar para
+a apresentação" (predefinido, igual ao comportamento atual). Novo campo
+`qualification_price_disclosure` (`on_request` / `after_qualification`) no AI profile
+(backend-core), lido pelo prompt de qualificação; seletor na Camada 2 e no resumo; campo
+no painel admin (`admin-agents-contract.md`). A mídia continua só na apresentação.
+
+### Fase 4 — Limpar a Camada 4
 
 **Objetivo:** retirar as categorias Roteiro e Duplicado das listas por template;
 itens existentes nelas aparecem numa secção "Para mover" (destino indicado, texto para
@@ -152,11 +215,18 @@ copiar), fora do prompt e fora do conteúdo extra.
 - [x] Confirmar: o texto não aparece no prompt nem nas respostas
 - **Validado em:** 24/09/2026 — o template `hybrid_scheduler` não oferece "Recuperação de Carrinho"; usei o "Script de Aquecimento" (`warming_script`) com a frase-marcador "férias em Fernando de Noronha". Resultados: `knowledge_reference` do lead com 2 itens (perfil + conteúdo extra, sem o roteiro); a marca não aparece em nenhum dos 3 prompts capturados nem nas respostas do playground; nenhum código do backend lê `warming_script`.
 
-### Cenário P3 — Preço perguntado na qualificação (Fase 2)
-- [ ] (definido na Fase 2)
+### Cenário P3 — Conhecimento consolidado em todas as fases (Fase 2)
+- [ ] Camada 4 → "FAQ do Serviço" com um facto único (conta de teste: "cada sessão dura 50 minutos, mais 10 de conversa inicial")
+- [ ] Playground, lead em qualificação: perguntar "quanto tempo dura a sessão?" → responde com os 50 minutos e continua o objetivo da fase
+- [ ] Playground, apresentação: perguntar o preço → responde com a tabela cadastrada
+- [ ] Playground, qualificação: perguntar o preço → comportamento de hoje (não dá valores; ficam para a apresentação)
+- [ ] Prompt reconstruído (mesmo método da Fase 1): nenhum "usar APENAS" nos blocos de conhecimento; a FAQ e a tabela aparecem uma só vez
 
-### Cenário P5 — Camada 4 limpa (Fase 3)
+### Cenário P6 — Preço na qualificação configurável (Fase 3)
 - [ ] (definido na Fase 3)
+
+### Cenário P5 — Camada 4 limpa (Fase 4)
+- [ ] (definido na Fase 4)
 
 ---
 
