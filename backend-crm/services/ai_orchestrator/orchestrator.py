@@ -530,17 +530,27 @@ def _load_knowledge_items(user_id: int) -> Dict[str, str]:
     return knowledge_by_category
 
 
-# Categorias de referência (factos que o agente consulta quando o lead pergunta) sem
-# bloco próprio no decision_engine — entram no bloco único "Base de conhecimento"
-# (knowledge_reference), junto com o conteúdo extra sem categoria (texto livre e
-# uploads). Chave → rótulo exibido na Camada 4 (frontend-crm/src/types/agente.ts).
-_REFERENCE_ONLY_CATEGORIES: Dict[str, str] = {
+# Categorias de referência (factos que o agente consulta quando o lead pergunta) — entram
+# no bloco único "Base de conhecimento" (knowledge_reference), junto com o conteúdo extra
+# sem categoria (texto livre e uploads). O decision_engine decide por fase o que excluir
+# (ex.: categorias com mídia na apresentação, preço na qualificação). Chave → rótulo
+# exibido na Camada 4 (frontend-crm/src/types/agente.ts).
+_REFERENCE_CATEGORIES: Dict[str, str] = {
     "company_profile": "Perfil da Empresa",
     "professional_bio": "Bio do Profissional",
     "pre_meeting_faq": "FAQ Pré-Reunião",
     "scheduling_policy": "Política de Agendamento",
     "price_policy": "Política de Preço",
     "competitive_differentials": "Diferenciação Competitiva",
+    "service_faq": "FAQ do Serviço",
+    "objections_faq": "Objeções e Respostas",
+    "guarantee_policy": "Política de Garantia",
+    "service_pricing_table": "Tabela de Serviços e Preços",
+    "commercial_objections": "Objeções Comerciais e Respostas",
+    "service_differentials": "Diferenciais do Serviço",
+    "active_promotion": "Condição Especial Vigente",
+    "payment_policy": "Política de Pagamento Presencial",
+    "pre_commitment_faq": "FAQ Pré-Compromisso",
 }
 
 # Teto de segurança do bloco: um upload grande (PDF, site) não pode encher o prompt de
@@ -551,12 +561,13 @@ _KNOWLEDGE_REFERENCE_MAX_CHARS = 40_000
 
 
 def _load_knowledge_reference(user_id: int) -> List[Dict[str, str]]:
-    """Carrega a base de conhecimento de referência: categorias de _REFERENCE_ONLY_CATEGORIES
+    """Carrega a base de conhecimento de referência: categorias de _REFERENCE_CATEGORIES
     + itens sem categoria (texto livre / uploads), todos os itens activos (não só o mais
     recente por categoria). Categorias guiadas primeiro, depois o conteúdo extra.
 
-    Retorna [{"heading": str, "content": str}], limitado a _KNOWLEDGE_REFERENCE_MAX_CHARS."""
-    placeholders = ",".join("?" * len(_REFERENCE_ONLY_CATEGORIES))
+    Retorna [{"heading", "content", "category"}] ("category" vazio no conteúdo extra),
+    limitado a _KNOWLEDGE_REFERENCE_MAX_CHARS."""
+    placeholders = ",".join("?" * len(_REFERENCE_CATEGORIES))
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -567,19 +578,26 @@ def _load_knowledge_reference(user_id: int) -> List[Dict[str, str]]:
                AND (category IS NULL OR trim(category) = '' OR category IN ({placeholders}))
              ORDER BY (category IS NULL OR trim(category) = ''), updated_at DESC, id DESC
             """,
-            (user_id, *_REFERENCE_ONLY_CATEGORIES.keys()),
+            (user_id, *_REFERENCE_CATEGORIES.keys()),
         ).fetchall()
 
     items: List[Dict[str, str]] = []
     total_chars = 0
     for row in rows:
         title = (row["title"] or "").strip()
-        label = _REFERENCE_ONLY_CATEGORIES.get((row["category"] or "").strip())
+        category = (row["category"] or "").strip()
+        label = _REFERENCE_CATEGORIES.get(category)
         if label:
             heading = f"{label} — {title}" if title and title != label else label
         else:
             heading = title or "Informação adicional"
-        content = row["content_text"].strip()
+        if category in _MULTI_ITEM_CATEGORIES:
+            # Tabela estruturada (JSON) → texto; o título já vai no heading.
+            content = _render_service_pricing_block("", row["content_text"]).strip()
+            if not content:
+                continue
+        else:
+            content = row["content_text"].strip()
         if total_chars + len(content) > _KNOWLEDGE_REFERENCE_MAX_CHARS:
             logger.warning(
                 "knowledge_reference truncada: user_id=%s excede %d caracteres (%d itens incluídos de %d)",
@@ -587,7 +605,7 @@ def _load_knowledge_reference(user_id: int) -> List[Dict[str, str]]:
             )
             break
         total_chars += len(content)
-        items.append({"heading": heading, "content": content})
+        items.append({"heading": heading, "content": content, "category": category})
     return items
 
 

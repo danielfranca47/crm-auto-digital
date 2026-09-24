@@ -1,6 +1,8 @@
-"""_load_knowledge_reference: categorias de referência sem bloco próprio + conteúdo extra
-sem categoria chegam ao ContextBundle (knowledge_reference); roteiros, categorias já lidas
-por bloco próprio e itens inactivos ficam de fora. Ver docs/architecture/knowledge-base.md."""
+"""_load_knowledge_reference: categorias de referência + conteúdo extra sem categoria chegam
+ao ContextBundle (knowledge_reference), cada item com a sua categoria; roteiros, itens
+inactivos e vazios ficam de fora. Ver docs/architecture/knowledge-base.md."""
+
+import json
 
 import os
 import sqlite3
@@ -64,7 +66,10 @@ class LoadKnowledgeReferenceTest(unittest.TestCase):
 
     def test_reference_category_uses_label_as_heading(self):
         self._insert("Perfil da Empresa", "Somos a Clínica Exemplo.", "company_profile")
-        self.assertEqual(self._load(), [{"heading": "Perfil da Empresa", "content": "Somos a Clínica Exemplo."}])
+        self.assertEqual(
+            self._load(),
+            [{"heading": "Perfil da Empresa", "content": "Somos a Clínica Exemplo.", "category": "company_profile"}],
+        )
 
     def test_custom_title_is_appended_to_label(self):
         self._insert("Unidade Centro", "Rua A, 10.", "company_profile")
@@ -83,9 +88,32 @@ class LoadKnowledgeReferenceTest(unittest.TestCase):
         self._insert("FAQ Pré-Reunião", "É online.", "pre_meeting_faq", updated_at="2026-09-21")
         self.assertEqual([i["content"] for i in self._load()], ["É online.", "Dura 30 min."])
 
-    def test_excludes_scripts_categories_with_own_block_inactive_empty_and_other_users(self):
+    def test_extra_content_has_empty_category(self):
+        self._insert("Domicílio", "Atendemos ao domicílio.", None)
+        self.assertEqual(self._load()[0]["category"], "")
+
+    def test_previously_read_reference_categories_are_included(self):
+        self._insert("FAQ do Serviço", "A sessão dura 50 min.", "service_faq")
+        self._insert("Garantia", "Devolvemos o valor.", "guarantee_policy")
+        items = self._load()
+        self.assertEqual(
+            sorted((i["category"], i["heading"]) for i in items),
+            [("guarantee_policy", "Política de Garantia — Garantia"), ("service_faq", "FAQ do Serviço")],
+        )
+
+    def test_structured_pricing_table_is_rendered_as_text(self):
+        table = json.dumps({
+            "format": "structured_v1",
+            "rows": [{"nome": "Massagem relaxante", "duracaoMinutos": 60, "preco": "R$ 180"}],
+        })
+        self._insert("Unidade Pinheiros", table, "service_pricing_table")
+        item = self._load()[0]
+        self.assertEqual(item["heading"], "Tabela de Serviços e Preços — Unidade Pinheiros")
+        self.assertEqual(item["content"], "- Massagem relaxante — 60min: R$ 180")
+
+    def test_excludes_scripts_inactive_empty_and_other_users(self):
         self._insert("Script", "Recupere o carrinho assim…", "cart_recovery_scripts")
-        self._insert("FAQ", "Já lida por bloco próprio.", "service_faq")
+        self._insert("Aquecimento", "Conecte a dor…", "warming_script")
         self._insert("Inactivo", "Não usar.", "company_profile", active=0)
         self._insert("Áudio", "", None)
         self._insert("Outro user", "Não é meu.", "company_profile", user_id=2)

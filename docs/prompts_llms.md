@@ -56,8 +56,9 @@ ContextBundle {
                         asked_questions_json, last_question_text)
   knowledge_items  — base de conhecimento do usuário (dict por categoria)
   knowledge_media  — chaves das categorias que têm mídia (set)
-  knowledge_reference — base de referência sem bloco próprio + conteúdo extra
-                        ([{heading, content}], ver docs/architecture/knowledge-base.md)
+  knowledge_reference — base de referência (FAQs, políticas, preços, objeções…) + conteúdo
+                        extra ([{heading, content, category}], ver
+                        docs/architecture/knowledge-base.md)
   training_examples — exemplos classificados pelo operador no Playground (bom/ruim por fase)
   generated_prompt_parts — blocos gerados pelo meta-prompter (few-shot por fase,
                            tone_rules, qualification_phrasing, objection_rewrites,
@@ -384,7 +385,7 @@ DESEJÁVEIS — capturar se surgir oportunidade natural:
 | `hybrid_flow_style` | `_resolve_hybrid_flow_style()` | `ai_profile.hybrid_flow_style` ou `metadata.hybrid_flow_style` |
 | `offer_pack_summary` | `_build_offer_pack_summary()` | `ai_profile.offer_pack` (JSON) ou fallback de `offer_description` |
 | `appointment_mode` | `ai_profile.appointment_mode` | `"exploratory"` (padrão) ou `"commercial"` — só relevante para `hybrid_scheduler` |
-| `knowledge_items` | `context["knowledge_items"]` | dict com categorias: social_proof, pitch_script, product_details, objections_faq, service_faq, guarantee_policy |
+| `knowledge_items` | `context["knowledge_items"]` | dict por categoria — aqui só as narrativas (social_proof, pitch_script, product_details) e o bloco MODO COMERCIAL; o resto vem de `knowledge_reference` |
 | `knowledge_media` | `context["knowledge_media"]` | chaves com mídia — suprime texto descritivo |
 | `warming_social_proof` | `ai_profile.warming_social_proof` | texto de prova social (agent 3 exploratory) |
 | `warming_session_preview` | `ai_profile.warming_session_preview` | preview da sessão (agent 3 exploratory) |
@@ -474,18 +475,19 @@ Lê as categorias de `knowledge_items` específicas do modo comercial:
 
 Regra crítica embutida: "pagamento é SEMPRE presencial — NUNCA envie link de checkout."
 
-#### 1.4.3 `standard_knowledge_block` — Knowledge Base (fora do commercial)
+#### 1.4.3 `standard_knowledge_block` — narrativas e notas de mídia
 
-Injetado quando NÃO há `commercial_injection` e `knowledge_items` não está vazio. Cada categoria tem instrução de uso diferente:
+Só as categorias **narrativas** (com dedup 1x por lead) e as notas de mídia. FAQs, políticas,
+preços e objeções vêm do bloco único "BASE DE CONHECIMENTO DO NEGÓCIO"
+(`_build_knowledge_reference_block`, uma instrução para tudo).
 
-| Categoria | Instrução de uso | Comportamento com mídia |
+| Parte | Quando | Instrução |
 |---|---|---|
-| `social_proof` | Integrar na fase de warming ou quando lead hesitar. Nunca dizer "temos uma prova social" | — |
-| `pitch_script` | Usar como guia estrutural, não copiar literalmente | Se tiver mídia: omite texto, só introdução curta |
-| `product_details` | Usar dados presentes; nunca inventar features | Se tiver mídia: omite texto, só introdução curta |
-| `objections_faq` | Usar apenas quando lead levantar objeção; adaptar tom | — |
-| `service_faq` | Usar apenas quando lead fizer pergunta coberta; handoff se não coberta | Se tiver mídia: omite texto, só introdução curta |
-| `guarantee_policy` | Citar apenas quando lead demonstrar hesitação sobre risco | — |
+| `social_proof` | fora do turno comercial, 1ª vez | Integrar na fase de warming ou quando lead hesitar. Nunca dizer "temos uma prova social" |
+| `pitch_script` | fora do turno comercial, 1ª vez | Guia estrutural, não copiar literalmente (com mídia: só introdução curta) |
+| `product_details` | fora do turno comercial, 1ª vez | Usar dados presentes; nunca inventar features (com mídia: só introdução curta) |
+| `PAGAMENTO (modo comercial)` | `hybrid_scheduler` + `appointment_mode=commercial`, fora do turno comercial | Pagamento sempre presencial, sem link de checkout |
+| Nota de mídia por categoria de referência | categoria em `knowledge_media` | "Conteúdo disponível em mídia — escreva só uma frase curta de introdução"; o texto sai do bloco de referência |
 
 ---
 
@@ -569,7 +571,7 @@ Quando `is_followup_tick=False`:
 Faça no máximo 1 pergunta por mensagem e priorize o próximo missing_field.
 ```
 
-**Knowledge Base (follow-up):** injetado via `followup_knowledge_block` com categorias: `social_proof`, `objections_faq`, `service_faq` (com mesmas instruções de uso da apresentação).
+**Knowledge Base (follow-up):** `followup_knowledge_block` só com `social_proof` (narrativa, dedup). FAQs, objeções e o resto vêm do bloco único `_build_knowledge_reference_block`, em texto (o follow-up não envia mídia do knowledge).
 
 ---
 
@@ -855,9 +857,9 @@ Blocos que só aparecem no prompt quando certas condições são atendidas:
 | `WARMING scheduler` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `presentation_variant=scheduler` | apresentation |
 | `COMMERCIAL INJECTION` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `appointment_mode=commercial` | apresentation |
 | `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | apresentation |
-| `standard_knowledge_block` | `not commercial_injection` + `knowledge_items` não vazio | apresentation |
-| `followup_knowledge_block` | `knowledge_items` com social_proof/objections_faq/service_faq | followup |
-| `_build_knowledge_reference_block` ("BASE DE CONHECIMENTO DO NEGÓCIO" + "COMO USAR") | `context["knowledge_reference"]` não vazio | qualification, apresentation, followup, closing, pre-agendamento, agendamento (sempre ao lado de `business_info`) |
+| `standard_knowledge_block` | narrativas com conteúdo novo, nota de pagamento do modo comercial ou categoria de referência com mídia | apresentation |
+| `followup_knowledge_block` | `social_proof` ainda não mostrada | followup |
+| `_build_knowledge_reference_block` ("BASE DE CONHECIMENTO DO NEGÓCIO" + "COMO USAR") | `context["knowledge_reference"]` não vazio (menos as categorias excluídas pela fase — ver `knowledge-base.md`) | qualification (sem preço/oferta), apresentation (sem categorias com mídia), followup, closing, pre-agendamento, agendamento (sem a tabela, já em "SERVIÇOS E DURAÇÕES") — sempre ao lado de `business_info` |
 | `VARIANT_RULE cart_recovery` | `followup_variant=cart_recovery` | followup |
 | `VARIANT_RULE hybrid_scheduler` | `followup_variant=hybrid_scheduler` | followup |
 | `FOLLOWUP_PRIORITY_RULE` (tick) | `is_followup_tick=True` | followup |

@@ -60,29 +60,46 @@ tabelas concatenadas — usado no bloco "MODO COMERCIAL" da fase de apresentaç�
 
 ## Base de conhecimento de referência — `knowledge_reference`
 
-Categorias de **referência** (factos que o lead pode perguntar a qualquer momento) sem bloco
-próprio no `decision_engine`, mais o **conteúdo extra** sem categoria (texto livre e uploads da
-Camada 4), chegam à LLM num bloco único:
+Todo o conhecimento de **referência** (factos que o lead pode perguntar a qualquer momento),
+mais o **conteúdo extra** sem categoria (texto livre e uploads da Camada 4), chega à LLM num
+bloco único, com uma só instrução:
 
 - **Carregamento:** `_load_knowledge_reference()` (`orchestrator.py`) — categorias em
-  `_REFERENCE_ONLY_CATEGORIES` (`company_profile`, `professional_bio`, `pre_meeting_faq`,
-  `scheduling_policy`, `price_policy`, `competitive_differentials`) + itens com `category`
-  vazia. **Todos** os itens activos com texto (não só o mais recente por categoria); guiadas
-  primeiro, extra depois. Teto de `_KNOWLEDGE_REFERENCE_MAX_CHARS` (40 000 caracteres — o
-  gatilho de `docs/discovery/rag-busca-vetorial-conhecimento.md`); acima disso trunca e loga
-  `knowledge_reference truncada`. Formato: `[{"heading", "content"}]`, heading = rótulo da
-  categoria (+ título quando diferente) ou o título do item extra.
+  `_REFERENCE_CATEGORIES` (`company_profile`, `professional_bio`, `pre_meeting_faq`,
+  `scheduling_policy`, `price_policy`, `competitive_differentials`, `service_faq`,
+  `objections_faq`, `guarantee_policy`, `service_pricing_table`, `commercial_objections`,
+  `service_differentials`, `active_promotion`, `payment_policy`, `pre_commitment_faq`) + itens
+  com `category` vazia. **Todos** os itens activos com texto (não só o mais recente por
+  categoria); guiadas primeiro, extra depois. `service_pricing_table` estruturada (JSON) é
+  renderizada em texto por `_render_service_pricing_block()`. Teto de
+  `_KNOWLEDGE_REFERENCE_MAX_CHARS` (40 000 caracteres — o gatilho de
+  `docs/discovery/rag-busca-vetorial-conhecimento.md`); acima disso trunca e loga
+  `knowledge_reference truncada`. Formato: `[{"heading", "content", "category"}]`, heading =
+  rótulo da categoria (+ título quando diferente) ou o título do item extra; `category` vazia
+  no conteúdo extra.
 - **Paridade:** campo `knowledge_reference` do `ContextBundle`, preenchido em
   `enrich_context_bundle()` (B2b, ver [`playground-parity.md`](playground-parity.md)).
-- **Injecção:** `_build_knowledge_reference_block()` (`decision_engine.py`), sempre ao lado de
-  `_build_business_info_block()` — qualificação, apresentação, follow-up, fecho,
-  pré-agendamento e agendamento. **Uma** instrução semântica para o bloco inteiro (consultar
-  quando o lead pergunta algo coberto, responder só com o trecho relevante, retomar o objetivo
-  da fase, "vou confirmar com a equipa" se não estiver lá) — em vez de uma regra "usar APENAS
+- **Injecção:** `_build_knowledge_reference_block(context, exclude_categories)`
+  (`decision_engine.py`), sempre ao lado de `_build_business_info_block()` — qualificação,
+  apresentação, follow-up, fecho, pré-agendamento e agendamento. **Uma** instrução semântica
+  para o bloco inteiro (consultar quando o lead pergunta algo coberto, responder só com o
+  trecho relevante, retomar o objetivo da fase, "vou confirmar com a equipa" se um facto não
+  estiver lá; objeção não listada → empatia + valor) — em vez de uma regra "usar APENAS
   quando X" por categoria.
+- **O que cada fase exclui** (`exclude_categories`), sempre por receber o conteúdo por outro
+  caminho ou por decisão de produto:
 
-Categorias já lidas por bloco próprio (`objections_faq`, `service_faq`, `service_pricing_table`,
-etc., ver abaixo) **não** entram em `knowledge_reference`, para não duplicar texto no prompt.
+  | Fase | Exclui | Porquê |
+  |---|---|---|
+  | Qualificação | `_QUALIFICATION_WITHHELD_CATEGORIES` (`service_pricing_table`, `price_policy`, `active_promotion`, `payment_policy`, `commercial_objections`) | Preço/oferta são apresentados na apresentação (decisão de 22/04/2026) |
+  | Apresentação | Categorias de referência com mídia em `knowledge_media` | A mídia é a resposta; fica só uma nota "conteúdo disponível em mídia — escreva só uma frase de introdução" |
+  | Apresentação, turno único de aquecimento comercial | `_COMMERCIAL_INJECTION_CATEGORIES` | Já mostradas em texto no bloco "MODO COMERCIAL" |
+  | Agendamento | `service_pricing_table` | Já está no bloco "SERVIÇOS E DURAÇÕES" (usado para a duração da marcação) |
+  | Follow-up, fecho, pré-agendamento | — | Recebem tudo (o follow-up não envia mídia, por isso recebe o texto mesmo com mídia configurada) |
+
+`knowledge_items` (1 texto por categoria) continua no `ContextBundle` para o que não é
+referência: narrativas com dedup, o bloco "MODO COMERCIAL", o bloco de serviços do
+agendamento e a seleção de mídia.
 
 ## Instrução ao LLM — `backend-executors/app/services/decision_engine.py`
 
@@ -94,12 +111,10 @@ duração/preço errados quando o profissional tem mais de um serviço cadastrad
 ## Dedup de categorias narrativas (evitar repetição entre turnos)
 
 `_apres_knowledge_parts`/`standard_knowledge_block` (fase apresentação) e
-`followup_knowledge_block` (fase follow-up), em `decision_engine.py`, injetam o conteúdo cru de
-algumas categorias diretamente no prompt da filha. A maioria é **reativa** — condicionada a "usar
-APENAS quando/se o lead perguntar X" (`objections_faq`, `service_faq`, `guarantee_policy`,
-`service_pricing_table`, `commercial_objections`, `service_differentials`, `active_promotion`,
-`payment_policy`, `pre_commitment_faq`) — fica sempre disponível, sem dedup, porque o lead pode
-perguntar por aquilo a qualquer momento da conversa.
+`followup_knowledge_block` (fase follow-up), em `decision_engine.py`, injetam só as categorias
+**narrativas** e as notas de mídia. As categorias de referência (FAQs, políticas, preços,
+objeções…) vão pelo bloco único `knowledge_reference` (acima), sempre disponíveis e sem dedup,
+porque o lead pode perguntar por aquilo a qualquer momento da conversa.
 
 Três categorias são **narrativas** — informação para contar proativamente uma vez, não para
 responder sob demanda: `social_proof`, `pitch_script`, `product_details` (só as duas primeiras

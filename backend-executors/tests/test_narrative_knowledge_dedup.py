@@ -146,7 +146,9 @@ def test_apresentation_prompt_omits_social_proof_after_shown():
 
 def test_apresentation_prompt_keeps_reactive_faq_regardless_of_shown_state():
     context = _apres_context(shown='["social_proof", "pitch_script"]')
-    context["knowledge_items"]["objections_faq"] = "Resposta X de objeção."
+    context["knowledge_reference"] = [
+        {"heading": "Objeções e Respostas", "content": "Resposta X de objeção.", "category": "objections_faq"},
+    ]
     prompt = _build_child_prompt_apresentation(context, "oi", _mother_apres())
     assert "Resposta X de objeção." in prompt
 
@@ -220,7 +222,10 @@ def test_followup_prompt_omits_social_proof_after_shown():
         "playbook": {},
         "metadata": {"inbound_message_text": "oi"},
         "history": [],
-        "knowledge_items": {"social_proof": _SOCIAL, "objections_faq": "resposta X"},
+        "knowledge_items": {"social_proof": _SOCIAL},
+        "knowledge_reference": [
+            {"heading": "Objeções e Respostas", "content": "resposta X", "category": "objections_faq"},
+        ],
         "knowledge_media": {},
         "lead_detected_language": "pt",
     }

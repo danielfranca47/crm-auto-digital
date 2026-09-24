@@ -258,17 +258,17 @@ Fora desses dois caminhos (ex.: lead já está em apresentation há vários turn
 Mãe devolve `route_to="apresentation"` directamente), o bloco de aquecimento não é
 reinjectado — é um aquecimento de transição única, não recorrente.
 
-**Conhecimento comercial sob demanda fora do turno único:** a sequência proativa
-de aquecimento (prova social + apresentação completa da tabela) não repete, mas
-o conteúdo das mesmas 6 categorias comerciais (`service_pricing_table`,
+**Conhecimento comercial fora do turno único:** a sequência proativa de
+aquecimento (prova social + apresentação completa da tabela) não repete, mas o
+conteúdo das mesmas 6 categorias comerciais (`service_pricing_table`,
 `commercial_objections`, `service_differentials`, `active_promotion`,
 `payment_policy`, `pre_commitment_faq`) continua disponível à Filha em qualquer
-turno de apresentation — mesmo padrão "usar APENAS se pedido explicitamente
-neste turno" já aplicado a `objections_faq`/`service_faq` no mesmo bloco
-(`_build_child_prompt_apresentation`, dentro de `if not commercial_injection:`).
-Assim, se o lead perguntar o preço de novo dois ou três turnos depois do
-aquecimento, a Filha ainda tem acesso ao valor real — só não o repete
-proativamente sem ser perguntada.
+turno, pelo bloco único de referência (`knowledge_reference`, ver
+[`knowledge-base.md`](knowledge-base.md#base-de-conhecimento-de-referência--knowledge_reference)).
+No turno de aquecimento, essas categorias saem do bloco de referência
+(`_COMMERCIAL_INJECTION_CATEGORIES`) para não repetir o que o "MODO COMERCIAL" já
+mostra. Nos turnos seguintes do modo comercial fica só a regra de modo "pagamento
+sempre presencial, sem link de checkout".
 
 ---
 

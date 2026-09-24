@@ -5,7 +5,7 @@ import logging
 import unicodedata
 from datetime import datetime, timedelta, timezone as _dt_timezone
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from app.contracts.qualification_contract import (
@@ -1005,11 +1005,9 @@ def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
 
 # Categorias de knowledge_items consideradas "narrativas" — informação para contar
 # proativamente 1x (prova social, roteiro de pitch, detalhes do produto), não uma
-# resposta sob demanda. Categorias reativas/FAQ (objections_faq, service_faq,
-# guarantee_policy, service_pricing_table, commercial_objections, service_differentials,
-# active_promotion, payment_policy, pre_commitment_faq) ficam de fora de propósito — já
-# são condicionadas a "usar apenas se o lead perguntar X" e o lead pode perguntar a
-# qualquer momento, então devem continuar sempre disponíveis no prompt.
+# resposta sob demanda. Categorias de referência (FAQs, políticas, preços, objeções…)
+# ficam de fora de propósito — vão pelo bloco único _build_knowledge_reference_block e o
+# lead pode perguntar a qualquer momento, então devem continuar sempre disponíveis.
 _NARRATIVE_KNOWLEDGE_CATEGORIES_BY_PHASE: Dict[str, tuple] = {
     "apresentation": ("social_proof", "pitch_script", "product_details"),
     "follow-up": ("social_proof",),
@@ -1208,15 +1206,68 @@ def _build_business_info_block(context: Dict[str, Any]) -> str:
     return f"\nINFORMAÇÕES DO NEGÓCIO (disponíveis em qualquer fase):\n{biz}\n"
 
 
-def _build_knowledge_reference_block(context: Dict[str, Any]) -> str:
+# Categorias de preço/oferta comercial retidas na qualificação: decisão de produto de
+# 22/04/2026 (commit 6a05d31) — preços e oferta são apresentados na fase de apresentação,
+# não enquanto o agente ainda qualifica o lead.
+_QUALIFICATION_WITHHELD_CATEGORIES = frozenset({
+    "service_pricing_table",
+    "price_policy",
+    "active_promotion",
+    "payment_policy",
+    "commercial_objections",
+})
+
+# Categorias mostradas em texto pelo turno único de aquecimento comercial
+# (commercial_injection, hybrid_scheduler + appointment_mode=commercial) — nesse turno
+# saem do bloco de referência para o mesmo conteúdo não aparecer duas vezes.
+_COMMERCIAL_INJECTION_CATEGORIES = frozenset({
+    "service_pricing_table",
+    "commercial_objections",
+    "service_differentials",
+    "active_promotion",
+    "payment_policy",
+    "pre_commitment_faq",
+})
+
+# Rótulos das categorias de referência (espelho de _REFERENCE_CATEGORIES no backend-crm),
+# usados nas notas de mídia da apresentação.
+_REFERENCE_CATEGORY_LABELS: Dict[str, str] = {
+    "company_profile": "Perfil da Empresa",
+    "professional_bio": "Bio do Profissional",
+    "pre_meeting_faq": "FAQ Pré-Reunião",
+    "scheduling_policy": "Política de Agendamento",
+    "price_policy": "Política de Preço",
+    "competitive_differentials": "Diferenciação Competitiva",
+    "service_faq": "FAQ do Serviço",
+    "objections_faq": "Objeções e Respostas",
+    "guarantee_policy": "Política de Garantia",
+    "service_pricing_table": "Tabela de Serviços e Preços",
+    "commercial_objections": "Objeções Comerciais e Respostas",
+    "service_differentials": "Diferenciais do Serviço",
+    "active_promotion": "Condição Especial Vigente",
+    "payment_policy": "Política de Pagamento Presencial",
+    "pre_commitment_faq": "FAQ Pré-Compromisso",
+}
+
+
+def _build_knowledge_reference_block(
+    context: Dict[str, Any],
+    exclude_categories: Iterable[str] = (),
+) -> str:
     """Base de conhecimento de referência (context["knowledge_reference"], montada por
     _load_knowledge_reference no backend-crm): factos que o lead pode perguntar em qualquer
-    fase — perfil da empresa, políticas, FAQs sem bloco próprio e conteúdo extra do
-    utilizador. Uma única instrução semântica: a LLM decide o que é relevante para a
-    pergunta, em vez de uma regra "usar APENAS quando X" por categoria."""
+    fase — perfil da empresa, FAQs, políticas, preços e conteúdo extra do utilizador. Uma
+    única instrução semântica: a LLM decide o que é relevante para a pergunta, em vez de
+    uma regra "usar APENAS quando X" por categoria.
+
+    exclude_categories: categorias que a fase não recebe em texto (ex.: com mídia na
+    apresentação, preço na qualificação, tabela já presente noutro bloco do agendamento)."""
+    excluded = set(exclude_categories)
     sections = []
     for item in context.get("knowledge_reference") or []:
         if not isinstance(item, dict):
+            continue
+        if str(item.get("category") or "").strip() in excluded:
             continue
         content = str(item.get("content") or "").strip()
         if not content:
@@ -1236,6 +1287,9 @@ def _build_knowledge_reference_block(context: Dict[str, Any]) -> str:
         "Depois de responder, retome o que a fase pede.\n"
         "- Se a resposta não estiver nesta base nem no resto do contexto, diga que vai confirmar "
         "com a equipa — uma resposta inventada custa a confiança do lead.\n"
+        "- Uma objeção (preço, tempo, dúvida sobre o resultado) não é uma pergunta de facto: use "
+        "as respostas a objeções da base como apoio e, se a objeção não estiver lá, acolha com "
+        "empatia e reforce o valor do serviço.\n"
         "- Exemplo ✅: lead pergunta \"vocês atendem online?\" durante a qualificação → responde "
         "com o que a base diz sobre o formato e volta à pergunta de qualificação pendente.\n"
     )
@@ -2906,7 +2960,7 @@ def _build_child_prompt_qualification(
     # ESCOPO e RECUSAS condicionais ao response_style.
     # O bloco passivo aparece ANTES do PAPEL para ter precedência sobre qualquer instrução posterior.
     _escopo_line = (
-        "Responder perguntas directas do cliente PRIMEIRO, usando custom_instructions. "
+        "Responder perguntas directas do cliente PRIMEIRO, usando custom_instructions e a base de conhecimento. "
         "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
         "responde à saudação de forma calorosa. "
         "NÃO agenda reunião nesta fase. "
@@ -2918,7 +2972,7 @@ def _build_child_prompt_qualification(
         if response_style == "passive"
         else (
             "Responde SEMPRE à mensagem do cliente antes de qualificar. Se o cliente fez uma pergunta, "
-            "responde usando custom_instructions. "
+            "responde usando custom_instructions e a base de conhecimento. "
             "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
             "responde à saudação de forma calorosa antes de qualificar. "
             "Depois, se houver campos obrigatórios em falta, adicione UMA única pergunta de qualificação natural ao final. "
@@ -2927,7 +2981,7 @@ def _build_child_prompt_qualification(
     )
     _recusas_line = (
         "Nunca invente informação. Nunca agende reunião nesta fase. "
-        "Se a resposta não estiver em custom_instructions, diz que vais verificar (→ handoff). "
+        "Se a resposta não estiver em custom_instructions nem na base de conhecimento, diz que vais verificar (→ handoff). "
         "Em modo passivo: NUNCA faças perguntas para coletar dados — infere silenciosamente da conversa."
         if response_style == "passive"
         else (
@@ -2941,7 +2995,7 @@ def _build_child_prompt_qualification(
             "A mãe sinalizou next_action_hint='reply': o cliente fez uma pergunta directa.\n"
             "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
             "should_ask=false. question_text DEVE ficar vazio (\"\").\n"
-            "Responde à pergunta do cliente usando apenas custom_instructions. "
+            "Responde à pergunta do cliente usando custom_instructions e a base de conhecimento. "
             "NÃO menciones preços, tabelas de valores, promoções ou oferta comercial — "
             "essas informações são exclusivas da fase de apresentação.\n"
             "A qualificação continua nos próximos turnos — NÃO neste.\n\n"
@@ -2950,7 +3004,7 @@ def _build_child_prompt_qualification(
         else (
             "MODO PASSIVO ACTIVADO — ZERO PERGUNTAS ABERTAS.\n"
             "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre\n"
-            "localização, horários, funcionamento, etc.), RESPONDE-A PRIMEIRO usando custom_instructions.\n"
+            "localização, horários, funcionamento, etc.), RESPONDE-A PRIMEIRO usando custom_instructions e a base de conhecimento.\n"
             "Para perguntas sobre preços ou oferta: informa que essas informações serão apresentadas em breve.\n"
             "NÃO faças perguntas de qualificação. Infere os campos silenciosamente da conversa.\n"
             "should_ask=false na esmagadora maioria dos casos.\n"
@@ -3039,7 +3093,7 @@ CONTEXTO:
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
-{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_knowledge_reference_block(context)}{_build_training_examples_block(context, "qualification")}"""
+{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_knowledge_reference_block(context, exclude_categories=_QUALIFICATION_WITHHELD_CATEGORIES)}{_build_training_examples_block(context, "qualification")}"""
     _qual_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "qualification", mother_decision.signals))
     _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _inject_generated_parts(_qual_prompt, context, "qualification")
@@ -3316,16 +3370,15 @@ def _build_child_prompt_apresentation(
         else ""
     )
 
-    # Tarefa 1.3 — knowledge_items com directivas de uso para sdr_padrao / closer_agressivo
-    # (e qualquer path que não use commercial_injection, onde knowledge não é injectado inline)
+    # Knowledge da apresentação: só as narrativas (contadas 1x por lead, com dedup) e as
+    # notas de mídia vivem aqui. O conhecimento de referência (FAQs, políticas, preços,
+    # objeções…) vai pelo bloco único _build_knowledge_reference_block, com uma instrução
+    # semântica em vez de uma regra "usar APENAS quando…" por categoria.
     _apres_knowledge_parts: list[str] = []
     if not commercial_injection:
         _social_proof_apres = _narrative_dedup_apres["content"].get("social_proof") or ""
         _pitch_script_apres = _narrative_dedup_apres["content"].get("pitch_script") or ""
         _product_details_apres = _narrative_dedup_apres["content"].get("product_details") or ""
-        _objections_faq_apres = knowledge_items.get("objections_faq") or ""
-        _service_faq_apres = knowledge_items.get("service_faq") or ""
-        _guarantee_policy_apres = knowledge_items.get("guarantee_policy") or ""
         if _social_proof_apres:
             _apres_knowledge_parts.append(
                 f"PROVA SOCIAL (usar na fase de aquecimento ou quando o lead demonstrar hesitação):\n"
@@ -3360,101 +3413,30 @@ def _build_child_prompt_apresentation(
                     f"{_product_details_apres}\n"
                     f"INSTRUÇÃO: Use apenas os dados presentes neste bloco. Nunca invente features ou condições não listadas.\n"
                 )
-        if _objections_faq_apres:
-            _apres_knowledge_parts.append(
-                f"OBJEÇÕES E RESPOSTAS (usar APENAS quando o lead levantar uma objeção):\n"
-                f"{_objections_faq_apres}\n"
-                f"INSTRUÇÃO: Se o lead levantar uma objeção listada, use a resposta configurada como base. "
-                f"Adapte ao tom de voz e ao contexto. Nunca copie literalmente. "
-                f"Se a objeção NÃO estiver listada, use empatia + reformulação de valor.\n"
-            )
-        if _service_faq_apres:
-            if "service_faq" in _km_categories:
-                _apres_knowledge_parts.append(
-                    "FAQ DO SERVIÇO: Informação completa disponível em arquivo de mídia (enviado automaticamente).\n"
-                    "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução "
-                    "(ex.: 'Aqui estão os valores:', 'Veja os detalhes abaixo:'). "
-                    "NÃO liste preços, serviços nem detalhes — a mídia tem prioridade absoluta sobre o texto.\n"
-                )
-            else:
-                _apres_knowledge_parts.append(
-                    f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
-                    f"{_service_faq_apres}\n"
-                    f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
-                    f"diga que vai confirmar com a equipa.\n"
-                )
-        if _guarantee_policy_apres:
-            _apres_knowledge_parts.append(
-                f"POLÍTICA DE GARANTIA (mencionar para reforçar confiança quando relevante):\n"
-                f"{_guarantee_policy_apres}\n"
-                f"INSTRUÇÃO: Cite apenas quando o lead demonstrar hesitação sobre risco. "
-                f"Nunca invente garantias não configuradas.\n"
-            )
-        # Categorias comerciais do hybrid_scheduler (modo commercial) fora do turno único
-        # de warming (commercial_injection vazio aqui): o aquecimento proativo não repete,
-        # mas o conteúdo (preço, objeções, etc.) continua disponível sob demanda — mesmo
-        # padrão "usar APENAS se pedido" já aplicado acima a objections_faq/service_faq.
         if template_key_for_warming == "hybrid_scheduler" and appointment_mode == "commercial":
-            _pricing_ondemand = knowledge_items.get("service_pricing_table") or ""
-            _objections_ondemand = knowledge_items.get("commercial_objections") or ""
-            _differentials_ondemand = knowledge_items.get("service_differentials") or ""
-            _promotion_ondemand = knowledge_items.get("active_promotion") or ""
-            _payment_ondemand = knowledge_items.get("payment_policy") or ""
-            _faq_commit_ondemand = knowledge_items.get("pre_commitment_faq") or ""
-            if _pricing_ondemand:
-                if "service_pricing_table" in _km_categories:
-                    _apres_knowledge_parts.append(
-                        "TABELA DE SERVIÇOS/PREÇOS: conteúdo disponível em mídia visual "
-                        "(enviada automaticamente quando pedida).\n"
-                        "INSTRUÇÃO CRÍTICA: escreva APENAS uma frase curta de introdução SE o lead "
-                        "pedir preço, valores ou pacotes explicitamente neste turno. Caso contrário, "
-                        "não mencione — a mídia tem prioridade absoluta sobre o texto.\n"
-                    )
-                else:
-                    _apres_knowledge_parts.append(
-                        f"TABELA DE SERVIÇOS/PREÇOS (usar APENAS se o lead pedir preço, valores ou "
-                        f"pacotes explicitamente neste turno):\n"
-                        f"{_pricing_ondemand}\n"
-                        f"INSTRUÇÃO: Se houver pedido explícito, apresente com clareza os valores "
-                        f"exatos. Nunca invente preços ou condições não listadas. Sem pedido explícito, "
-                        f"não mencione.\n"
-                    )
-            if _objections_ondemand:
-                _apres_knowledge_parts.append(
-                    f"OBJEÇÕES COMERCIAIS E RESPOSTAS (usar APENAS quando o lead levantar uma "
-                    f"objeção de preço ou comprometimento):\n"
-                    f"{_objections_ondemand}\n"
-                    f"INSTRUÇÃO: Use a resposta configurada como base, adapte ao tom de voz. "
-                    f"Nunca copie literalmente.\n"
-                )
-            if _differentials_ondemand:
-                _apres_knowledge_parts.append(
-                    f"DIFERENCIAIS DO SERVIÇO (usar APENAS quando o lead comparar com concorrência "
-                    f"ou pedir o diferencial):\n"
-                    f"{_differentials_ondemand}\n"
-                    f"INSTRUÇÃO: Integre naturalmente, não liste como bullet points.\n"
-                )
-            if _promotion_ondemand:
-                _apres_knowledge_parts.append(
-                    f"CONDIÇÃO ESPECIAL VIGENTE (citar apenas se relevante para o lead fechar agora):\n"
-                    f"{_promotion_ondemand}\n"
-                    f"INSTRUÇÃO: Cite apenas se vigente. Nunca crie urgência artificial.\n"
-                )
-            if _payment_ondemand:
-                _apres_knowledge_parts.append(
-                    f"POLÍTICA DE PAGAMENTO PRESENCIAL (usar APENAS se o lead perguntar sobre "
-                    f"formas de pagamento):\n"
-                    f"{_payment_ondemand}\n"
-                    f"INSTRUÇÃO: Reforce que o pagamento é presencial. Nunca envie link de checkout.\n"
-                )
-            if _faq_commit_ondemand:
-                _apres_knowledge_parts.append(
-                    f"FAQ PRÉ-COMPROMISSO (usar APENAS quando o lead fizer uma pergunta diretamente "
-                    f"coberta):\n"
-                    f"{_faq_commit_ondemand}\n"
-                    f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, diga "
-                    f"que vai confirmar com a equipa.\n"
-                )
+            # Regra do modo comercial fora do turno único de aquecimento (que já a traz em
+            # commercial_injection): vale para qualquer conversa sobre pagamento.
+            _apres_knowledge_parts.append(
+                "PAGAMENTO (modo comercial): o pagamento é sempre presencial, na marcação — "
+                "quando o assunto for pagamento, esclareça isso em vez de enviar link de checkout.\n"
+            )
+    # Categorias de referência com mídia configurada: a mídia é a resposta (enviada quando a
+    # filha a lista em media_keys_to_send), por isso o texto sai do bloco de referência e
+    # fica só esta nota. No turno comercial, as categorias já mostradas em
+    # commercial_injection também saem do bloco, para não repetir o mesmo conteúdo.
+    _apres_reference_excluded = {c for c in _km_categories if c in _REFERENCE_CATEGORY_LABELS}
+    for _media_cat in sorted(_apres_reference_excluded):
+        if commercial_injection and _media_cat in _COMMERCIAL_INJECTION_CATEGORIES:
+            continue
+        _apres_knowledge_parts.append(
+            f"{_REFERENCE_CATEGORY_LABELS[_media_cat].upper()}: conteúdo disponível em mídia "
+            f"(enviada quando a listar em media_keys_to_send).\n"
+            "INSTRUÇÃO: se o lead pedir este conteúdo, escreva só uma frase curta de introdução "
+            "(ex.: 'Aqui estão os detalhes:') e deixe a mídia mostrar o conteúdo — descrevê-lo "
+            "em texto duplica a informação.\n"
+        )
+    if commercial_injection:
+        _apres_reference_excluded |= _COMMERCIAL_INJECTION_CATEGORIES
     standard_knowledge_block = (
         "\nKNOWLEDGE BASE (usar conforme as instruções de cada bloco):\n"
         + "\n".join(_apres_knowledge_parts)
@@ -3682,7 +3664,7 @@ def _build_child_prompt_apresentation(
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
-        + _build_knowledge_reference_block(context)
+        + _build_knowledge_reference_block(context, exclude_categories=_apres_reference_excluded)
         + _build_training_examples_block(context, "apresentation")
     )
     _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
@@ -3871,14 +3853,13 @@ def _build_child_prompt_follow_up(
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     is_followup_tick = _is_followup_tick_context(context)
 
-    # Tarefa 1.3 — knowledge_items com directivas de uso
+    # Knowledge do follow-up: só a prova social (narrativa, 1x por lead). FAQs, objeções e o
+    # resto do conhecimento de referência vão pelo bloco único _build_knowledge_reference_block
+    # — em texto, porque o follow-up não envia mídia do knowledge (só a apresentação envia).
     knowledge_items = context.get("knowledge_items") or {}
-    _km_categories_fu = set((context.get("knowledge_media") or {}).keys())
     _followup_knowledge_parts: list[str] = []
     _narrative_dedup_fu = _evaluate_narrative_knowledge_dedup(context, "follow-up", knowledge_items)
     _social_proof_ki = _narrative_dedup_fu["content"].get("social_proof") or ""
-    _objections_faq_ki = knowledge_items.get("objections_faq") or ""
-    _service_faq_ki = knowledge_items.get("service_faq") or ""
     if _social_proof_ki:
         _followup_knowledge_parts.append(
             f"PROVA SOCIAL (usar na fase de warming ou quando o lead demonstrar hesitação):\n"
@@ -3886,29 +3867,6 @@ def _build_child_prompt_follow_up(
             f"INSTRUÇÃO: Integre naturalmente na conversa. Nunca diga 'temos uma prova social'. "
             f"Adapte ao perfil do lead se possível.\n"
         )
-    if _objections_faq_ki:
-        _followup_knowledge_parts.append(
-            f"OBJEÇÕES E RESPOSTAS (usar APENAS quando o lead levantar uma objeção):\n"
-            f"{_objections_faq_ki}\n"
-            f"INSTRUÇÃO: Se o lead levantar uma objeção listada, use a resposta configurada como base. "
-            f"Adapte ao tom de voz e ao contexto. Nunca copie literalmente. "
-            f"Se a objeção NÃO estiver listada, use empatia + reformulação de valor.\n"
-        )
-    if _service_faq_ki:
-        if "service_faq" in _km_categories_fu:
-            _followup_knowledge_parts.append(
-                "FAQ DO SERVIÇO: Informação completa disponível em arquivo de mídia (enviado automaticamente).\n"
-                "INSTRUÇÃO CRÍTICA: Escreva APENAS uma frase curta de introdução "
-                "(ex.: 'Aqui estão os valores:', 'Veja os detalhes abaixo:'). "
-                "NÃO liste preços, serviços nem detalhes — a mídia tem prioridade absoluta sobre o texto.\n"
-            )
-        else:
-            _followup_knowledge_parts.append(
-                f"FAQ DO SERVIÇO (usar APENAS quando o lead fizer uma pergunta diretamente coberta):\n"
-                f"{_service_faq_ki}\n"
-                f"INSTRUÇÃO: Responda com base no FAQ. Se a pergunta não estiver coberta, "
-                f"diga que vai confirmar com a equipa.\n"
-            )
     followup_knowledge_block = (
         "\nKNOWLEDGE BASE (usar conforme as instruções de cada bloco):\n"
         + "\n".join(_followup_knowledge_parts)
@@ -4460,7 +4418,7 @@ def _build_child_prompt_agendamento(
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
-        + _build_knowledge_reference_block(context)
+        + _build_knowledge_reference_block(context, exclude_categories=("service_pricing_table",))
     )
     return _sched_prompt
 
