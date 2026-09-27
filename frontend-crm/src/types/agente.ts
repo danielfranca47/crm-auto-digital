@@ -1015,9 +1015,7 @@ export const KNOWLEDGE_CATEGORIES_BY_TEMPLATE: Record<string, KnowledgeCategory[
     CAT_QUALIFICATION_CRITERIA,
     CAT_PRE_MEETING_FAQ,
     CAT_PRICE_POLICY,
-    CAT_HANDOFF_BRIEFING,
     CAT_COMPETITIVE_DIFFERENTIALS,
-    CAT_NURTURE_CONTENT,
   ],
   consultor_especialista: [
     CAT_COMPANY_PROFILE,
@@ -1026,9 +1024,7 @@ export const KNOWLEDGE_CATEGORIES_BY_TEMPLATE: Record<string, KnowledgeCategory[
     CAT_QUALIFICATION_CRITERIA,
     CAT_PRE_MEETING_FAQ,
     CAT_PRICE_POLICY,
-    CAT_HANDOFF_BRIEFING,
     CAT_COMPETITIVE_DIFFERENTIALS,
-    CAT_NURTURE_CONTENT,
   ],
   closer_agressivo: [
     CAT_PITCH_SCRIPT,
@@ -1037,24 +1033,42 @@ export const KNOWLEDGE_CATEGORIES_BY_TEMPLATE: Record<string, KnowledgeCategory[
     CAT_PRODUCT_DETAILS,
     CAT_GUARANTEE,
     CAT_URGENCY_OFFER,
-    CAT_FIT_QUESTIONS,
-    CAT_CART_RECOVERY,
-    CAT_UPSELL,
-    CAT_POST_PURCHASE_ONBOARDING,
   ],
   hybrid_scheduler: [
     CAT_PROFESSIONAL_BIO,
     CAT_SOCIAL_PROOF_HYBRID,
-    CAT_SESSION_PREVIEW,
-    CAT_WARMING_SCRIPT,
-    CAT_PAIN_QUESTIONS,
     CAT_SCHEDULING_POLICY,
     CAT_SERVICE_PRICING_TABLE,
     CAT_SERVICE_FAQ,
-    CAT_POST_SESSION_FOLLOWUP,
-    CAT_PRE_SESSION_MATERIAL,
-    CAT_REFERRAL_SCRIPT,
   ],
+};
+
+/**
+ * Categorias que já não fazem parte da Camada 4: roteiros com momento (o que o agente
+ * faz e quando — lugar certo é o Fluxo de Venda) e duplicados de outras camadas. A IA não
+ * as lê como base de conhecimento. Itens já existentes nelas aparecem na secção
+ * "Para mover" da Camada 4, com o destino indicado. Ver docs/architecture/knowledge-base.md.
+ */
+export interface KnowledgeCategoryToMove {
+  label: string;
+  destination: string;
+}
+
+const SALES_FLOW_DEST = 'Fluxo de Venda → fase';
+
+export const KNOWLEDGE_CATEGORIES_TO_MOVE: Record<string, KnowledgeCategoryToMove> = {
+  [CAT_WARMING_SCRIPT.key]:           { label: CAT_WARMING_SCRIPT.label,           destination: `${SALES_FLOW_DEST} Apresentação (bloco "Orientação ao Agente")` },
+  [CAT_CART_RECOVERY.key]:            { label: CAT_CART_RECOVERY.label,            destination: `${SALES_FLOW_DEST} Follow Up (blocos "Sem resposta" + "Mensagem fixa")` },
+  [CAT_POST_SESSION_FOLLOWUP.key]:    { label: CAT_POST_SESSION_FOLLOWUP.label,    destination: `${SALES_FLOW_DEST} Follow Up (blocos "Sem resposta" + "Mensagem fixa")` },
+  [CAT_NURTURE_CONTENT.key]:          { label: CAT_NURTURE_CONTENT.label,          destination: `${SALES_FLOW_DEST} Follow Up (blocos "Sem resposta" + "Mensagem fixa")` },
+  [CAT_PRE_SESSION_MATERIAL.key]:     { label: CAT_PRE_SESSION_MATERIAL.label,     destination: `${SALES_FLOW_DEST} Agendamento (bloco "Mensagem fixa")` },
+  [CAT_REFERRAL_SCRIPT.key]:          { label: CAT_REFERRAL_SCRIPT.label,          destination: `${SALES_FLOW_DEST} Fechamento (bloco "Mensagem fixa")` },
+  [CAT_POST_PURCHASE_ONBOARDING.key]: { label: CAT_POST_PURCHASE_ONBOARDING.label, destination: `${SALES_FLOW_DEST} Fechamento (bloco "Mensagem fixa")` },
+  [CAT_SESSION_PREVIEW.key]:          { label: CAT_SESSION_PREVIEW.label,          destination: 'Camada 1 · Identidade → "Preview da sessão/serviço"' },
+  [CAT_UPSELL.key]:                   { label: CAT_UPSELL.label,                   destination: 'Oferta → "Mensagem de upsell pós-compra"' },
+  [CAT_FIT_QUESTIONS.key]:            { label: CAT_FIT_QUESTIONS.label,            destination: 'Camada 2 · Qualificação → campos de qualificação' },
+  [CAT_PAIN_QUESTIONS.key]:           { label: CAT_PAIN_QUESTIONS.label,           destination: 'Camada 2 · Qualificação → campos de qualificação' },
+  [CAT_HANDOFF_BRIEFING.key]:         { label: CAT_HANDOFF_BRIEFING.label,         destination: 'Não é preciso mover — o dossiê é gerado automaticamente a partir da qualificação' },
 };
 
 export const KNOWLEDGE_IMPORTANCE_LABELS: Record<KnowledgeCategory['importance'], string> = {

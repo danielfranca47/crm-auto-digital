@@ -4,6 +4,7 @@ import { api, type KnowledgeItem, type KnowledgeMediaItem, type MediaLanguage } 
 import {
   KNOWLEDGE_CATEGORIES_BY_TEMPLATE,
   KNOWLEDGE_CATEGORIES_HYBRID_COMMERCIAL,
+  KNOWLEDGE_CATEGORIES_TO_MOVE,
   KNOWLEDGE_IMPORTANCE_LABELS,
   type KnowledgeCategory,
   type AgentConfig,
@@ -1098,7 +1099,21 @@ export function CamadaConhecimento({
     ...guidedCategories.map(c => c.key),
     ...guidedCommercialCategories.map(c => c.key),
   ]);
-  const extraItems = items.filter(i => !i.category || !allGuidedKeys.has(i.category));
+  // Itens em categorias que saíram da Camada 4 (roteiros e duplicados) — secção "Para mover"
+  const moveItems = items.filter(i => i.category && i.category in KNOWLEDGE_CATEGORIES_TO_MOVE);
+  const extraItems = items.filter(
+    i => (!i.category || !allGuidedKeys.has(i.category)) && !(i.category && i.category in KNOWLEDGE_CATEGORIES_TO_MOVE)
+  );
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  async function handleCopyToMove(item: KnowledgeItem) {
+    try {
+      await navigator.clipboard.writeText(item.content_text);
+      setCopiedId(item.id);
+      setTimeout(() => setCopiedId(current => (current === item.id ? null : current)), 2000);
+    } catch {
+      setViewItem(item);  // sem acesso à área de transferência: abre o texto para copiar à mão
+    }
+  }
 
   // Score de prontidão (considera todas as categorias guiadas incluindo as comerciais)
   const allGuidedForReadiness = [...guidedCategories, ...guidedCommercialCategories];
@@ -1426,6 +1441,59 @@ export function CamadaConhecimento({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Para mover (roteiros e duplicados fora da Camada 4) ── */}
+      {moveItems.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div className="o-section-hdr" style={{ marginBottom: 12 }}>
+            <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+              Para mover
+            </span>
+            <span className="font-mono-orion" style={{ fontSize: 8, color: 'var(--o-dim)', border: '1px solid var(--o-b1)', padding: '1px 6px', borderRadius: 2 }}>
+              {moveItems.length} item(s)
+            </span>
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--o-sub)', marginBottom: 14, fontWeight: 300 }}>
+            Estes conteúdos descrevem o que o agente faz e quando — não são consultados como base de
+            conhecimento. Copie o texto para o destino indicado e depois remova daqui.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {moveItems.map(item => {
+              const target = KNOWLEDGE_CATEGORIES_TO_MOVE[item.category as string];
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    padding: '10px 12px', background: 'var(--o-b0)', borderRadius: 4,
+                    border: '1px solid var(--o-b1)', display: 'flex', flexDirection: 'column', gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, color: 'var(--o-text)', flex: 1 }}>{target.label}</span>
+                    <button className="o-btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCopyToMove(item)}>
+                      {copiedId === item.id ? 'Copiado ✓' : 'Copiar texto'}
+                    </button>
+                    <button className="o-btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setViewItem(item)}>Ver</button>
+                    <button
+                      className="o-btn"
+                      style={{ fontSize: 11, padding: '3px 8px', color: 'var(--o-hot)' }}
+                      onClick={() => handleDelete(item.id)}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--o-sub)' }}>
+                    Destino: <span style={{ color: 'var(--o-text)' }}>{target.destination}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--o-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.content_text}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

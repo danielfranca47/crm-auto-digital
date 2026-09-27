@@ -101,6 +101,10 @@ class LoadKnowledgeReferenceTest(unittest.TestCase):
             [("guarantee_policy", "Política de Garantia — Garantia"), ("service_faq", "FAQ do Serviço")],
         )
 
+    def test_urgency_offer_is_reference(self):
+        self._insert("Condição Atual da Oferta", "Só até sexta: 20% off.", "urgency_offer")
+        self.assertEqual(self._load()[0]["heading"], "Condição Atual da Oferta")
+
     def test_structured_pricing_table_is_rendered_as_text(self):
         table = json.dumps({
             "format": "structured_v1",

@@ -1,6 +1,6 @@
 # Conhecimento dos Agentes — Referência Oficial
 
-> **Atualizado em:** 2026-03-28 (sub-modo comercial Agente 03 implementado)
+> **Atualizado em:** 2026-09-27 (roteiros e duplicados saíram da Camada 4 — ver secção final)
 > **Escopo:** Camada 4 (Conhecimento) do `AiProfile.tsx`
 > **Status:** Estrutura implementada e em produção
 
@@ -40,9 +40,7 @@ Cada arquétipo tem um **papel estratégico diferente** na jornada de vendas, o 
 | 4 | **Critérios de Qualificação** | `qualification_criteria` | Recomendado | Define o que é aprovado ou descartado no F1 e F3. Sem isso, o bot usa critérios genéricos e avança leads errados. |
 | 5 | **FAQ Pré-Reunião** | `pre_meeting_faq` | Recomendado | Reduz atrito antes do agendamento: duração, formato, o que esperar. Aumenta taxa de comparecimento. |
 | 6 | **Política de Preço** | `price_policy` | Recomendado | Define o que o bot pode ou não dizer sobre preço antes da reunião. Sem instrução, o bot improvisa e pode citar valores que atrapalham a negociação do humano. |
-| 7 | **Script de Dossiê** | `handoff_briefing_template` | Recomendado | Define quais campos o bot deve incluir no resumo enviado ao vendedor antes da reunião. Sem isso o dossiê é genérico e o vendedor não se prepara. |
-| 8 | **Diferenciação Competitiva** | `competitive_differentials` | Opcional | Respostas para "já usamos X" ou "estou avaliando também Y". Em mercados com concorrentes diretos é essencial; em nicho único, opcional. |
-| 9 | **Mensagens de Nurture** | `nurture_content` | Opcional | Conteúdo para leads que não qualificaram agora mas têm potencial futuro. Sem isso, o bot arquiva sem cultivar relacionamento. |
+| 7 | **Diferenciação Competitiva** | `competitive_differentials` | Opcional | Respostas para "já usamos X" ou "estou avaliando também Y". Em mercados com concorrentes diretos é essencial; em nicho único, opcional. |
 
 ---
 
@@ -61,13 +59,9 @@ Cada arquétipo tem um **papel estratégico diferente** na jornada de vendas, o 
 | 1 | **Script de Pitch** | `pitch_script` | Crítico | É o coração do agente. Estrutura: Dor → Solução → Benefícios → Prova Social → Oferta → Urgência. Sem isso o agente improvisa e não converte. |
 | 2 | **FAQ de Objeções** | `objections_faq` | Crítico | Em low ticket a janela de decisão é de minutos. O bot precisa de respostas instantâneas para "está caro", "vou pensar", "já tentei antes". |
 | 3 | **Depoimentos e Provas Sociais** | `social_proof` | Crítico | Depoimentos específicos (resultado + tempo + perfil) reduzem o risco percebido na hora do pagamento. |
-| 4 | **Perguntas de Fit** | `fit_questions` | Recomendado | As 1–2 perguntas de qualificação mínima antes do pitch. Sem elas, o bot faz o pitch para qualquer pessoa — inclusive quem não tem a dor. |
-| 5 | **Detalhes do Produto** | `product_details` | Recomendado | O que está incluído na compra: módulos, bônus, formato de entrega. O lead pergunta "o que vem junto?" durante o pitch. |
-| 6 | **Política de Garantia** | `guarantee_policy` | Recomendado | Remove o último obstáculo antes do pagamento. "Garantia de X dias sem risco" é um argumento de fechamento clássico. |
-| 7 | **Condição Atual da Oferta** | `urgency_offer` | Recomendado | Urgência real (prazo, vagas, desconto) — única forma ética de criar senso de urgência. Deve ser atualizado conforme a campanha muda. ⚠️ Badge de atualização ativado após 30 dias sem edição. |
-| 8 | **Script de Recuperação de Carrinho** | `cart_recovery_scripts` | Recomendado | As 3 mensagens de follow-up (2h, 24h, 48h) com ângulos diferentes. Sem isso, o bot usa mensagem genérica de lembrete. ⚠️ Badge de atualização ativado após 30 dias sem edição. |
-| 9 | **Conteúdo de Upsell** | `upsell_content` | Opcional | Produto a apresentar imediatamente pós-compra. Momento de maior abertura do cliente — oportunidade de aumentar LTV. |
-| 10 | **Onboarding Pós-Compra** | `post_purchase_onboarding` | Opcional | Mensagem de boas-vindas + próximos passos enviados automaticamente após pagamento confirmado. Reduz chargeback e aumenta satisfação. |
+| 4 | **Detalhes do Produto** | `product_details` | Recomendado | O que está incluído na compra: módulos, bônus, formato de entrega. O lead pergunta "o que vem junto?" durante o pitch. |
+| 5 | **Política de Garantia** | `guarantee_policy` | Recomendado | Remove o último obstáculo antes do pagamento. "Garantia de X dias sem risco" é um argumento de fechamento clássico. |
+| 6 | **Condição Atual da Oferta** | `urgency_offer` | Recomendado | Urgência real (prazo, vagas, desconto) — única forma ética de criar senso de urgência. Deve ser atualizado conforme a campanha muda. ⚠️ Badge de atualização ativado após 30 dias sem edição. |
 
 ---
 
@@ -87,14 +81,8 @@ Cada arquétipo tem um **papel estratégico diferente** na jornada de vendas, o 
 |---|---|---|---|---|
 | 1 | **Bio do Profissional** | `professional_bio` | Crítico | Primeira coisa que o lead quer saber: quem é? Por que confiar? O agente usa para se apresentar em nome do profissional. |
 | 2 | **Histórias de Transformação** | `social_proof` | Crítico | Usada no aquecimento. O lead se identifica com um caso parecido — aumenta confiança e motivação para agendar. |
-| 3 | **Preview da Sessão / Serviço** | `session_preview` | Crítico | Descreve o que acontece na marcação: duração, formato, o que o lead pode esperar. Reduz ansiedade e aumenta comparecimento. |
-| 4 | **Script de Aquecimento** | `warming_script` | Recomendado | Texto que conecta a dor ou necessidade do lead com o que o profissional resolve. Usado antes de propor o agendamento. |
-| 5 | **Roteiro de Perguntas de Contexto** | `pain_questions` | Recomendado | Perguntas abertas para entender o que o lead busca. As respostas viram o briefing enviado ao profissional antes da sessão — ele chega preparado. |
-| 6 | **Política de Agendamento** | `scheduling_policy` | Recomendado | Regras de cancelamento, reagendamento e no-show. O lead pergunta antes de confirmar — sem resposta clara, desiste. |
-| 7 | **FAQ do Serviço** | `service_faq` | Recomendado | Dúvidas gerais sobre o serviço: duração, formato, localização, preços. |
-| 8 | **Follow-up Pós-Sessão** | `post_session_followup` | Opcional | Mensagens para quem veio mas não retornou: reconectar, propor nova marcação, citar resultado que ficou pendente. |
-| 9 | **Material Pré-Sessão** | `pre_session_material` | Opcional | Instrução ou formulário enviado 24h antes para o lead chegar preparado. |
-| 10 | **Script de Indicação** | `referral_script` | Opcional | Pedido de indicação para clientes satisfeitos. Momento ideal: após confirmar que a sessão foi bem. |
+| 3 | **Política de Agendamento** | `scheduling_policy` | Recomendado | Regras de cancelamento, reagendamento e no-show. O lead pergunta antes de confirmar — sem resposta clara, desiste. |
+| 4 | **FAQ do Serviço** | `service_faq` | Recomendado | Dúvidas gerais sobre o serviço: duração, formato, localização, preços. |
 
 ---
 
@@ -131,7 +119,7 @@ function getReadinessLevel(
 
 ## 4. Badge de atualização temporal
 
-Categorias com conteúdo de curta validade exibem um badge de alerta quando não foram editadas há mais de 30 dias. Aplicado às chaves `urgency_offer` e `cart_recovery_scripts` do `closer_agressivo`.
+Categorias com conteúdo de curta validade exibem um badge de alerta quando não foram editadas há mais de 30 dias. Aplicado à chave `urgency_offer` do `closer_agressivo`.
 
 **Lógica implementada em** [CamadaConhecimento.tsx](../frontend-crm/src/components/agente/CamadaConhecimento.tsx):
 
@@ -269,3 +257,24 @@ O `decision_engine` detecta `appointment_mode == 'commercial'` e injeta o bloco 
 | [backend-crm/routes/executor.py](../backend-crm/routes/executor.py) | Inclui `knowledge_items` no contexto de execução enviado ao `decision_engine` |
 | [backend-executors/app/services/decision_engine.py](../backend-executors/app/services/decision_engine.py) | `_build_child_prompt_apresentation()` — lógica de `commercial_injection` vs `warming_injection` |
 | [frontend-crm/src/components/agente/CamadaApresentacao.tsx](../frontend-crm/src/components/agente/CamadaApresentacao.tsx) | Seletor `ModalAppointmentMode` (exploratory / commercial) |
+
+---
+
+## Categorias retiradas da Camada 4
+
+Estas categorias descreviam **o que o agente faz e quando** (roteiros) ou repetiam outra camada. A IA nunca as lia como base de conhecimento, por isso saíram das listas por agente (`KNOWLEDGE_CATEGORIES_BY_TEMPLATE`). Itens já existentes aparecem na secção **"Para mover"** da Camada 4, com o destino abaixo (`KNOWLEDGE_CATEGORIES_TO_MOVE` em `frontend-crm/src/types/agente.ts`).
+
+| Chave | Destino |
+|---|---|
+| `warming_script` | Fluxo de Venda → fase Apresentação (bloco "Orientação ao Agente") |
+| `cart_recovery_scripts` | Fluxo de Venda → fase Follow Up (blocos "Sem resposta" + "Mensagem fixa") |
+| `post_session_followup` | Fluxo de Venda → fase Follow Up (blocos "Sem resposta" + "Mensagem fixa") |
+| `nurture_content` | Fluxo de Venda → fase Follow Up (blocos "Sem resposta" + "Mensagem fixa") |
+| `pre_session_material` | Fluxo de Venda → fase Agendamento (bloco "Mensagem fixa") |
+| `referral_script` | Fluxo de Venda → fase Fechamento (bloco "Mensagem fixa") |
+| `post_purchase_onboarding` | Fluxo de Venda → fase Fechamento (bloco "Mensagem fixa") |
+| `session_preview` | Camada 1 · Identidade → "Preview da sessão/serviço" |
+| `upsell_content` | Oferta → "Mensagem de upsell pós-compra" |
+| `fit_questions` | Camada 2 · Qualificação → campos de qualificação |
+| `pain_questions` | Camada 2 · Qualificação → campos de qualificação |
+| `handoff_briefing_template` | Nenhum — o dossiê é gerado automaticamente a partir da qualificação |

@@ -1213,6 +1213,7 @@ _QUALIFICATION_WITHHELD_CATEGORIES = frozenset({
     "service_pricing_table",
     "price_policy",
     "active_promotion",
+    "urgency_offer",
     "payment_policy",
     "commercial_objections",
 })
@@ -1245,6 +1246,7 @@ _REFERENCE_CATEGORY_LABELS: Dict[str, str] = {
     "commercial_objections": "Objeções Comerciais e Respostas",
     "service_differentials": "Diferenciais do Serviço",
     "active_promotion": "Condição Especial Vigente",
+    "urgency_offer": "Condição Atual da Oferta",
     "payment_policy": "Política de Pagamento Presencial",
     "pre_commitment_faq": "FAQ Pré-Compromisso",
 }
@@ -3094,7 +3096,7 @@ PROIBIÇÕES (violar qualquer uma é crítico):
 2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.
 3. NUNCA dê conselhos médicos, jurídicos ou financeiros.
 4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.
-5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.
+5. NUNCA use urgência artificial — só mencione urgência se a base de conhecimento trouxer uma condição vigente (Condição Atual da Oferta ou Condição Especial Vigente).
 6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.
 7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.
 {_ESCAPE_HATCH_BLOCK}
@@ -3646,7 +3648,7 @@ def _build_child_prompt_apresentation(
         "2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.\n"
         "3. NUNCA dê conselhos médicos, jurídicos ou financeiros.\n"
         "4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.\n"
-        "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
+        "5. NUNCA use urgência artificial — só mencione urgência se a base de conhecimento trouxer uma condição vigente (Condição Atual da Oferta ou Condição Especial Vigente).\n"
         "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
         "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
         "8. NUNCA mencione \"veja a imagem\" ou \"veja o vídeo\" — a mídia é enviada automaticamente pelo sistema.\n"
@@ -3944,7 +3946,7 @@ def _build_child_prompt_follow_up(
         f"ESCOPO: Nutrir, tratar objeções, reagendar. Nunca reabrir campos de qualificação antigos em ticks automáticos.\n"
         f"TOM: {ai_summary.get('tone_of_voice') or 'profissional'} — empático e orientado a ação. Máx {playbook_summary.get('max_chars') or 'N/D'} caracteres.\n"
         f"FRAMEWORK: Modo {agent_mode_normalized}. Template {playbook_summary.get('template_key')}. is_followup_tick: {is_followup_tick}.\n"
-        "RECUSAS: Nunca invente informação. Nunca use urgência artificial sem urgency_offer. Nunca reabra qualificação em follow-up tick.\n"
+        "RECUSAS: Nunca invente informação. Nunca use urgência artificial sem uma condição vigente na base de conhecimento. Nunca reabra qualificação em follow-up tick.\n"
         + tone_block_followup
         + _build_followup_tone_extensions()
         + "\nRetorne SOMENTE JSON válido no schema ChildResult:\n"
@@ -3974,7 +3976,7 @@ def _build_child_prompt_follow_up(
         "2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.\n"
         "3. NUNCA dê conselhos médicos, jurídicos ou financeiros.\n"
         "4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.\n"
-        "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
+        "5. NUNCA use urgência artificial — só mencione urgência se a base de conhecimento trouxer uma condição vigente (Condição Atual da Oferta ou Condição Especial Vigente).\n"
         "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
         "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
         "8. NUNCA reabra campos de qualificação em ticks automáticos.\n"
@@ -4098,7 +4100,7 @@ def _build_child_prompt_closing(
         "2. NUNCA prometa descontos, prazos ou condições não presentes em offer_pack ou knowledge_items.\n"
         "3. NUNCA dê conselhos médicos, jurídicos ou financeiros.\n"
         "4. NUNCA mencione concorrentes pelo nome, a menos que estejam em knowledge_items.\n"
-        "5. NUNCA use urgência artificial — só mencione urgência se urgency_offer estiver preenchido.\n"
+        "5. NUNCA use urgência artificial — só mencione urgência se a base de conhecimento trouxer uma condição vigente (Condição Atual da Oferta ou Condição Especial Vigente).\n"
         "6. NUNCA responda sobre assuntos fora do nicho do negócio — redirecione para o tema.\n"
         "7. Se não souber a resposta, diga que vai verificar com a equipa (→ handoff), não improvise.\n"
         + _ESCAPE_HATCH_BLOCK

@@ -549,6 +549,7 @@ _REFERENCE_CATEGORIES: Dict[str, str] = {
     "commercial_objections": "Objeções Comerciais e Respostas",
     "service_differentials": "Diferenciais do Serviço",
     "active_promotion": "Condição Especial Vigente",
+    "urgency_offer": "Condição Atual da Oferta",
     "payment_policy": "Política de Pagamento Presencial",
     "pre_commitment_faq": "FAQ Pré-Compromisso",
 }

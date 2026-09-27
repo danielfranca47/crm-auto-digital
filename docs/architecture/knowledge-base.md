@@ -101,6 +101,15 @@ bloco único, com uma só instrução:
 referência: narrativas com dedup, o bloco "MODO COMERCIAL", o bloco de serviços do
 agendamento e a seleção de mídia.
 
+## Classificação das categorias da Camada 4
+
+| Tipo | Categorias | Como chega à IA |
+|---|---|---|
+| **Referência** — o que o agente *sabe* | `company_profile`, `professional_bio`, `pre_meeting_faq`, `scheduling_policy`, `price_policy`, `competitive_differentials`, `service_faq`, `objections_faq`, `guarantee_policy`, `service_pricing_table`, `commercial_objections`, `service_differentials`, `active_promotion`, `urgency_offer`, `payment_policy`, `pre_commitment_faq` + conteúdo extra | Bloco único `knowledge_reference` (acima) |
+| **Narrativa** — contar 1x por lead | `social_proof`, `pitch_script`, `product_details` | `knowledge_items` + dedup (abaixo) |
+| **Uso próprio** | `qualification_criteria` | `routes/qualification.py` |
+| **Para mover** — roteiros e duplicados | ver `KNOWLEDGE_CATEGORIES_TO_MOVE` (`frontend-crm/src/types/agente.ts`) e [`docs/conhecimento-dos-agentes.md`](../conhecimento-dos-agentes.md#categorias-retiradas-da-camada-4) | Não chegam. Fora das listas por agente (`KNOWLEDGE_CATEGORIES_BY_TEMPLATE`), por isso a Camada 4, o wizard e a ingestão por IA já não as pedem nem geram; itens existentes aparecem na secção "Para mover" da Camada 4 (`CamadaConhecimento.tsx`) com o destino e "Copiar texto" |
+
 ## Instrução ao LLM — `backend-executors/app/services/decision_engine.py`
 
 Os dois blocos que já liam `service_pricing_table` (qualificação em modo comercial e filha de

@@ -175,3 +175,20 @@ def test_qualification_answers_price_when_operator_chooses_on_request(response_s
     assert prompt.count(_PRICE) == 1
     assert "responde com os valores da base de conhecimento" in prompt
     assert "os valores são apresentados logo a seguir" not in prompt
+
+
+def test_urgency_offer_is_reference_withheld_from_qualification_by_default():
+    context = _context_with_faq_and_price("qualification")
+    context["knowledge_reference"].append(
+        {"heading": "Condição Atual da Oferta", "content": "Só até sexta: 20% off.", "category": "urgency_offer"}
+    )
+    qualification = _build_child_prompt_qualification(context, "tem desconto?", _mother("qualification"))
+    closing = _build_child_prompt_closing(context, "tem desconto?", _mother("closing"))
+    assert "Só até sexta: 20% off." not in qualification
+    assert "Só até sexta: 20% off." in closing
+
+
+def test_urgency_rule_points_to_knowledge_base_not_internal_key():
+    context = _context_with_faq_and_price("closing")
+    prompt = _build_child_prompt_closing(context, "vou pensar", _mother("closing"))
+    assert "urgency_offer" not in prompt
