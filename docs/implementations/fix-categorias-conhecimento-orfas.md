@@ -274,11 +274,19 @@ copiar), fora do prompt e fora do conteúdo extra.
   - **Prompt reconstruído nas 6 fases:** 0 regras "usar APENAS"; a FAQ e a tabela aparecem 1 vez cada (a tabela não aparece na qualificação); tamanhos na tabela da Fase 2.
 
 ### Cenário P6 — Preço na qualificação configurável (Fase 3)
-- [ ] Reiniciar backend-core, backend-crm e backend-executors com o código da Fase 3 (a coluna nova é criada no arranque do backend-core); frontend a correr a partir da pasta da correção
-- [ ] Camada 2: o seletor "Se o lead perguntar o preço durante a qualificação" aparece em "Deixar para a apresentação"; o resumo mostra "Fica para a apresentação"
-- [ ] Com "Deixar para a apresentação": pergunta de preço com o prompt de qualificação do lead (mesmo método do P3) → diz que os valores vêm a seguir e continua a qualificar, sem citar valores nem propor marcação
-- [ ] Mudar para "Responder com a tabela", gravar e recarregar a página → a escolha mantém-se e o resumo mostra "Responde com a tabela"
-- [ ] Repetir a pergunta de preço → responde com o valor da tabela (conta de teste: R$150) e continua a qualificar
+- [x] Reiniciar backend-core, backend-crm e backend-executors com o código da Fase 3 (a coluna nova é criada no arranque do backend-core); frontend a correr a partir da pasta da correção
+- [x] Camada 2: o seletor "Se o lead perguntar o preço durante a qualificação" aparece em "Deixar para a apresentação"; o resumo mostra "Fica para a apresentação"
+- [x] Com "Deixar para a apresentação": pergunta de preço com o prompt de qualificação do lead (mesmo método do P3) → diz que os valores vêm a seguir e continua a qualificar, sem citar valores nem propor marcação
+- [x] Mudar para "Responder com a tabela", gravar e recarregar a página → a escolha mantém-se e o resumo mostra "Responde com a tabela"
+- [x] Repetir a pergunta de preço → responde com o valor da tabela (conta de teste: R$150) e continua a qualificar
+- **Validado em:** 27/09/2026 — teste automatizado via browser + IA real, conta de teste local (modo passivo).
+  - **Arranque:** o backend-core da pasta da correção arrancou sobre a base local da pasta principal (cópia de segurança antes) e criou a coluna; a conta ficou em `after_qualification`.
+  - **Camada 2 e resumo:** o seletor aparece por baixo de "Como o agente coleta informações", já em "Deixar para a apresentação", e o resumo mostra "Fica para a apresentação".
+  - **"Deixar para a apresentação"** (lead #513, 3 execuções): a tabela não entra no prompt. Respostas: "Os valores são apresentados logo a seguir, conforme entendermos melhor o que você procura… Que tipo de massagem você está considerando?". Nenhuma cita valores nem propõe marcação, o que corrige as respostas vagas e as propostas de marcação vistas no P3.
+  - **Mudança da opção:** passar a "Responder com a tabela" e "SALVAR CAMADA 2" grava `on_request` na base; depois de recarregar, o resumo mostra "Responde com a tabela".
+  - **"Responder com a tabela"** (3 execuções): a tabela entra no prompt. Respostas: "Uma sessão de massagem custa a partir de R$150. Para pacotes de 5 sessões pagas à vista, oferecemos um desconto de 10%… Você já tem em mente um tipo específico de massagem?".
+  - **Nota de método:** o primeiro ensaio usou o lead #514, que já tinha "R$150" no histórico (resposta da apresentação no P3). Esse ensaio foi descartado e repetido com o #513, sem preço no histórico.
+  - **Estado final:** a conta de teste ficou em "Responder com a tabela".
 
 ### Cenário P5 — Camada 4 limpa (Fase 4)
 - [ ] (definido na Fase 4)
