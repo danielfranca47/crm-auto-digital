@@ -188,6 +188,51 @@ a apresentação" (predefinido, igual ao comportamento atual). Novo campo
 (backend-core), lido pelo prompt de qualificação; seletor na Camada 2 e no resumo; campo
 no painel admin (`admin-agents-contract.md`). A mídia continua só na apresentação.
 
+| Arquivo | O que muda |
+|---|---|
+| `backend-core/app/models/ai_profile.py`, `app/db.py`, `app/api/ai_profiles.py` | Coluna `qualification_price_disclosure` (padrão `after_qualification`), migração idempotente, enum `QualificationPriceDisclosure` nos schemas |
+| `backend-executors/app/services/decision_engine.py` | `_qualification_price_disclosure()`; exclusão das categorias de preço só com `after_qualification`; `_price_line` única nos modos ativo e passivo (substitui "exclusivas da fase de apresentação" e "serão apresentadas em breve"; o modo ativo não tinha regra) |
+| `backend-crm/routes/admin_agents.py` | Campo no diff (`_SYSTEM_DEFAULTS`) e nas respostas por utilizador |
+| `frontend-crm/src/components/agente/CamadaQualificacao.tsx` | Seletor `TogglePriceDisclosure` abaixo de "Como o agente coleta informações" |
+| `frontend-crm/src/pages/AiProfile.tsx` | Linha "Preço na qualificação" no resumo |
+| `frontend-crm/src/types/agente.ts`, `src/services/api.ts` | Campo, valor predefinido, leitura e gravação |
+| `backend-core/tests/test_ai_profile_price_disclosure.py` | Novo: padrão e persistência de `on_request` |
+| `backend-executors/tests/test_knowledge_reference_block.py` | Qualificação nos dois valores × modos ativo/passivo, valor ausente/desconhecido |
+| `docs/architecture/agents.md`, `admin-agents-contract.md`, `knowledge-base.md`, `docs/prompts_llms.md` | Campo novo, tabela de exclusões, `_price_line` |
+
+**Testes:** 2 novos no backend-core e 8 novos no backend-executors, todos a passar. Os
+testes antigos do AI profile no backend-core (`test_ai_profile_agent_mode.py` e afins)
+já falhavam antes: chamam `create_or_replace_ai_profile` sem `background_tasks`. Na suíte
+do backend-executors ficam as mesmas 72 falhas antigas. Há ainda 1 falha de ambiente:
+`test_optional_custom_field_is_captured…` tenta ligar ao backend-crm local e falha quando
+ele não está a correr; passa sozinho e no seu ficheiro. Não há erros de tipos nos
+ficheiros do frontend alterados: os 66 erros do `tsc` são todos noutros ficheiros e já
+existiam. A pasta de trabalho passou a ter um `node_modules` ligado ao da pasta principal
+(junction, ignorado pelo git).
+
+#### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ce52fcf` | Campo no AI profile, prompt de qualificação, seletor na Camada 2, admin, testes, docs |
+
+#### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** quando o lead perguntava o preço durante a qualificação, o agente nunca dava
+valores. Era uma regra fixa para todos os clientes, decidida em abril. No modo "conduz a
+conversa" nem sequer havia instrução sobre o que dizer, e as respostas saíam vagas ("os
+preços variam…"), às vezes com uma proposta de marcação.
+**Agora:** na Camada 2 há uma escolha nova, "Se o lead perguntar o preço durante a
+qualificação", com duas opções:
+- **"Deixar para a apresentação" (predefinida):** o agente diz que os valores vêm logo a seguir e continua a qualificar.
+- **"Responder com a tabela":** o agente dá o valor da tabela de preços e depois continua a qualificar.
+
+Os clientes atuais ficam na opção predefinida, por isso nada muda para eles até alguém
+mudar a escolha. Imagens e ficheiros da tabela continuam a ser enviados só na
+apresentação. A escolha aparece no resumo do agente e no painel admin, quando é diferente
+da predefinida.
+**Para validar:** Cenário P6, abaixo.
+
 ### Fase 4 — Limpar a Camada 4
 
 **Objetivo:** retirar as categorias Roteiro e Duplicado das listas por template;
@@ -229,7 +274,11 @@ copiar), fora do prompt e fora do conteúdo extra.
   - **Prompt reconstruído nas 6 fases:** 0 regras "usar APENAS"; a FAQ e a tabela aparecem 1 vez cada (a tabela não aparece na qualificação); tamanhos na tabela da Fase 2.
 
 ### Cenário P6 — Preço na qualificação configurável (Fase 3)
-- [ ] (definido na Fase 3)
+- [ ] Reiniciar backend-core, backend-crm e backend-executors com o código da Fase 3 (a coluna nova é criada no arranque do backend-core); frontend a correr a partir da pasta da correção
+- [ ] Camada 2: o seletor "Se o lead perguntar o preço durante a qualificação" aparece em "Deixar para a apresentação"; o resumo mostra "Fica para a apresentação"
+- [ ] Com "Deixar para a apresentação": pergunta de preço com o prompt de qualificação do lead (mesmo método do P3) → diz que os valores vêm a seguir e continua a qualificar, sem citar valores nem propor marcação
+- [ ] Mudar para "Responder com a tabela", gravar e recarregar a página → a escolha mantém-se e o resumo mostra "Responde com a tabela"
+- [ ] Repetir a pergunta de preço → responde com o valor da tabela (conta de teste: R$150) e continua a qualificar
 
 ### Cenário P5 — Camada 4 limpa (Fase 4)
 - [ ] (definido na Fase 4)
