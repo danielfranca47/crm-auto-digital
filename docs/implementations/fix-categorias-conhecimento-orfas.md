@@ -325,12 +325,12 @@ A "Condição Atual da Oferta" passa a chegar à IA (fora da qualificação, com
   - **Estado final:** a conta de teste ficou em "Responder com a tabela".
 
 ### Cenário P5 — Camada 4 limpa (Fase 4)
-- [ ] Serviços com o código da Fase 4 (frontend a partir da pasta da correção)
-- [ ] Camada 4 (conta de teste `hybrid_scheduler`): já não lista "Script de Aquecimento", "Preview da Sessão", "Roteiro de Perguntas de Dor", "Follow-up Pós-Sessão", "Material Pré-Sessão" nem "Script de Indicação"
-- [ ] O "Script de Aquecimento" já preenchido aparece em "Para mover", com o destino "Fluxo de Venda → fase Apresentação", e não em "Conteúdo adicional"
-- [ ] "Copiar texto" copia o conteúdo (ou abre o texto, se o browser bloquear a área de transferência)
-- [ ] O contador de secções críticas deixa de contar as secções retiradas
-- [ ] Prompt reconstruído: o roteiro continua fora (como no P4)
+- [x] Serviços com o código da Fase 4 (frontend a partir da pasta da correção) ✅ 2026-09-27 — backend-crm e backend-executors reiniciados depois do commit `fd888bc`; frontend a partir da pasta da correção
+- [x] Camada 4 (conta de teste `hybrid_scheduler`): já não lista "Script de Aquecimento", "Preview da Sessão", "Roteiro de Perguntas de Dor", "Follow-up Pós-Sessão", "Material Pré-Sessão" nem "Script de Indicação" ✅ 2026-09-27 — sugeridas agora: Bio do Profissional, Histórias de Transformação, Política de Agendamento, Tabela de Serviços e Preços, FAQ do Serviço (+ bloco comercial)
+- [x] O "Script de Aquecimento" já preenchido aparece em "Para mover", com o destino "Fluxo de Venda → fase Apresentação", e não em "Conteúdo adicional" ✅ 2026-09-27 — "Para mover · 1 item" com o destino "Fluxo de Venda → fase Apresentação (bloco Orientação ao Agente)" e o texto; "Conteúdo adicional" ficou só com "Atendimento ao domicílio" e "Perfil da Empresa"
+- [x] "Copiar texto" copia o conteúdo (ou abre o texto, se o browser bloquear a área de transferência) ✅ 2026-09-27 — o botão passou a "Copiado ✓" (só acontece depois de o browser confirmar a cópia); o conteúdo em si não foi lido de fora, porque o browser de teste tem área de transferência própria
+- [x] O contador de secções críticas deixa de contar as secções retiradas ✅ 2026-09-27 — Resumo: "1 / 3 críticas preenchidas" (antes eram 4: "Preview da Sessão" era crítica)
+- [x] Prompt reconstruído: o roteiro continua fora (como no P4) ✅ 2026-09-27 — lead #513: `knowledge_reference` com 5 itens, sem o roteiro; o texto do roteiro aparece 0 vezes nos 6 prompts (qualificação, apresentação, follow-up, fechamento, pré-agendamento, agendamento), o bloco da base 1 vez em cada
 
 ---
 
