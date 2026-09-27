@@ -216,11 +216,17 @@ copiar), fora do prompt e fora do conteúdo extra.
 - **Validado em:** 24/09/2026 — o template `hybrid_scheduler` não oferece "Recuperação de Carrinho"; usei o "Script de Aquecimento" (`warming_script`) com a frase-marcador "férias em Fernando de Noronha". Resultados: `knowledge_reference` do lead com 2 itens (perfil + conteúdo extra, sem o roteiro); a marca não aparece em nenhum dos 3 prompts capturados nem nas respostas do playground; nenhum código do backend lê `warming_script`.
 
 ### Cenário P3 — Conhecimento consolidado em todas as fases (Fase 2)
-- [ ] Camada 4 → "FAQ do Serviço" com um facto único (conta de teste: "cada sessão dura 50 minutos, mais 10 de conversa inicial")
-- [ ] Playground, lead em qualificação: perguntar "quanto tempo dura a sessão?" → responde com os 50 minutos e continua o objetivo da fase
-- [ ] Playground, apresentação: perguntar o preço → responde com a tabela cadastrada
-- [ ] Playground, qualificação: perguntar o preço → comportamento de hoje (não dá valores; ficam para a apresentação)
-- [ ] Prompt reconstruído (mesmo método da Fase 1): nenhum "usar APENAS" nos blocos de conhecimento; a FAQ e a tabela aparecem uma só vez
+- [x] Camada 4 → "FAQ do Serviço" com um facto único (conta de teste: "cada sessão dura 50 minutos, mais 10 de conversa inicial")
+- [x] Playground, lead em qualificação: perguntar "quanto tempo dura a sessão?" → responde com os 50 minutos e continua o objetivo da fase
+- [x] Playground, apresentação: perguntar o preço → responde com a tabela cadastrada
+- [x] Playground, qualificação: perguntar o preço → comportamento de hoje (não dá valores; ficam para a apresentação)
+- [x] Prompt reconstruído (mesmo método da Fase 1): nenhum "usar APENAS" nos blocos de conhecimento; a FAQ e a tabela aparecem uma só vez
+- **Validado em:** 27/09/2026 — serviços locais reiniciados com o código da Fase 2 (`a1ad9ad`), testes no browser (leads #513 e #514).
+  - **FAQ ao vivo:** "quanto tempo dura cada sessão?" → "Cada sessão dura 50 minutos, com mais 10 minutos para uma conversa inicial"; "grávida de 5 meses, posso fazer massagem?" → "a partir do segundo trimestre… massagens pré-natais adaptadas". A Mãe mandou as duas para a apresentação: a conta de teste não tem campos de qualificação e raramente cai na qualificação.
+  - **Qualificação:** a fase foi validada ao enviar à IA real o prompt de qualificação do lead #514 (dados reais, código da Fase 2). "O que preciso levar?" → "não precisa trazer nada… toalhas e roupão… roupa confortável" e volta a qualificar.
+  - **Preço na qualificação:** não dá valores (3 de 3 execuções), igual ao código da Fase 1. As respostas são vagas e às vezes falam em marcar ("posso agendar uma conversa"). O código da Fase 1 fez o mesmo ("Que dias você tem em mente?"): não é regressão, é o efeito da regra fixa que a Fase 3 torna configurável.
+  - **Preço na apresentação ao vivo:** "Quanto custa uma sessão?" → "a partir de R$150, com desconto de 10% para pacotes de 5 sessões pagas à vista" (tabela cadastrada).
+  - **Prompt reconstruído nas 6 fases:** 0 regras "usar APENAS"; a FAQ e a tabela aparecem 1 vez cada (a tabela não aparece na qualificação); tamanhos na tabela da Fase 2.
 
 ### Cenário P6 — Preço na qualificação configurável (Fase 3)
 - [ ] (definido na Fase 3)
