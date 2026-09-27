@@ -111,6 +111,11 @@ class ResponseStyle(str, Enum):
     passive = "passive"  # agente responde perguntas do cliente antes de qualificar
 
 
+class QualificationPriceDisclosure(str, Enum):
+    after_qualification = "after_qualification"  # preço fica para a apresentação
+    on_request = "on_request"                    # responde o preço na qualificação quando perguntado
+
+
 class ColdOutreachChannel(str, Enum):
     whatsapp_only = "whatsapp_only"
     email_first = "email_first"
@@ -226,6 +231,9 @@ class AIProfileBase(BaseModel):
     availability_mode: Optional[str] = "24h"
     meeting_management_enabled: bool = True
     response_style: Optional[ResponseStyle] = ResponseStyle.active
+    qualification_price_disclosure: Optional[QualificationPriceDisclosure] = (
+        QualificationPriceDisclosure.after_qualification
+    )
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None
     qualification_extraction_tolerance: Optional[QualificationExtractionTolerance] = (
@@ -306,6 +314,7 @@ class AIProfileUpdate(BaseModel):
     availability_mode: Optional[str] = None
     meeting_management_enabled: Optional[bool] = None
     response_style: Optional[ResponseStyle] = None
+    qualification_price_disclosure: Optional[QualificationPriceDisclosure] = None
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None
     qualification_extraction_tolerance: Optional[QualificationExtractionTolerance] = None

@@ -849,6 +849,7 @@ Blocos que só aparecem no prompt quando certas condições são atendidas:
 | `_greeting_header` | `next_action_hint == "greet"` | qualification |
 | `_passive_header` (reply now) | `response_style=passive` + `next_action_hint=reply` | qualification |
 | `_passive_header` (default) | `response_style=passive` (sem hint especial) | qualification |
+| `_price_line` (preço na qualificação) | sempre — texto depende de `ai_profile.qualification_price_disclosure` (`after_qualification`: valores vêm a seguir; `on_request`: responde com a tabela) | qualification (ativo e passivo) |
 | `_passive_apres_header` | `response_style=passive` + qualif concluída neste turno + pergunta no inbound | apresentation |
 | `must_collect_with_questions` | `response_style=active` + `qualification_fields` com `mode=required` | qualification |
 | `passive_hints` | `response_style=passive` + `passive_hint` preenchido em algum campo | qualification |

@@ -162,6 +162,78 @@ function ToggleResponseStyle({ value, onChange }: {
   );
 }
 
+// ─── Preço perguntado na qualificação ────────────────────────
+
+type PriceDisclosure = 'after_qualification' | 'on_request';
+
+const PRICE_DISCLOSURE_OPTIONS: Array<{ value: PriceDisclosure; title: string; description: string }> = [
+  {
+    value: 'after_qualification',
+    title: 'Deixar para a apresentação',
+    description: 'Diz que os valores vêm logo a seguir e continua a qualificar',
+  },
+  {
+    value: 'on_request',
+    title: 'Responder com a tabela',
+    description: 'Dá o valor da tabela de preços e depois continua a qualificar',
+  },
+];
+
+function TogglePriceDisclosure({ value, onChange }: {
+  value: PriceDisclosure;
+  onChange: (v: PriceDisclosure) => void;
+}) {
+  return (
+    <div style={{
+      border: '1px solid var(--o-b2)',
+      borderRadius: 8,
+      marginBottom: 24,
+      overflow: 'hidden',
+    }}>
+      <div style={{ padding: '10px 16px', background: 'var(--o-b1)', borderBottom: '1px solid var(--o-b2)' }}>
+        <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
+          Se o lead perguntar o preço durante a qualificação
+        </span>
+        <div style={{ fontSize: 11, color: 'var(--o-dim)', marginTop: 4 }}>
+          Depende do seu processo de venda. Imagens e ficheiros da tabela só são enviados na apresentação.
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+        {PRICE_DISCLOSURE_OPTIONS.map((opt, i) => {
+          const selected = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              onClick={() => onChange(opt.value)}
+              style={{
+                padding: '14px 16px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                background: selected ? 'color-mix(in srgb, var(--o-purple) 10%, transparent)' : 'transparent',
+                borderRight: i === 0 ? '1px solid var(--o-b2)' : 'none',
+                outline: selected ? '2px solid var(--o-purple)' : 'none',
+                outlineOffset: -2,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <div style={{
+                  width: 16, height: 16, borderRadius: '50%',
+                  border: `2px solid ${selected ? 'var(--o-purple)' : 'var(--o-dim)'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  {selected && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--o-purple)' }} />}
+                </div>
+                <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--o-text)' }}>{opt.title}</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--o-sub)', paddingLeft: 24, lineHeight: 1.5 }}>
+                {opt.description}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── 4.6 — Banner de sugestão por agent_mode ─────────────────
 
 function BannerSugestao({ mode, onApply, onDismiss }: {
@@ -1126,6 +1198,11 @@ export function CamadaQualificacao({ config, onUpdate }: CamadaQualificacaoProps
       <ToggleResponseStyle
         value={config.response_style}
         onChange={v => onUpdate({ response_style: v })}
+      />
+
+      <TogglePriceDisclosure
+        value={config.qualification_price_disclosure}
+        onChange={v => onUpdate({ qualification_price_disclosure: v })}
       />
 
       {/* Contexto do negócio */}

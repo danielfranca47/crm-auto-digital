@@ -28,6 +28,7 @@ class AIProfile(Base):
     presentation_variant = Column(String, nullable=True)
     hybrid_flow_style = Column(String, nullable=True)
     response_style = Column(String, nullable=True, server_default="active")
+    qualification_price_disclosure = Column(String, nullable=True, server_default="after_qualification")
     offer_pack = Column(JSON, nullable=True)
     identity_mode = Column(String, nullable=True, server_default="human_agent")
     llm_provider = Column(String, nullable=True, server_default="openai")

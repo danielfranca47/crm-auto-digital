@@ -166,6 +166,11 @@ function PainelResumo({
               value={config.response_style === 'passive' ? 'Passivo (persuasão)' : 'Ativo (pergunta)'}
               onClick={() => onNavigate('c2')}
             />
+            <SummaryCard
+              label="Preço na qualificação"
+              value={config.qualification_price_disclosure === 'on_request' ? 'Responde com a tabela' : 'Fica para a apresentação'}
+              onClick={() => onNavigate('c2')}
+            />
           </>
         )}
       </div>

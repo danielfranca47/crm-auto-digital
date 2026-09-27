@@ -1250,6 +1250,14 @@ _REFERENCE_CATEGORY_LABELS: Dict[str, str] = {
 }
 
 
+def _qualification_price_disclosure(ai_profile: Dict[str, Any]) -> str:
+    """Escolha do operador (Camada 2) para o preço perguntado na qualificação:
+    "on_request" responde com a tabela; qualquer outro valor (incl. ausente) vale
+    "after_qualification" — o comportamento anterior à opção existir."""
+    value = str((ai_profile or {}).get("qualification_price_disclosure") or "").strip().lower()
+    return "on_request" if value == "on_request" else "after_qualification"
+
+
 def _build_knowledge_reference_block(
     context: Dict[str, Any],
     exclude_categories: Iterable[str] = (),
@@ -2957,6 +2965,23 @@ def _build_child_prompt_qualification(
 
     _media_intro_note = ""  # qualificação nunca envia knowledge_media
 
+    # Pergunta de preço na qualificação: escolha do operador (qualification_price_disclosure).
+    # Com "after_qualification" as categorias de preço/oferta ficam fora do bloco de referência
+    # e o agente adia os valores; com "on_request" responde com a tabela. Mesma frase nos
+    # modos ativo e passivo.
+    _price_disclosure = _qualification_price_disclosure(ai_profile)
+    _price_line = (
+        "Se o lead perguntar o preço ou a oferta: responde com os valores da base de conhecimento "
+        "(só os que lá estão) e depois continua a qualificação."
+        if _price_disclosure == "on_request"
+        else "Se o lead perguntar o preço ou a oferta: diz que os valores são apresentados logo a seguir, "
+        "quando perceberes o que procura, e continua a qualificação — o operador escolheu apresentar "
+        "os preços só depois de qualificar."
+    )
+    _qualification_excluded = (
+        () if _price_disclosure == "on_request" else _QUALIFICATION_WITHHELD_CATEGORIES
+    )
+
     # ESCOPO e RECUSAS condicionais ao response_style.
     # O bloco passivo aparece ANTES do PAPEL para ter precedência sobre qualquer instrução posterior.
     _escopo_line = (
@@ -2975,6 +3000,7 @@ def _build_child_prompt_qualification(
             "responde usando custom_instructions e a base de conhecimento. "
             "Se a mensagem do lead for uma saudação social (boa tarde, oi, olá, tudo bem, bom dia, etc.), "
             "responde à saudação de forma calorosa antes de qualificar. "
+            f"{_price_line} "
             "Depois, se houver campos obrigatórios em falta, adicione UMA única pergunta de qualificação natural ao final. "
             "Nunca respondas APENAS com uma pergunta de qualificação. Não agenda reuniões nesta fase."
         )
@@ -2996,8 +3022,7 @@ def _build_child_prompt_qualification(
             "INSTRUÇÃO CRÍTICA: coloca TODA a resposta em message_text. NÃO perguntes nada neste turno.\n"
             "should_ask=false. question_text DEVE ficar vazio (\"\").\n"
             "Responde à pergunta do cliente usando custom_instructions e a base de conhecimento. "
-            "NÃO menciones preços, tabelas de valores, promoções ou oferta comercial — "
-            "essas informações são exclusivas da fase de apresentação.\n"
+            f"{_price_line}\n"
             "A qualificação continua nos próximos turnos — NÃO neste.\n\n"
         )
         if _passive_reply_now
@@ -3005,7 +3030,7 @@ def _build_child_prompt_qualification(
             "MODO PASSIVO ACTIVADO — ZERO PERGUNTAS ABERTAS.\n"
             "PRIORIDADE ABSOLUTA: se a mensagem do cliente for uma pergunta directa (sobre\n"
             "localização, horários, funcionamento, etc.), RESPONDE-A PRIMEIRO usando custom_instructions e a base de conhecimento.\n"
-            "Para perguntas sobre preços ou oferta: informa que essas informações serão apresentadas em breve.\n"
+            f"{_price_line}\n"
             "NÃO faças perguntas de qualificação. Infere os campos silenciosamente da conversa.\n"
             "should_ask=false na esmagadora maioria dos casos.\n"
             "NUNCA ignores uma pergunta directa para fazer uma pergunta de qualificação.\n\n"
@@ -3093,7 +3118,7 @@ CONTEXTO:
 - origin_opener: {origin_opener}
 - inbound_message_text: {message_text}
 - next_action_hint_mae: {mother_decision.next_action_hint or "null"}
-{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_knowledge_reference_block(context, exclude_categories=_QUALIFICATION_WITHHELD_CATEGORIES)}{_build_training_examples_block(context, "qualification")}"""
+{_build_qualification_fields_block(ai_profile, response_style)}{_build_custom_instructions_block(ai_profile)}{_build_business_info_block(context)}{_build_knowledge_reference_block(context, exclude_categories=_qualification_excluded)}{_build_training_examples_block(context, "qualification")}"""
     _qual_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "qualification", mother_decision.signals))
     _qual_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "qualification", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _inject_generated_parts(_qual_prompt, context, "qualification")

@@ -151,3 +151,27 @@ def test_followup_does_not_promise_media_it_never_sends():
     prompt = _build_child_prompt_follow_up(context, "e quanto tempo dura?", _mother("follow-up"))
     assert _FAQ in prompt
     assert "enviado automaticamente" not in prompt
+
+
+@pytest.mark.parametrize("response_style", ["active", "passive"])
+@pytest.mark.parametrize("disclosure", [None, "after_qualification", "valor-desconhecido"])
+def test_qualification_withholds_price_by_default(response_style, disclosure):
+    context = _context_with_faq_and_price("qualification")
+    context["ai_profile"]["response_style"] = response_style
+    if disclosure is not None:
+        context["ai_profile"]["qualification_price_disclosure"] = disclosure
+    prompt = _build_child_prompt_qualification(context, "quanto custa?", _mother("qualification"))
+    assert _PRICE not in prompt
+    assert "os valores são apresentados logo a seguir" in prompt
+    assert "exclusivas da fase de apresentação" not in prompt
+
+
+@pytest.mark.parametrize("response_style", ["active", "passive"])
+def test_qualification_answers_price_when_operator_chooses_on_request(response_style):
+    context = _context_with_faq_and_price("qualification")
+    context["ai_profile"]["response_style"] = response_style
+    context["ai_profile"]["qualification_price_disclosure"] = "on_request"
+    prompt = _build_child_prompt_qualification(context, "quanto custa?", _mother("qualification"))
+    assert prompt.count(_PRICE) == 1
+    assert "responde com os valores da base de conhecimento" in prompt
+    assert "os valores são apresentados logo a seguir" not in prompt

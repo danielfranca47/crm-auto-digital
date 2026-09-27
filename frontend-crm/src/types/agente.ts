@@ -269,6 +269,8 @@ export interface AgentConfig {
   timezone: string;
   custom_instructions: string;
   response_style: 'active' | 'passive';
+  /** Preço perguntado na qualificação: adiar para a apresentação (predefinido) ou responder com a tabela. */
+  qualification_price_disclosure: 'after_qualification' | 'on_request';
 
   // ── Camada 1 — Contexto de abertura ──────────────────────
   origin_inbound_opener: string;
@@ -386,6 +388,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   timezone: 'America/Sao_Paulo',
   custom_instructions: '',
   response_style: 'active',
+  qualification_price_disclosure: 'after_qualification',
 
   origin_inbound_opener: '',
   origin_outbound_opener: '',

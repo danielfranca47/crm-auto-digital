@@ -91,7 +91,7 @@ bloco único, com uma só instrução:
 
   | Fase | Exclui | Porquê |
   |---|---|---|
-  | Qualificação | `_QUALIFICATION_WITHHELD_CATEGORIES` (`service_pricing_table`, `price_policy`, `active_promotion`, `payment_policy`, `commercial_objections`) | Preço/oferta são apresentados na apresentação (decisão de 22/04/2026) |
+  | Qualificação, com `qualification_price_disclosure=after_qualification` (padrão) | `_QUALIFICATION_WITHHELD_CATEGORIES` (`service_pricing_table`, `price_policy`, `active_promotion`, `payment_policy`, `commercial_objections`) | O operador escolheu apresentar os preços só depois de qualificar; o prompt diz ao lead que os valores vêm a seguir. Com `on_request`, nada é excluído e o prompt manda responder com a tabela (mesma frase nos modos ativo e passivo). Mídia continua só na apresentação |
   | Apresentação | Categorias de referência com mídia em `knowledge_media` | A mídia é a resposta; fica só uma nota "conteúdo disponível em mídia — escreva só uma frase de introdução" |
   | Apresentação, turno único de aquecimento comercial | `_COMMERCIAL_INJECTION_CATEGORIES` | Já mostradas em texto no bloco "MODO COMERCIAL" |
   | Agendamento | `service_pricing_table` | Já está no bloco "SERVIÇOS E DURAÇÕES" (usado para a duração da marcação) |

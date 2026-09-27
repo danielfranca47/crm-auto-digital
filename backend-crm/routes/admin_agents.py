@@ -103,6 +103,7 @@ _SYSTEM_DEFAULTS: Dict[str, Any] = {
     "offer_pack": None,
     "qualification_score_threshold": 6,
     "qualification_extraction_tolerance": "equilibrado",
+    "qualification_price_disclosure": "after_qualification",
     "followup_max_attempts": None,
     "llm_provider": "openai",
 }
@@ -243,6 +244,7 @@ async def admin_agents_users(
             "qualification_required_fields": p.get("qualification_required_fields"),
             "qualification_fields": p.get("qualification_fields"),
             "qualification_extraction_tolerance": p.get("qualification_extraction_tolerance"),
+            "qualification_price_disclosure": p.get("qualification_price_disclosure"),
             "followup_max_attempts": p.get("followup_max_attempts"),
             "prompt_parts_version": p.get("prompt_parts_version"),
             "prompt_parts_generated_at": p.get("prompt_parts_generated_at"),
@@ -309,6 +311,7 @@ async def admin_agents_user_detail(
             "qualification_required_fields": profile.get("qualification_required_fields"),
             "qualification_fields": profile.get("qualification_fields"),
             "qualification_extraction_tolerance": profile.get("qualification_extraction_tolerance"),
+            "qualification_price_disclosure": profile.get("qualification_price_disclosure"),
             "followup_max_attempts": profile.get("followup_max_attempts"),
             "enabled_extensions": profile.get("enabled_extensions"),
             "prompt_parts_version": profile.get("prompt_parts_version"),
