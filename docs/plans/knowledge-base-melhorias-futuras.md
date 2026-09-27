@@ -4,6 +4,9 @@
 > `docs/implementations/fix-knowledge-narrativo-repeticao.md` (19/08/2026), que introduziu
 > o dedup de categorias narrativas (`social_proof`, `pitch_script`, `product_details`) —
 > ver [`docs/architecture/knowledge-base.md`](../architecture/knowledge-base.md#dedup-de-categorias-narrativas-evitar-repetição-entre-turnos).
+> M4–M5: itens deixados de fora da graduação de
+> `docs/implementations/fix-categorias-conhecimento-orfas.md` (27/09/2026), que criou o
+> bloco único `knowledge_reference` e a secção "Para mover" da Camada 4.
 
 ---
 
@@ -58,3 +61,33 @@ a informação faria sentido depois de tanto tempo.
 limpar `knowledge_categories_shown` (avaliar se `triggers_fired`/`phases_triggered` do
 Fluxo de Venda também deveriam ser limpos no mesmo momento — ficaria fora do escopo deste
 item específico, mas é a mesma pergunta de fundo).
+
+---
+
+## M4 — Fontes duplicadas que a IA lê ao mesmo tempo
+
+**Prioridade: MÉDIA**
+
+Duas informações existem em dois sítios e ambas chegam ao prompt:
+- **Garantia:** Camada 4 `guarantee_policy` (no bloco `knowledge_reference`) e Oferta
+  `guarantee_text` (Camada 6).
+- **Prova social no híbrido:** Camada 4 `social_proof` (narrativa, com dedup) e Camada 1
+  `warming_social_proof`.
+
+Se o utilizador escrever textos diferentes em cada sítio, a IA pode responder de forma
+contraditória. Não há queixa conhecida; é um risco. Passar primeiro pela discovery
+(medir em produção quantas contas têm os dois preenchidos e com texto diferente) antes
+de decidir entre fundir as fontes, escolher uma como principal ou avisar no ecrã.
+
+---
+
+## M5 — Conversão assistida de roteiros para blocos do Fluxo de Venda
+
+**Prioridade: BAIXA**
+
+A secção "Para mover" da Camada 4 (`CamadaConhecimento.tsx`, mapa
+`KNOWLEDGE_CATEGORIES_TO_MOVE` em `frontend-crm/src/types/agente.ts`) mostra o destino e
+copia o texto, mas é o utilizador que cria o bloco no Fluxo de Venda (Camada 7). O
+sistema não sabe a fase exata nem o gatilho de cada roteiro. Uma versão assistida
+proporia o bloco (fase + tipo + texto) para o utilizador confirmar. Em produção há poucos
+itens para mover; só compensa se o volume crescer.

@@ -34,7 +34,7 @@ estamos perto desse ponto?
   1. `_load_knowledge_items` (`backend-crm/services/ai_orchestrator/orchestrator.py:503-528`)
      carrega todas as categorias ativas do cliente (1 item por categoria, exceto a
      tabela de preços — problema já tratado em
-     `docs/implementations/fix-categorias-conhecimento-orfas.md`).
+     `docs/architecture/knowledge-base.md` (resolvido pela correção das categorias órfãs, 27/09/2026)).
   2. A Mãe decide a fase pelo significado da mensagem (`decision_engine.py:2419-2501`).
   3. Cada filha recebe só as categorias da sua fase (apresentação:
      `decision_engine.py:3288-3428`; follow-up: `3843-3881`), e as categorias
@@ -48,7 +48,7 @@ estamos perto desse ponto?
   Ambos muito abaixo do gatilho.
 - **Achado lateral:** 16 dos 25 itens de produção (~58% do texto) estão em
   categorias que a IA nunca lê — ver
-  `docs/implementations/fix-categorias-conhecimento-orfas.md`.
+  `docs/architecture/knowledge-base.md` (resolvido pela correção das categorias órfãs, 27/09/2026).
 - **Modelo:** `gpt-4o-mini` por padrão (`backend-executors/app/core/config.py:17`),
   janela de ~128 mil tokens; OpenRouter opcional por perfil
   (`app/services/llm_service.py:57`). A maior base local ocupa ~1,5% da janela.

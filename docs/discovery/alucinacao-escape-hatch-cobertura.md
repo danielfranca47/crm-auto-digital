@@ -29,4 +29,4 @@ temos forma de saber quando ele inventou ou quando pediu ajuda à equipa?
   forma de detetar alucinação depois do facto. Há também o risco de ele disparar
   **demais** quando a informação existe mas não foi carregada na fase (ver
   `conhecimento-fora-fase-apresentacao.md` e
-  `docs/implementations/fix-categorias-conhecimento-orfas.md`).
+  `docs/architecture/knowledge-base.md` (resolvido pela correção das categorias órfãs, 27/09/2026)).
