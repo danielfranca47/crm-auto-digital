@@ -239,6 +239,42 @@ da predefinida.
 itens existentes nelas aparecem numa secção "Para mover" (destino indicado, texto para
 copiar), fora do prompt e fora do conteúdo extra.
 
+**Correção à classificação (Plan Mode, 27/09/2026):**
+- `urgency_offer` ("Condição Atual da Oferta", closer) passa de roteiro a **referência**. Os prompts do closer diziam "só mencione urgência se `urgency_offer` estiver preenchido", mas esse texto nunca chegava à IA.
+- `post_purchase_onboarding`, que faltava na classificação, entra como roteiro.
+
+| Arquivo | O que muda |
+|---|---|
+| `frontend-crm/src/types/agente.ts` | 12 categorias saem de `KNOWLEDGE_CATEGORIES_BY_TEMPLATE`; novo `KNOWLEDGE_CATEGORIES_TO_MOVE` (rótulo + destino) |
+| `frontend-crm/src/components/agente/CamadaConhecimento.tsx` | Secção "Para mover" (destino, início do texto, Copiar texto, Ver, Remover); esses itens saem de "Conteúdo adicional" |
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | `urgency_offer` em `_REFERENCE_CATEGORIES` |
+| `backend-executors/app/services/decision_engine.py` | `urgency_offer` em `_REFERENCE_CATEGORY_LABELS` e `_QUALIFICATION_WITHHELD_CATEGORIES`; a regra de urgência (5 sítios) aponta para a base de conhecimento em vez da chave interna |
+| `backend-*/tests/…knowledge_reference*` | `urgency_offer` como referência, fora da qualificação por padrão, regra sem a chave interna |
+| `docs/architecture/knowledge-base.md`, `docs/conhecimento-dos-agentes.md` | Classificação final; categorias retiradas com o destino |
+
+**Testes:** 56 no backend-executors e 11 no orchestrator, todos a passar. O `tsc` mantém os
+mesmos 66 erros antigos: o de `CamadaConhecimento.tsx` (`title` em `KnowledgeCategory`)
+já existia, só mudou de linha.
+
+#### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `fd888bc` | Camada 4 sem roteiros/duplicados, secção "Para mover", `urgency_offer` como referência, testes, docs |
+
+#### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** a Camada 4 pedia 12 secções que a IA nunca lia. Umas eram roteiros (aquecimento,
+recuperação de carrinho, follow-up pós-sessão, indicação…) e outras repetiam o que já existe
+noutra camada (preview da sessão, perguntas de dor, upsell…). O cliente preenchia, contava
+como "crítico preenchido" e o agente não via nada. A "Condição Atual da Oferta" dos closers
+também nunca chegava à IA, e a regra de urgência dependia dela.
+**Agora:** a Camada 4 só pede o que o agente consulta. O que alguém já tinha escrito nessas
+secções aparece em "Para mover", com o sítio certo para onde levar o texto (Fluxo de Venda,
+Identidade, Oferta ou Qualificação) e um botão para copiar. Nada é apagado automaticamente.
+A "Condição Atual da Oferta" passa a chegar à IA (fora da qualificação, como os preços).
+**Para validar:** Cenário P5, abaixo.
+
 ---
 
 ## Checks de Validação
@@ -289,7 +325,12 @@ copiar), fora do prompt e fora do conteúdo extra.
   - **Estado final:** a conta de teste ficou em "Responder com a tabela".
 
 ### Cenário P5 — Camada 4 limpa (Fase 4)
-- [ ] (definido na Fase 4)
+- [ ] Serviços com o código da Fase 4 (frontend a partir da pasta da correção)
+- [ ] Camada 4 (conta de teste `hybrid_scheduler`): já não lista "Script de Aquecimento", "Preview da Sessão", "Roteiro de Perguntas de Dor", "Follow-up Pós-Sessão", "Material Pré-Sessão" nem "Script de Indicação"
+- [ ] O "Script de Aquecimento" já preenchido aparece em "Para mover", com o destino "Fluxo de Venda → fase Apresentação", e não em "Conteúdo adicional"
+- [ ] "Copiar texto" copia o conteúdo (ou abre o texto, se o browser bloquear a área de transferência)
+- [ ] O contador de secções críticas deixa de contar as secções retiradas
+- [ ] Prompt reconstruído: o roteiro continua fora (como no P4)
 
 ---
 
