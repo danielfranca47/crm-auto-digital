@@ -213,7 +213,7 @@
   }
 
   .btn-outline {
-    @apply border-2 border-primary text-primary px-6 py-3 rounded-lg font-medium transition-smooth
+    @apply border-2 border-primary text-[hsl(220_80%_65%)] px-6 py-3 rounded-lg font-medium transition-smooth
       hover:bg-primary hover:text-primary-foreground;
   }
 }
