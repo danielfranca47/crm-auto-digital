@@ -2,7 +2,7 @@
 
 ---
 
-**Branch:** `feat/whatsapp-connection-health-check`
+**Branch:** `feat/whatsapp-connection-health-check` (Fases 1–3, já mergeada em `main`) · Fase 4: `fix/whatsapp-reconnect-email-polling`
 **Status:** Em andamento
 
 ---
@@ -129,8 +129,9 @@ banco SQLite local descartável, contra a UazAPI e o serviço de email
 ## Checks de Validação
 
 ### Cenário P1 — Webhook continua funcionando após o refactor da Fase 1
-- [ ] Desconectar e reconectar uma instância de teste (produção/playground)
+- [x] Desconectar e reconectar uma instância de teste (produção/playground)
 - [ ] Confirmar: os dois emails (queda e retorno) continuam disparando, com o cooldown de 30min intacto
+- **Resultado em:** 28/09/2026 — instância `crm-2-88ff58af` (conta de teste). Email de queda chegou (23:45, hora local); email de retorno **não saiu**. Causa: bug pré-existente no polling de status, não no refactor da Fase 1 — ver Fase 4. Este check fecha junto com o Cenário P2.
 
 ### Cenário C1 — Job não mexe em conexão saudável
 - [x] Validado localmente de forma equivalente: rodar o trigger sem nenhuma conexão ativa não gera erro nem falso positivo (`checked: 0, marked_dead: 0`)
@@ -144,8 +145,8 @@ banco SQLite local descartável, contra a UazAPI e o serviço de email
 
 ### Cenário C3 — Agendamento automático funciona
 - [x] Log do Railway confirma o job registrado no APScheduler ao subir (`Added job "run_whatsapp_connection_check" to job store "default"`) — mecanismo de agendamento funcionando
-- [ ] Pendente: confirmar uma execução automática real (sem trigger manual) em um dos horários 00:00/06:00/12:00/18:00 UTC — só se confirma esperando o próximo horário passar
-- **Validado em:** 18/09/2026 (parcial — registro confirmado; execução automática ainda não observada)
+- [x] Confirmar uma execução automática real (sem trigger manual) em um dos horários 00:00/06:00/12:00/18:00 UTC
+- **Validado em:** 28/09/2026 — logs do Railway mostram execuções automáticas às 00h, 06h, 12h e 18h UTC, todas `executed successfully` (`checked: 0` porque não havia conexão ativa naquele momento)
 
 ---
 
@@ -192,6 +193,55 @@ validação do Cenário C3.
 
 ---
 
+## Fase 4 — Diagnóstico + Fix: email de reconexão não saía ao reconectar pela tela do CRM (28/09/2026)
+
+### Problema identificado
+
+No teste P1 em produção, o email de queda chegou mas o de retorno não. A
+ordem dos logs do Railway mostrou a causa: enquanto o QR está na tela, o
+frontend consulta `GET /api/whatsapp/status` a cada 3s, que chega ao
+backend-core em `GET /whatsapp-instances/status`
+(`backend-core/app/api/whatsapp_instances.py`, `status_instance`). Essa rota
+gravava `connection.status` **direto** no banco. O polling viu "connected"
+antes do webhook; quando o webhook `connection=connected` chegou, a conexão
+já constava como ativa → nenhuma transição → email de reconexão suprimido, e
+`disconnect_alert_sent_at` ficou preso preenchido. Bug pré-existente (não
+introduzido pelo refactor da Fase 1), mas atinge quase toda reconexão feita
+pela tela do CRM.
+
+### Correção
+
+`status_instance` passa a chamar `apply_connection_status_change()` — a mesma
+função do webhook e do job de 6h. Quem vê a transição primeiro manda o email;
+os seguintes não repetem.
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-core/app/api/whatsapp_instances.py` | `status_instance`: troca a escrita direta de status por `connections_service.apply_connection_status_change(...)` |
+| `backend-core/tests/test_connection_status.py` | 5 testes novos: queda+retorno mandam 2 emails; "connected" repetido não duplica; cooldown de 30min; queda após cooldown volta a avisar; regressão do polling (`status_instance` com UazAPI mockada) |
+| `docs/architecture/webhooks.md` | Tabela dos 3 chamadores de `apply_connection_status_change()`; remove a "limitação conhecida" (o job de 6h já existe) |
+| `docs/architecture/whatsapp-connection.md` | Seção "Deteção de queda de sessão" alinhada com os 3 caminhos |
+
+Testes: `tests/test_connection_status.py` 7/7 passam. A suíte completa do
+backend-core tem 8 falhas em `test_ai_profile_*`, **idênticas no `main`**
+(pré-existentes, sem relação com esta fase).
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(pendente)_ | fix: polling de status passa por `apply_connection_status_change()` |
+
+### Cenário P2 — Email de reconexão sai ao reconectar pela tela do CRM
+- [ ] Após o deploy desta fase: com a instância de teste conectada, desconectar o aparelho no telemóvel
+- [ ] Confirmar: chega o email "A tua Lara desconectou…"
+- [ ] Reconectar pela tela Conexão (Reconectar QR)
+- [ ] Confirmar: chega o email "A tua Lara reconectou…" (é este que falhava)
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
+- `upsert_connection()` (chamado por `/whatsapp-instances/init` e `/connect`) ainda grava o status devolvido pela UazAPI direto, sem passar por `apply_connection_status_change()`. Hoje só grava `connecting`/"Already connected" — baixo risco. Não foi mudado na Fase 4 para não disparar um email de "desconectou" no exato momento em que o cliente clica "Reconectar QR".
+- **Instâncias mortas nunca são apagadas na UazAPI (encontrado em 28/09/2026):** o plano UazAPI permite no máximo 6 instâncias criadas. Havia 6 fantasmas (todas `disconnected`, de testes antigos), e **nenhum cliente conseguia conectar WhatsApp** (`/instance/init` → 429 "Maximum number of instances reached"). Foram apagadas à mão no painel da UazAPI. O job de 6h marca a conexão como `disconnected` no banco, mas não apaga a instância. Candidato a correção própria: limpeza automática e/ou alerta quando estiver perto do limite.
 - Hoje o job só detecta conexões que estavam "ativas" no banco e morreram — não tenta redescobrir conexões marcadas como `disconnected` que voltaram a ficar vivas sem passar pelo webhook. Se isso virar um problema real, dá pra estender o escopo da query.

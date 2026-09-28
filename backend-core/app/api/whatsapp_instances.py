@@ -299,10 +299,11 @@ async def status_instance(
     if status_value:
         connection = connections_service.get_connection_by_instance(db, normalized_instance_id)
         if connection:
-            connection.status = status_value
-            db.add(connection)
-            db.commit()
-            db.refresh(connection)
+            # Passa pela mesma função do webhook/job de 6h: o polling do QR no
+            # frontend costuma ver "connected" antes do webhook, e gravar o
+            # status direto aqui fazia o webhook não detetar a transição —
+            # o email de reconexão nunca saía.
+            connections_service.apply_connection_status_change(db, connection, status_value)
 
     return uazapi_admin.redact_instance_token(raw)
 

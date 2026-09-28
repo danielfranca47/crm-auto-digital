@@ -113,10 +113,27 @@ o utilizador receber "Lara reconectou" sem ter recebido o "Lara desconectou"
 correspondente. Ao concluir a transição, limpa `disconnect_alert_sent_at` de
 volta para `NULL` em qualquer um dos dois casos.
 
-**Limitação conhecida:** este mecanismo depende inteiramente do webhook ser
-entregue. Não existe hoje nenhuma verificação periódica em segundo plano que
-confirme o status real junto à UazAPI de forma independente — se a entrega do
-webhook falhar, o status volta a ficar congelado sem aviso.
+**Quem atualiza o status (todos pelo mesmo caminho):** a lógica de transição
+e emails acima vive em `apply_connection_status_change()`
+(`backend-core/app/services/whatsapp_connections.py`) e é a única porta de
+escrita de status real vindo da UazAPI. Três chamadores:
+
+| Chamador | Quando |
+|---|---|
+| `POST /whatsapp-instances/connection-event` (este webhook) | UazAPI avisa mudança de sessão |
+| `GET /whatsapp-instances/status` | Polling do frontend (a cada 3s enquanto o QR/código está na tela) e qualquer outra consulta de status ao vivo |
+| `run_whatsapp_connection_check` (`app/jobs/whatsapp_connection_check_jobs.py`) | APScheduler, 00/06/12/18h UTC — cobre webhook que nunca chegou |
+
+Quem vê a transição primeiro manda o email; os seguintes veem o mesmo estado
+e não repetem. Na reconexão pela tela do CRM, o polling costuma chegar antes
+do webhook — por isso ele não pode gravar o status direto no banco (se
+gravasse, o webhook já não veria transição e o email de reconexão nunca
+sairia).
+
+Exceção conhecida: `upsert_connection()` (chamado por
+`/whatsapp-instances/init` e `/connect`) ainda grava o status devolvido pela
+UazAPI direto, sem passar por esta função — hoje só grava
+`connecting`/"Already connected".
 
 ---
 
