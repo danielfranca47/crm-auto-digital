@@ -265,10 +265,12 @@ padrão de `_request()`.
 
 ## Deteção de queda de sessão
 
-`WhatsappConnection.status` não é só escrito pelos endpoints acima — a UazAPI
-também envia um evento `connection` ao webhook quando a sessão cai de verdade
-(ex.: logout forçado pelo WhatsApp). Esse evento atualiza o status em segundo
-plano e dispara um email ao dono da conta pedindo para reconectar; quando a
+O status real da sessão chega por três caminhos — o evento `connection` do
+webhook da UazAPI (ex.: logout forçado pelo WhatsApp), o polling de `GET
+/whatsapp-instances/status` feito pela tela de Conexão e o job de verificação
+a cada 6h — e todos passam por `apply_connection_status_change()`
+(`backend-core/app/services/whatsapp_connections.py`). Uma queda atualiza o
+status e dispara um email ao dono da conta pedindo para reconectar; quando a
 conta reconecta depois dessa queda, um segundo email confirma que a Lara
 voltou a funcionar (coluna `WhatsappConnection.disconnect_alert_sent_at`
 controla esse segundo envio — só dispara se o primeiro alerta de queda
@@ -277,8 +279,7 @@ uma instância nova). Um cooldown de 30 minutos (`last_disconnect_email_at`)
 evita reenviar o email de desconexão — e o de reconexão pareado — se a sessão
 oscilar (flapping) entre `active`/`inactive` repetidamente em pouco tempo. Ver
 [`webhooks.md`](webhooks.md#evento-de-conexão-eventconnection--status-real--alerta-de-desconexão)
-para o fluxo completo — inclui a limitação conhecida de depender da entrega
-do webhook, sem verificação periódica independente ainda.
+para o fluxo completo e a tabela de chamadores.
 
 Além do email, o `frontend-crm` mostra um banner in-app persistente em
 qualquer página autenticada enquanto a desconexão não for resolvida:
