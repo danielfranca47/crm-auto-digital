@@ -2,153 +2,191 @@
 
 ---
 
-**Status:** Em investigação — análise preliminar feita, aguardando 3 respostas do utilizador
+**Status:** Em investigação — recomendação revista (v2) feita, aguardando 3 respostas do utilizador
 **Origem:** pedido do utilizador em 28/09/2026 + briefing do arquiteto de soluções
-(`C:\projetos\modelos-agents\briefings\2026-09-28-agente-ligacoes-prospeccao.md`, fora do repo)
-**Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (se as ligações forem para vender o
-próprio CRM); M5 se virar produto para os clientes
-**Área do sistema:** backend-crm (fila de jobs, appointments, Kanban) / backend-core (entitlements,
-aceite de termo) / frontend-crm (campanha, termo) / fornecedor externo de voz + telefonia
+(`C:\projetos\modelos-agents\briefings\2026-09-28-agente-ligacoes-prospeccao.md`, fora do repo) +
+protótipo próprio `C:\projetos\ai-coldcall-agent-study` (fora do repo)
+**Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (ligações para vender o próprio CRM);
+M5 quando virar produto para os clientes
+**Área do sistema:** backend-crm (fila de jobs, appointments, Kanban, consentimento) /
+backend-executors (worker `voice`) / serviço novo `voice-gateway` / frontend-crm (campanha)
 
 ---
 
 ## Pergunta a responder
 
-Faz sentido termos um agente que liga sozinho para uma lista de leads, faz a abordagem (cold call)
-e agenda a call de demonstração — primeiro em beta só para a conta `autodigital157@gmail.com`,
-depois como produto pago? Se sim, construímos a voz ou compramos?
+Faz sentido termos um agente que liga sozinho para leads, faz a abordagem e agenda a call de
+demonstração — primeiro em beta só para a conta `autodigital157@gmail.com`, depois como produto
+pago? Se sim, construímos a tecnologia de voz ou compramos?
 
 ## O que já se sabe
 
-- **Já existe quase tudo menos a voz:** Kanban de leads com `origin` inbound/outbound
-  ([leads-schema.md](../architecture/leads-schema.md)), importação por planilha, agenda com
-  sincronização Google Calendar ([agenda.md](../architecture/agenda.md),
-  [google-calendar.md](../architecture/google-calendar.md)), agendamento feito pela IA no WhatsApp,
-  follow-up automático ([followup.md](../architecture/followup.md)), fila de jobs com retry
-  (`services/jobs_service.py`).
-- **Liberar só para uma conta já é possível:** feature gates por plano via `/me/entitlements` +
-  `services/plan_gates.py` ([plans-limits.md](../architecture/plans-limits.md)).
-- **Não existe nada de telefonia/voz em tempo real no sistema** — é a parte nova.
+**Respostas do utilizador (29/09/2026):**
+1. **Para quem liga:** clientes da carteira + leads que pediram contacto nos anúncios para saber
+   mais da plataforma. Não é lista fria. A conta `autodigital157` é a operação comercial dele.
+2. **Quem paga:** no beta, ele próprio (validar roteiro, fluxo no CRM, funil). No produto, quer
+   **tecnologia própria** (não revender terceiro), para baratear e dar a cada cliente o seu número
+   e plano.
+3. **Etapa humana:** pode contratar um cold caller para fazer a operação e passar os dados.
+
+**No CRM já existe quase tudo menos a voz:** Kanban com `origin` inbound/outbound
+([leads-schema.md](../architecture/leads-schema.md)), importação por planilha, agenda com Google
+Calendar ([agenda.md](../architecture/agenda.md), [google-calendar.md](../architecture/google-calendar.md)),
+agendamento pela IA no WhatsApp, follow-up ([followup.md](../architecture/followup.md)), fila de
+jobs com lease/retry (`services/jobs_service.py`, executors fazem claim via
+`/api/internal/jobs/{id}/claim`), liberação por conta via `plan_limits`
+([plans-limits.md](../architecture/plans-limits.md)).
+
+**Protótipo próprio (`ai-coldcall-agent-study`, agente "Lara"):**
+- Twilio Media Streams + OpenAI Realtime (`gpt-realtime-2`, voz `marin`, `semantic_vad`, redução de
+  ruído, transcrição) — **não** usa ElevenLabs (só aparece como decisão futura de voz).
+- Já tem: disparo protegido por token, limite de chamadas por minuto/dia, gravação de chamadas e
+  transcrição em SQLite, indicadores (`/kpis`), logging sem dados sensíveis.
+- Roteiro "Lara" v1.2 para o mesmo nicho (massoterapeutas, psicólogos, dentistas, terapeutas).
+- **Nunca fez uma ligação real** (conta Twilio/número não configurados); sem funções de agenda, sem
+  desligar a chamada sozinho, sem deteção de caixa postal, sem campanha, sem integração com o CRM.
+- **Problemas a corrigir antes de qualquer ligação real:**
+  - a abertura do roteiro diz **"Aqui é o Daniel"** — a IA passa-se pelo dono e só admite ser IA se
+    perguntarem (contradiz a própria secção IDENTIDADE do prompt);
+  - a mensagem inicial da Twilio está em inglês ("Connecting with Compliance Agent"), herança do
+    projeto original;
+  - marca "Digital Pro" em vez de "Auto Digital"; mistura de português de Portugal e do Brasil;
+  - possível incompatibilidade de versão na ligação à OpenAI (cabeçalho beta + formato GA).
 
 ---
-
-## Evidência no código
-
-Ver "O que já se sabe". O trabalho novo seria: um tipo de job `voice.call.outbound`, endpoints que a
-plataforma de voz chama durante a ligação (`consultar_horarios_livres`, `agendar_demo` reaproveitando
-`appointments`, `registrar_opt_out`, `transferir_para_humano`), um webhook de fim de chamada
-(transcrição + resultado → Kanban), campo de consentimento no lead, lista de "não ligar", aceite do
-termo de responsabilidade registado (data, versão) e um gate novo em `plan_limits`.
 
 ## Como o mercado faz
 
 | Referência | Como resolve | Aplica-se a nós? |
 |---|---|---|
-| Retell AI / Vapi (plataformas de voz IA) | Fazem a parte difícil (ouvir, falar, interrupções, caixa postal) e chamam as nossas funções por API. ~US$ 0,05–0,07/min só a plataforma; total real US$ 0,12–0,31/min | Sim — é a opção recomendada; qualidade do português tem de ser testada |
-| Twilio (telefonia BR) | Ligação para celular BR US$ 0,0663/min; número BR US$ 4,25/mês | Sim — número ligado à plataforma de voz |
-| OpenAI Realtime + Twilio (construir) | Voz em tempo real feita por nós | Não agora — economiza pouco por minuto e custa semanas; só acima de 20–30 mil min/mês |
-| Anatel / LGPD | Bloqueio de quem faz ligações curtas em massa; prefixo 0303 em transição (opcional desde ago/2025, MPF pede volta); LGPD exige base legal, aviso de gravação e respeitar quem pede para não ser contactado | Sim — regras têm de estar no código, não só no termo |
-| AI Act UE (art. 50) | Obrigatório dizer que é IA desde 02/08/2026 | Só se houver leads em Portugal/UE; adotar o aviso como padrão também no Brasil |
+| Twilio (telefonia BR) | Celular BR US$ 0,0663/min, fixo US$ 0,031/min, número fixo US$ 4,25/mês. **Número fixo BR exige CNPJ + registo comercial + comprovante de endereço no Brasil**; celular aceita pessoa física com documento e endereço BR | Sim — é igual em todos os caminhos e é 40–70% do custo do minuto |
+| OpenAI Realtime (o que o protótipo usa) | Voz em tempo real num só serviço; ~US$ 0,06–0,11/min, versão mini ~US$ 0,02–0,05/min | Sim — motor do beta |
+| ElevenLabs Agents | **É uma plataforma comprada** (como Retell/Vapi): US$ 0,08/min + LLM à parte, usa o número Twilio do cliente. Baixou preço em maio/2026 | Plano B se o protótipo falhar no teste |
+| ElevenLabs Flash (só a voz) + Deepgram (ouvir) + LLM | Pipeline montado por nós, ~US$ 0,10–0,12/min | Só com volume de produto |
+| Retell / Vapi | US$ 0,12–0,31/min | Mais caros que ElevenLabs Agents |
+| Anatel / LGPD / AI Act UE | Bloqueio de ligações curtas em massa; 0303 em transição; LGPD pede base legal, aviso de gravação e respeitar opt-out; UE obriga dizer que é IA desde 02/08/2026 | Regras no código e no roteiro |
 
 ## Opções de solução
 
-### Opção A — Uma pessoa liga, com apoio do CRM (sem código novo no início)
-- **O que é:** 1–2 semanas de ligações humanas com roteiro, 50–100 leads, resultado registado no Kanban.
-- **Prós:** custo zero de desenvolvimento, sem risco, gera demos já e mede a taxa real de conversão.
-- **Contras:** não é o "agente que liga sozinho" nem vira produto.
-- **Esforço:** 0 fases.
+### Opção A — Só cold caller humano + CRM
+- **Prós:** sem código, sem risco, gera demos já.
+- **Contras:** não atende ao objetivo de produto. O utilizador já decidiu usá-la como **etapa 0**
+  (referência de conversão), não como solução final.
 
-### Opção B — IA de voz comprada (Retell/Vapi) + campanha controlada pelo nosso CRM
-- **O que é:** a plataforma faz a conversa; o nosso código decide quem ligar, quando, quantas vezes,
-  e só deixa agendar horários livres de verdade.
-- **Prós:** entrega o agente de ligações; reaproveita agenda, Kanban e WhatsApp (quem não atende
-  recebe follow-up no WhatsApp).
-- **Contras:** custo por minuto alto (~R$ 0,80–1,20/min); dependência de fornecedor; rejeição a robô.
-- **Esforço:** ~3 fases (~60–100 h).
+### Opção B — Plataforma comprada (ElevenLabs Agents) + Twilio + funções no CRM
+- **Prós:** voz em PT testada por terceiros, menos manutenção; aceita número próprio por cliente.
+- **Contras:** ~US$ 0,15–0,17/min; dependência de fornecedor; contraria o objetivo de tecnologia própria.
+- **Esforço:** ~3 fases.
 
-### Opção C — Construir a voz nós mesmos (OpenAI Realtime + Twilio)
-- **Prós:** custo por minuto um pouco menor.
-- **Contras:** semanas de engenharia na parte mais difícil; mais risco de falhas.
-- **Esforço:** 5+ fases. Descartada por agora.
+### Opção C1 — Protótipo próprio reforçado (Twilio + OpenAI Realtime) + funções no CRM ⭐
+- **Prós:** já existe; custo ~US$ 0,09–0,18/min (mini/completo); tecnologia própria; a integração
+  com o CRM é a mesma que a B precisaria — trocar de motor depois não refaz o CRM.
+- **Contras:** nunca testado ao vivo; manutenção da camada de voz fica connosco.
+- **Esforço:** ~4 fases (reforço, integração no backend-crm/executors, gateway, piloto).
+
+### Opção C2 — Pipeline próprio em cascata (Deepgram + LLM + ElevenLabs Flash)
+- **Prós:** custo parecido com C1-mini, voz ElevenLabs.
+- **Contras:** teríamos de resolver turnos/latência entre 3 fornecedores. Só com volume de produto.
 
 ## Recomendação
 
-**A e depois B, em sequência.** Primeiro 1–2 semanas de ligações humanas para saber quantas demos
-saem a cada 100 ligações e quais objeções aparecem (isso vira o "gabarito" para testar a IA). Depois,
-beta da Opção B só para `autodigital157@gmail.com`, com todas as regras de segurança no código.
-Só vira produto se o custo por demo compensar **e** 3–5 clientes disserem que pagam o adicional.
+**C1: usar o protótipo próprio no beta, com o cold caller a correr em paralelo como referência e a
+B (ElevenLabs Agents) como plano de saída.**
 
-Pontos em que a análise discorda da ideia inicial:
-1. **"Cold call" e "tenho autorização" são coisas diferentes.** Com autorização é um contacto de
-   retorno (seguro e converte melhor). Lista do Google Maps/comprada não tem autorização — aí a IA
-   não deve ligar sozinha.
-2. **O termo de responsabilidade é necessário, mas não basta.** O número e a conta de telefonia são
-   nossos: se um cliente abusar, o bloqueio atinge todos. E pela LGPD podemos responder junto. Por
-   isso: consentimento obrigatório por lead, lista de "não ligar", limite de ligações por dia, janela
-   de horário, número separado por cliente no produto.
-3. **A IA diz logo no início que é assistente virtual e que a ligação é gravada.**
-4. **Nunca incluir no plano de R$ 147.** Um uso moderado (300 min/mês) custa R$ 250–360 — mais que o
-   plano. Vender como adicional pré-pago, ex.: R$ 2,00–2,50/min (pacote 300 min ≈ R$ 600–750/mês).
+1. **Etapa 0 (semanas 1–2):** cold caller liga para carteira + leads de anúncio e regista no Kanban.
+   Dá a taxa de referência e 30–50 conversas que servem de "gabarito" para testar a IA.
+2. **Etapa 1 (semanas 1–3, sem leads reais):** corrigir abertura (IA + marca + aviso de gravação),
+   mensagem em inglês e português misturado; adicionar desligar a chamada, duração máxima e caixa
+   postal; número Twilio BR + publicar no Railway; 30–50 ligações de teste (Realtime completo vs.
+   mini). **Se falhar** (demora a responder, interrupções falsas, não desliga, erra a agenda) →
+   o beta usa ElevenLabs Agents, sem mudar o CRM.
+3. **Etapa 2 (semanas 3–5):** integração — no backend-crm: consentimento e opt-out por lead, job
+   `voice.call.outbound` com as regras (horário, tentativas, tetos), endpoints de agenda
+   (`consultar_horarios_livres`, `agendar_demo`), receção do resultado, liberação só para
+   `autodigital157`; no backend-executors um worker `voice` que só dispara a ligação; o protótipo
+   vira o serviço separado `voice-gateway` (o áudio fica aberto minutos por chamada — carga
+   diferente do resto).
+4. **Etapa 3 (semanas 5–8):** piloto real, começando pelos leads de anúncio de menor valor; revisão
+   de 100% das primeiras 50 ligações; comparação com o cold caller.
 
-**Custo estimado do beta:** ~R$ 540–790/mês em minutos (≈500 leads, até 3 tentativas) → ~R$ 20–90
-por demo agendada. Preços vêm de sites agregadores: confirmar na página oficial antes de fechar.
+**Pontos em que a análise discorda:**
+- **"Construir para baratear" tem teto:** a telefonia Twilio é igual em qualquer caminho, por isso
+  construir poupa só ~15–40% por minuto. O minuto fica em R$ 0,50–1,00 — continua a ser um
+  **adicional pago** (preço-alvo R$ 1,50–2,00/min), nunca dentro do plano de R$ 147.
+- **"Número próprio por cliente" não exige construir** (as plataformas também aceitam). O que pesa
+  é que **cada cliente terá de enviar documentos brasileiros** para a Twilio.
+- **O termo de responsabilidade é necessário mas não basta** — as regras de segurança ficam no
+  código. No beta não é preciso (o operador é o dono); já prever a tabela de aceite (versão, data)
+  para o produto.
+- **A IA não pode apresentar-se como "Daniel"** — deve dizer na primeira frase que é assistente
+  virtual a falar em nome dele/da empresa.
 
-## Pontuação RICE (preliminar)
+**Custo do beta** (~300 leads/mês, até 3 tentativas ≈ 700 min): **~R$ 400–770/mês** (minutos
+R$ 350–690 + número ~R$ 25 + servidor ~R$ 30–50) + cold caller pontual ~R$ 1.000–2.000.
+Estimativa **~R$ 10–60 por demo** e ~R$ 50–300 por cliente fechado. Preços de agregadores marcados
+como tal; confirmar nas páginas oficiais.
+
+**Critério para virar produto:** taxa de demo ≥ ~70% da do cold caller com custo por demo menor;
+zero reclamações; 3–5 clientes que aceitem pagar o adicional com o preço na mesa; cadastro de número
+testado com 1 cliente real; parecer jurídico (Anatel/LGPD).
+
+## Pontuação RICE
 
 | R | I | C | E | Score |
 |---|---|---|---|---|
-| 1 | 2 | 0.5 | 3 | 0.33 |
+| 1 | 2 | 0.8 | 4 | 0.40 |
 
-- **R = 1:** beta para uma conta.
-- **I = 2:** pode gerar demos e clientes (M1), mas só se a taxa de conversão se confirmar.
-- **C = 0.5:** todas as taxas de conversão são de fornecedores americanos, em inglês; nada medido em
-  português com o nosso público.
-- **E = 3:** Opção B em ~3 fases (a Opção A não tem código).
+- **R = 1:** beta para uma conta (a operação do próprio dono).
+- **I = 2:** leads quentes e carteira podem gerar demos e clientes (M1); ainda não medido.
+- **C = 0.8:** consentimento confirmado e protótipo existente; falta medir conversão e testar a voz ao vivo.
+- **E = 4:** reforço do protótipo + integração CRM/executors + gateway + piloto.
 
 ## Veredito proposto
 
-**Pendente das respostas abaixo.** Tendência: **Plans** para a Opção B, com a Opção A (ligações
-humanas) a começar já, fora do código. Se a lista não tiver autorização real → **Descartar** a IA
-ligando sozinha e ficar só na Opção A.
+**Implementations**, em duas frentes — depois das respostas abaixo:
+- **Fora deste repo, já:** cold caller (etapa 0) e reforço do protótipo com ligações de teste
+  (etapa 1), no próprio `ai-coldcall-agent-study`.
+- **Neste repo:** `feat/ligacoes-voz-beta` (integração CRM + worker `voice` + `voice-gateway`),
+  iniciada quando o protótipo passar no critério técnico da etapa 1.
 
 ## Perguntas ao utilizador
 
-1. **De onde vêm os leads que vão receber as ligações, e como deram a autorização?** (pediram
-   contacto num formulário / são clientes antigos / lista do Google Maps ou comprada?) — decide se a
-   IA pode ligar sozinha.
-2. **Quem pagaria por isto no produto?** Os massoterapeutas/terapeutas de hoje pagariam ~R$ 600/mês
-   a mais por ligações? Ou é para outro tipo de cliente? E a conta `autodigital157` vai ligar para
-   vender o próprio CRM ou é um cliente com outro público?
-3. **Há alguém que consiga ligar para 50–100 leads com roteiro nas próximas 1–2 semanas, antes de
-   construirmos a IA?** E quanto aceita pagar por demo agendada?
-
-Menores: haverá leads em Portugal? Prazo desejado para o beta?
+1. **A Auto Digital tem CNPJ e endereço no Brasil para registar o número de telefone? E os leads
+   estão no Brasil, em Portugal ou nos dois?** Sem CNPJ/endereço BR a Twilio não dá número fixo
+   brasileiro; leads na UE obrigam à lei europeia de IA.
+2. **Com que nome e marca a IA se apresenta (Auto Digital? Digital Pro?), e aceita que ela diga logo
+   na primeira frase que é uma assistente virtual a falar em seu nome?**
+3. **Quantos leads (anúncio + carteira) tem por mês, e que meta define o sucesso do beta?** Ex.:
+   "X demos por mês a no máximo R$ Y por demo".
 
 ## Em aberto
 
-- Retell/Vapi vendem número brasileiro próprio ou só via Twilio? (validar no 1.º dia do beta)
-- Bland, Synthflow e ElevenLabs Agents não foram comparados a fundo — incluir no teste de voz PT-BR.
-- Regras atuais de horário de telemarketing e se o "Não Me Perturbe" se aplica a um SaaS — parecer
-  jurídico antes do produto (não bloqueia o beta).
+- Preço mensal do número **celular** BR na Twilio e prazo de aprovação dos documentos.
+- Se o número aparece corretamente no ecrã de celulares BR (identificador de chamada).
+- Regras de documentação por subconta Twilio (fase de produto).
+- Preço exato da transcrição e do LLM dentro do ElevenLabs Agents.
 
 ## Fontes
 
 - [Twilio Voice Pricing Brazil](https://www.twilio.com/en-us/voice/pricing/br)
-- [CloudTalk – Retell pricing](https://www.cloudtalk.io/retell-ai-pricing/)
-- [Retell – AI voice agent pricing breakdown](https://www.retellai.com/blog/ai-voice-agent-pricing-full-cost-breakdown-platform-comparison-roi-analysis)
-- [CloudTalk – Vapi pricing](https://www.cloudtalk.io/blog/vapi-ai-pricing/)
-- [Cekura – Vapi pricing](https://www.cekura.ai/blogs/vapi-ai-pricing)
-- [Layer3 – OpenAI Realtime pricing](https://www.layer3labs.io/guides/openai-realtime-api-pricing)
-- [OpenAI – gpt-realtime](https://developers.openai.com/api/docs/models/gpt-realtime)
-- [Estado de Minas – bloqueio de telemarketing abusivo (09/05/2026)](https://www.em.com.br/emfoco/2026/05/09/operadoras-como-vivo-claro-e-tim-passam-a-seguir-novas-regras-da-anatel-para-bloqueio-temporario-de-ligacoes-de-telemarketing-abusivo/)
-- [Anatel – prefixo 0303](https://www.gov.br/anatel/pt-br/regulado/numeracao/telemarketing-ativo-prefixo-0303)
-- [InfoMoney – 0303 deixa de ser obrigatório](https://www.infomoney.com.br/consumo/chamadas-de-telemarketing-nao-precisam-mais-usar-prefixo-0303-decide-anatel/)
-- [MPF – recomenda volta do 0303](https://www.mpf.mp.br/o-mpf/unidades/pr-go/noticias/mpf-recomenda-que-anatel-restabeleca-uso-obrigatorio-do-prefixo-0303-para-telemarketing)
-- [Correio Braziliense – canais de robôs suspensos](https://www.correiobraziliense.com.br/cbradar/bloqueio-prefixo-0303-telemarketing-anatel/)
-- [2CX – exigências regulatórias para operações ativas 2026](https://2cx.com.br/exigencias-regulatorias-para-operacoes-ativas-2026/)
-- [Del Grande – gravação de ligação e LGPD](https://delgrande.com.br/blog/como-adequar-a-gravacao-de-ligacao-a-lgpd/)
-- [AI Act – artigo 50](https://artificialintelligenceact.eu/article/50/)
-- [Comissão Europeia – FAQ art. 50](https://digital-strategy.ec.europa.eu/en/faqs/transparency-obligations-under-article-50-ai-act)
-- [MarketsandMarkets – voice AI cold call](https://www.marketsandmarkets.com/AI-sales/voice-ai-can-agents-successfully-cold-call)
-- [VoiceInfra – AI cold calling](https://voiceinfra.ai/use-cases/ai-cold-calling)
-- [Martal – cold call statistics](https://martal.ca/cold-call-statistics-lb/)
+- [Twilio — Brazil Regulatory Guidelines](https://www.twilio.com/en-us/guidelines/br/regulatory)
+- [ElevenLabs — Agents pricing](https://elevenlabs.io/pricing/agents)
+- [ElevenLabs — corte de preço conversational AI](https://elevenlabs.io/blog/we-cut-our-pricing-for-conversational-ai)
+- [UsagePricing — mudança de preço ElevenLabs (05/2026)](https://www.usagepricing.com/blueprint/activity/elevenlabs-2026-05-07-price-change)
+- [ElevenLabs — Models](https://elevenlabs.io/docs/overview/models)
+- [Puter — ElevenLabs API pricing](https://developer.puter.com/tutorials/elevenlabs-api-pricing/)
+- [Deepgram — Nova-3](https://deepgram.com/learn/introducing-nova-3-speech-to-text-api)
+- [ConvertAudioToText — Deepgram Nova-3](https://convertaudiototext.com/blog/deepgram-nova-3-explained)
+- [Layer3 — OpenAI Realtime pricing](https://www.layer3labs.io/guides/openai-realtime-api-pricing)
+- [OpenAI — gpt-realtime](https://developers.openai.com/api/docs/models/gpt-realtime)
+- [CloudTalk — Retell pricing](https://www.cloudtalk.io/retell-ai-pricing/)
+- [CloudTalk — Vapi pricing](https://www.cloudtalk.io/blog/vapi-ai-pricing/)
+- [Estado de Minas — bloqueio de telemarketing abusivo (09/05/2026)](https://www.em.com.br/emfoco/2026/05/09/operadoras-como-vivo-claro-e-tim-passam-a-seguir-novas-regras-da-anatel-para-bloqueio-temporario-de-ligacoes-de-telemarketing-abusivo/)
+- [Anatel — prefixo 0303](https://www.gov.br/anatel/pt-br/regulado/numeracao/telemarketing-ativo-prefixo-0303)
+- [InfoMoney — 0303 deixa de ser obrigatório](https://www.infomoney.com.br/consumo/chamadas-de-telemarketing-nao-precisam-mais-usar-prefixo-0303-decide-anatel/)
+- [MPF — recomenda volta do 0303](https://www.mpf.mp.br/o-mpf/unidades/pr-go/noticias/mpf-recomenda-que-anatel-restabeleca-uso-obrigatorio-do-prefixo-0303-para-telemarketing)
+- [2CX — exigências regulatórias para operações ativas 2026](https://2cx.com.br/exigencias-regulatorias-para-operacoes-ativas-2026/)
+- [Del Grande — gravação de ligação e LGPD](https://delgrande.com.br/blog/como-adequar-a-gravacao-de-ligacao-a-lgpd/)
+- [AI Act — artigo 50](https://artificialintelligenceact.eu/article/50/)
+- [Comissão Europeia — FAQ art. 50](https://digital-strategy.ec.europa.eu/en/faqs/transparency-obligations-under-article-50-ai-act)
+- [MarketsandMarkets — voice AI cold call](https://www.marketsandmarkets.com/AI-sales/voice-ai-can-agents-successfully-cold-call)
