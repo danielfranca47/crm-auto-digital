@@ -87,7 +87,7 @@ Fora do escopo (isentos pela WCAG ou decorativos sem texto): estados
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | Correção de contraste nas landings Lara, rodapé e `.btn-outline` |
+| 1 | `e3f6754` | Correção de contraste nas landings Lara, rodapé e `.btn-outline` |
 
 #### Relatório da Fase 1 — o que mudou na prática
 
