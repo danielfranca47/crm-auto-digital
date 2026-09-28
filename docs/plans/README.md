@@ -34,6 +34,7 @@ implementação.
 | `reembolso-melhorias-futuras.md` | Itens deixados de fora da graduação do botão de reembolso admin MVP: agente automático de reembolso dos 7 dias via email, inconsistência "7 dias" vs "30 dias" na copy da landing |
 | `motor-llm-otimizacoes.md` | Achados da graduação de `prompt-engineering-principles`: temperature não configurada, Structured Outputs (json_schema+strict) da OpenAI, isolamento da mensagem do lead contra prompt injection, reordenação do prompt para prompt caching automático, validação semântica de `signals_structured` (checkout_sent+URL) |
 | `monitoramento-colaborador-melhorias-futuras.md` | Item deixado de fora da graduação da paginação do monitoramento de colaborador: contagem total ("Página N de M") nos pagers |
+| `website-acessibilidade-melhorias-futuras.md` | Item deixado de fora da graduação do fix de contraste WCAG do website: verificação automática de contraste no build/CI |
 | `knowledge-base-melhorias-futuras.md` | Base de Conhecimento: dedup narrativo por uso/conteúdo/reengajamento (M1–M3), fontes duplicadas lidas em simultâneo (M4) e conversão assistida dos itens "Para mover" em blocos do Fluxo de Venda (M5) |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas

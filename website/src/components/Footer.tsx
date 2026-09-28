@@ -118,7 +118,7 @@ const Footer = () => {
               <span className="text-2xl font-bold">{t('footer.brand.name')}</span>
             </div>
 
-            <p className="text-primary-foreground/80 mb-6 max-w-md leading-relaxed">
+            <p className="text-primary-foreground/90 mb-6 max-w-md leading-relaxed">
               {t('footer.brand.description')}
             </p>
 
@@ -143,7 +143,7 @@ const Footer = () => {
             <ul className="space-y-3">
               {services.map((service) => (
                 <li key={service.label}>
-                  <a href={service.href} className="text-primary-foreground/80 hover:text-accent transition-smooth text-sm">
+                  <a href={service.href} className="text-primary-foreground/90 hover:text-accent transition-smooth text-sm">
                     {service.label}
                   </a>
                 </li>
@@ -157,7 +157,7 @@ const Footer = () => {
             <ul className="space-y-3">
               {companyLinks.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-primary-foreground/80 hover:text-accent transition-smooth text-sm">
+                  <a href={link.href} className="text-primary-foreground/90 hover:text-accent transition-smooth text-sm">
                     {link.label}
                   </a>
                 </li>
@@ -197,7 +197,7 @@ const Footer = () => {
                 <input
                   type="email"
                   placeholder={t('footer.newsletter.placeholder')}
-                  className="px-4 py-2 rounded-l-lg bg-primary-foreground/10 border border-primary-foreground/20 text-primary-foreground placeholder-primary-foreground/60 focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="px-4 py-2 rounded-l-lg bg-primary-foreground/10 border border-primary-foreground/20 text-primary-foreground placeholder-primary-foreground/90 focus:outline-none focus:ring-2 focus:ring-accent"
                 />
                 <button className="px-4 py-2 bg-accent text-accent-foreground rounded-r-lg hover:bg-accent/90 transition-smooth font-medium">
                   {t('footer.newsletter.button')}
@@ -212,15 +212,15 @@ const Footer = () => {
       <div className="border-t border-primary-foreground/20 py-6">
         <div className="container mx-auto px-4 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="text-sm text-primary-foreground/60 mb-4 md:mb-0">
+            <div className="text-sm text-primary-foreground/90 mb-4 md:mb-0">
               {t('footer.copyright')}
             </div>
 
             <div className="flex items-center space-x-6">
-              <a href="#" className="text-sm text-primary-foreground/60 hover:text-accent transition-smooth">
+              <a href="#" className="text-sm text-primary-foreground/90 hover:text-accent transition-smooth">
                 {t('footer.legal.privacy')}
               </a>
-              <a href="#" className="text-sm text-primary-foreground/60 hover:text-accent transition-smooth">
+              <a href="#" className="text-sm text-primary-foreground/90 hover:text-accent transition-smooth">
                 {t('footer.legal.terms')}
               </a>
               <button

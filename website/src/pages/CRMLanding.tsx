@@ -299,7 +299,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
           <p className="text-center text-xs text-muted-foreground mb-5 uppercase tracking-widest font-semibold">
             A LARA JÁ TRABALHA EM NEGÓCIOS COMO
           </p>
-          <div className="flex flex-wrap justify-center items-center gap-6 opacity-50">
+          <div className="flex flex-wrap justify-center items-center gap-6">
             {['Infoprodutos', 'E-commerce', 'Saúde', 'Imóveis', 'Educação', 'Serviços', 'Beleza'].map(s => (
               <span key={s}
                 className="text-xs font-bold text-muted-foreground px-5 py-2 rounded-full border border-border uppercase tracking-wide">
@@ -380,7 +380,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
             {steps.map((step, i) => (
               <div key={step.num} className="portfolio-card relative">
                 <div className="text-5xl font-extrabold mb-4 select-none leading-none"
-                  style={{ color: '#4DD4FF', opacity: 0.25 }}>
+                  style={{ color: '#4DD4FF', opacity: 0.55 }}>
                   {step.num}
                 </div>
                 <h3 className="text-base font-bold mb-2">{step.title}</h3>
@@ -628,7 +628,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
                   ? { borderColor: 'rgba(77,212,255,0.4)', border: '1px solid', background: 'rgba(77,212,255,0.04)' }
                   : {}}>
                 <div className="text-3xl font-extrabold select-none leading-none flex-shrink-0 pt-1"
-                  style={{ color: '#4DD4FF', opacity: 'highlight' in bonus && bonus.highlight ? 0.8 : 0.35 }}>
+                  style={{ color: '#4DD4FF', opacity: 'highlight' in bonus && bonus.highlight ? 0.8 : 0.55 }}>
                   {bonus.num}
                 </div>
                 <div className="flex-1">
@@ -658,7 +658,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
               </div>
               <div className="text-xs text-muted-foreground">
                 Valor total:{' '}
-                <span className="line-through opacity-50">R$1.735/mês</span>
+                <span className="line-through text-muted-foreground">R$1.735/mês</span>
                 {' '}→ Seu investimento:{' '}
                 <strong className="text-accent">R$297/mês</strong>
               </div>
@@ -686,7 +686,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
             <p className="text-muted-foreground text-sm mb-3 leading-relaxed">
               O Onboarding ao Vivo acontece toda semana às terças — <strong className="text-foreground">10 vagas por sessão</strong>. Cada Fundador recebe sessão 1:1 prioritária para sair ativo no dia 1.
             </p>
-            <p className="text-xs text-muted-foreground mb-6 opacity-75">
+            <p className="text-xs text-muted-foreground mb-6">
               Após os 12 meses: R$197/mês para sempre. Novos clientes pagarão R$297/mês.
             </p>
             <a href="#planos" className="btn-hero inline-flex items-center gap-2">
@@ -720,7 +720,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
                       <X className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
                       <span>{cond}</span>
                     </span>
-                    <span className="block text-xs text-muted-foreground opacity-60 ml-6 mt-1">({why})</span>
+                    <span className="block text-xs text-muted-foreground ml-6 mt-1">({why})</span>
                   </li>
                 ))}
               </ul>
@@ -803,7 +803,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
             <span className="text-accent text-sm font-semibold uppercase tracking-widest">✦ Planos da Lara</span>
             <h2 className="text-3xl md:text-4xl font-bold mt-2">Escolha o plano e a Lara começa hoje</h2>
             <p className="text-muted-foreground mt-3">Sem fidelidade. Cancele quando quiser.</p>
-            <p className="text-sm text-muted-foreground mt-2 opacity-70">
+            <p className="text-sm text-muted-foreground mt-2">
               20–100 leads/mês? Comece pelo Start. 100+ leads? O Growth é o seu plano.
             </p>
           </div>
@@ -835,7 +835,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {plans.map(plan => (
               <div key={plan.name}
-                className={`portfolio-card flex flex-col relative ${plan.highlight ? 'ring-2' : ''} ${plan.comingSoon ? 'opacity-60' : ''}`}
+                className={`portfolio-card flex flex-col relative ${plan.highlight ? 'ring-2' : ''} ${plan.comingSoon ? 'opacity-80' : ''}`}
                 style={plan.highlight ? { '--tw-ring-color': '#4DD4FF' } as React.CSSProperties : {}}>
                 {plan.badge && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap"
@@ -935,7 +935,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
               <MessageSquare className="w-4 h-4" /> Falar no WhatsApp
             </a>
           </div>
-          <p className="text-muted-foreground text-sm mt-6 opacity-70">
+          <p className="text-muted-foreground text-sm mt-6">
             ✓ Garantia de 30 dias &nbsp;·&nbsp; ✓ Sem fidelidade &nbsp;·&nbsp; ✓ Suporte incluído
           </p>
         </div>
@@ -953,17 +953,17 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
                 </div>
                 <div>
                   <span className="text-xl font-bold leading-none">Lara</span>
-                  <span className="block text-xs text-primary-foreground/50 leading-none -mt-0.5">by DigitalPro</span>
+                  <span className="block text-xs text-primary-foreground/90 leading-none -mt-0.5">by DigitalPro</span>
                 </div>
               </div>
-              <p className="text-primary-foreground/70 text-sm leading-relaxed max-w-xs">
+              <p className="text-primary-foreground/90 text-sm leading-relaxed max-w-xs">
                 A Lara é a IA que atende, qualifica e faz follow-up pelo WhatsApp — para quem quer vender mais sem depender de uma equipe grande.
               </p>
             </div>
 
             <div>
               <h3 className="font-semibold mb-4">Produto</h3>
-              <ul className="space-y-2 text-sm text-primary-foreground/70">
+              <ul className="space-y-2 text-sm text-primary-foreground/90">
                 {['Funcionalidades', 'Planos', 'FAQ', 'Blog'].map(l => (
                   <li key={l}><a href="#" className="hover:text-accent transition-smooth">{l}</a></li>
                 ))}
@@ -972,7 +972,7 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
 
             <div>
               <h3 className="font-semibold mb-4">Contato</h3>
-              <div className="space-y-2 text-sm text-primary-foreground/70">
+              <div className="space-y-2 text-sm text-primary-foreground/90">
                 <div className="flex items-center gap-2"><Mail  className="w-4 h-4 text-accent" /> contato@digitalpro.com</div>
                 <div className="flex items-center gap-2"><Phone className="w-4 h-4 text-accent" /> +55 11 9 9999-9999</div>
               </div>
@@ -980,8 +980,8 @@ export default function CRMLanding({ lang: _lang = 'pt' }: { lang?: string }) {
           </div>
 
           <div className="border-t border-primary-foreground/20 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-primary-foreground/60">© 2026 DigitalPro — Lara. Todos os direitos reservados.</p>
-            <div className="flex items-center gap-6 text-sm text-primary-foreground/60">
+            <p className="text-sm text-primary-foreground/90">© 2026 DigitalPro — Lara. Todos os direitos reservados.</p>
+            <div className="flex items-center gap-6 text-sm text-primary-foreground/90">
               <a href="#" className="hover:text-accent transition-smooth">Privacidade</a>
               <a href="#" className="hover:text-accent transition-smooth">Termos</a>
               <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
