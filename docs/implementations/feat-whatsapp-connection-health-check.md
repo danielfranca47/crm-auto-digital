@@ -230,7 +230,13 @@ backend-core tem 8 falhas em `test_ai_profile_*`, **idênticas no `main`**
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | fix: polling de status passa por `apply_connection_status_change()` |
+| 1 | `59a7d57` | fix: polling de status passa por `apply_connection_status_change()` |
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** quando o cliente reconectava o WhatsApp pela tela do CRM, recebia o email de "caiu", mas nunca o de "voltou". A tela marcava a conexão como ligada por um caminho que não passava pela lógica dos emails.
+**Agora:** esse caminho passa pela mesma lógica do aviso da UazAPI e do job de 6h. Quem percebe a reconexão primeiro manda o email, e os outros não repetem.
+**Para validar:** Cenário P2 (abaixo), depois do deploy. Fecha também o P1.
 
 ### Cenário P2 — Email de reconexão sai ao reconectar pela tela do CRM
 - [ ] Após o deploy desta fase: com a instância de teste conectada, desconectar o aparelho no telemóvel
