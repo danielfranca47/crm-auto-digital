@@ -216,6 +216,7 @@ whatsapp_worker (polling)
 **Stack:** React + TypeScript + Vite + i18next
 **Idiomas:** `en`, `pt`, `es` (prefixo de rota)
 Site de marketing; deploy independente.
+Regras de contraste de cor (WCAG AA): ver [`website-acessibilidade.md`](website-acessibilidade.md).
 
 ---
 
