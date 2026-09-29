@@ -281,6 +281,41 @@ oscilar (flapping) entre `active`/`inactive` repetidamente em pouco tempo. Ver
 [`webhooks.md`](webhooks.md#evento-de-conexão-eventconnection--status-real--alerta-de-desconexão)
 para o fluxo completo e a tabela de chamadores.
 
+### Verificação periódica (job de 6h)
+
+Rede de segurança para o caso de o webhook `connection` nunca chegar.
+`backend-core/app/jobs/whatsapp_connection_check_jobs.py`:
+
+- Registado no `BackgroundScheduler` de `backend-core/app/main.py` (o mesmo
+  do job diário de assinaturas), `CronTrigger(hour="0,6,12,18", minute=0,
+  timezone="UTC")`. Não corre no startup.
+- Verifica só as `WhatsappConnection` cujo status normalizado é `active`. Para
+  cada uma, com 0.3s de pausa entre chamadas: `decrypt_secret(instance_token_encrypted)`
+  → `uazapi_admin.get_status()`:
+  - 401 (token morto) → `apply_connection_status_change(..., "disconnected")`;
+  - status devolvido → `apply_connection_status_change(..., status)`;
+  - outro erro (timeout, 5xx, 429 já esgotado pelo retry) → loga e segue.
+    Tenta de novo no ciclo seguinte e nunca aborta o lote.
+- Devolve e loga o sumário `{checked, marked_dead, errors, ran_at}`
+  (`whatsapp_connection_check concluído: ...` no log do Railway do
+  `backend-core`).
+- Duas entradas: `run_whatsapp_connection_check()` (síncrona, para o
+  APScheduler, que corre numa thread sem event loop) e
+  `run_whatsapp_connection_check_async()` (para quem já está dentro do event
+  loop). Chamar a versão síncrona a partir de uma rota `async` rebenta com
+  `asyncio.run() cannot be called from a running event loop`.
+- Trigger manual: `POST /admin/cron/whatsapp-connection-check`
+  (`backend-core/app/api/cron.py`, protegido por `require_admin`, token com
+  `role=admin`), que chama a versão async com `await`.
+- Uma conexão marcada `disconnected` sai da consulta seguinte. O job não
+  continua a bater na UazAPI por uma instância já morta, **mas também não a
+  apaga na UazAPI**: a instância continua a ocupar vaga no limite do plano
+  (6 registadas, 3 conectadas).
+
+`backend-core/app/main.py` chama `logging.basicConfig(level=logging.INFO)`.
+Sem isso, os `logger.info(...)` do serviço (incluindo o APScheduler e este
+job) não aparecem no Railway.
+
 Além do email, o `frontend-crm` mostra um banner in-app persistente em
 qualquer página autenticada enquanto a desconexão não for resolvida:
 
