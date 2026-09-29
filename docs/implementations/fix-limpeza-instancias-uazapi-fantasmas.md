@@ -141,9 +141,11 @@ o total de erros (86 linhas) é igual ao do `main` (pré-existentes).
 - [ ] Confirmar: a instância solta desaparece do painel; o log mostra `event=uazapi_capacity` com ela em `deleted_orphans`
 
 ### Cenário C2 — Teto atingido: o cliente conecta na mesma
-- [ ] Setup: criar instâncias soltas no painel até o total chegar a 6; esperar 10 min
-- [ ] Na tela Conexão do CRM (conta de teste), clicar em "Reconectar QR"
-- [ ] Confirmar: o QR aparece; o painel mostra uma instância solta a menos; o log mostra `event=uazapi_reclaim` e `event=uazapi_instance_deleted ... reason=instance_limit`
+- [x] Setup: criar instâncias soltas no painel até o total chegar a 6; esperar 10 min
+- [x] Numa ação que cria instância nova, provocar o init (a tela Conexão reaproveita a instância existente da conta e não chega ao init)
+- [x] Confirmar: o QR aparece; o painel mostra uma instância solta a menos; o log mostra `event=uazapi_reclaim` e `event=uazapi_instance_deleted ... reason=instance_limit`
+- **Validado em:** 29/09/2026. Foram criadas 5 órfãs descartáveis (`teste-limite-1..5`) via `POST /instance/init`, o que pôs o total em 6/6. O utilizador reconectou o colaborador monitorado da conta de teste (`collab-2-bae867ae`, cuja instância tinha sido apagada à mão no dia 28): connect 401 → init 429 "Maximum number of instances" → `uazapi_reclaim total=6 orphans=5 young_orphans=0 dead=1 deleted=['teste-limite-1']` → init 200 → connect 200 → QR na tela. A órfã mais antiga foi escolhida antes da instância morta de cliente (`crm-2-88ff58af`), que ficou intacta.
+- **Nota:** ao ler esse QR, o WhatsApp de 2 telemóveis respondeu "não foi possível, tente mais tarde". A mensagem vem do próprio WhatsApp, depois de o QR ter sido gerado com sucesso, por isso está fora desta correção. Suspeita: bloqueio temporário anti-abuso do WhatsApp após muitas ligações/desligações em pouco tempo (28–29/09). A confirmar se persistir.
 
 ### Cenário C3 — Nunca apaga uma conexão viva
 - [ ] Setup: conta de teste com WhatsApp conectado
