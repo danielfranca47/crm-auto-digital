@@ -222,11 +222,26 @@ leads com origem/consentimento registado; listas frias ficam fora até haver par
 
 ## Perguntas ao utilizador
 
-1. **Tem comprovante de endereço no Brasil em seu nome** (conta de luz, água, contrato de aluguel)?
-   E os leads estão só no Brasil? — sem endereço BR, a Twilio não dá o número celular a pessoa física.
-2. **Que meta define o sucesso do beta?** Ex.: "pelo menos X demos por mês a no máximo R$ Y por demo".
+1. **Qual modelo de comissão propor ao representante?** (ver simulador abaixo)
 
-(Respondidas: marca "Lara, assistente virtual de Daniel França"; volume ~10 leads/dia; sem CNPJ.)
+(Respondidas: marca "Lara, assistente virtual de Daniel França"; volume ~10 leads/dia; sem CNPJ;
+**tem comprovante de endereço no Brasil** → número celular Twilio em pessoa física viável.)
+
+**Execução do beta por representante comercial (29/09/2026):** o utilizador quer terceirizar a
+operação a uma equipa/representante que invista no projeto, com **20% de comissão recorrente**
+sobre a mensalidade dos clientes retidos. A meta do beta passa a ser a do plano progressivo do
+representante. Simulador (24 meses, 3 fases, 3 modelos de comissão):
+https://claude.ai/artifact/5CdUQe5T92GQeiZFaeDXUh
+
+Resultado com as premissas padrão (50→70→100 discagens/dia, preço R$147→197, churn 8%/mês):
+- **Só 20% recorrente:** representante ganha < R$ 1.000/mês nos primeiros 6 meses (R$ 964 no
+  mês 6, R$ 2.112 no mês 12, R$ 12,6 mil no 1.º ano). Pouco atrativo para quem começa do zero.
+- **20% + bônus de ativação (100% da 1.ª mensalidade, pago após a 2.ª):** R$ 2.392 no mês 6,
+  R$ 3.539 no mês 12, R$ 24,8 mil no 1.º ano. Custa a Daniel ~R$ 29 mil a menos em 2 anos.
+- **Escalonado 20→25→30% por tamanho da carteira:** meio-termo (R$ 16,4 mil no 1.º ano).
+- Tensão com a regra anterior em `docs/marketing/comercial/parceria-professor-e-escada-de-preco.md`
+  ("nunca comissão recorrente sobre preço travado de entrada"): aqui o representante é vendedor
+  ativo, por isso recorrente faz sentido, mas **com prazo** (12 ou 24 meses) e fora do preço Fundador.
 
 ## Em aberto
 

@@ -10,7 +10,7 @@
 
 | Investigação | Meta | Score RICE | Veredito proposto | Perguntas pendentes |
 |---|---|---|---|---|
-| [agente-ligacoes-prospeccao-voz](agente-ligacoes-prospeccao-voz.md) | M1 (M5 se virar produto) | 0.40 | Implementations — protótipo próprio (Twilio + OpenAI Realtime) + integração CRM; número celular BR em pessoa física | Endereço no Brasil para a Twilio; meta de sucesso do beta |
+| [agente-ligacoes-prospeccao-voz](agente-ligacoes-prospeccao-voz.md) | M1 (M5 se virar produto) | 0.40 | Implementations — protótipo próprio (Twilio + OpenAI Realtime) + integração CRM; número celular BR em pessoa física | Modelo de comissão do representante (simulador publicado) |
 
 ## Em investigação / Levantadas
 
