@@ -3,7 +3,7 @@
 ---
 
 **Branch:** `feat/whatsapp-connection-health-check` (Fases 1–3, já mergeada em `main`) · Fase 4: `fix/whatsapp-reconnect-email-polling`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (29/09/2026)
 
 ---
 
@@ -130,13 +130,15 @@ banco SQLite local descartável, contra a UazAPI e o serviço de email
 
 ### Cenário P1 — Webhook continua funcionando após o refactor da Fase 1
 - [x] Desconectar e reconectar uma instância de teste (produção/playground)
-- [ ] Confirmar: os dois emails (queda e retorno) continuam disparando, com o cooldown de 30min intacto
+- [x] Confirmar: os dois emails (queda e retorno) continuam disparando, com o cooldown de 30min intacto
 - **Resultado em:** 28/09/2026 — instância `crm-2-88ff58af` (conta de teste). Email de queda chegou (23:45, hora local); email de retorno **não saiu**. Causa: bug pré-existente no polling de status, não no refactor da Fase 1 — ver Fase 4. Este check fecha junto com o Cenário P2.
+- **Validado em:** 29/09/2026 — após a Fase 4, os dois emails chegaram (ver Cenário P2).
 
 ### Cenário C1 — Job não mexe em conexão saudável
 - [x] Validado localmente de forma equivalente: rodar o trigger sem nenhuma conexão ativa não gera erro nem falso positivo (`checked: 0, marked_dead: 0`)
-- [⏭️] Pendente em produção — pulado por ora: no momento do teste em produção (18/09/2026), **nenhuma das conexões WhatsApp existentes estava saudável** (as 3 contas de cliente já estavam mortas na UazAPI, achado do próprio teste — ver nota abaixo). Não há hoje uma conexão real "saudável" para servir de amostra positiva. Retomar este check assim que algum cliente reconectar com sucesso.
-- **Validado em:** 18/09/2026 (local, caminho "sem conexão ativa") + 18/09/2026 (produção, ver nota)
+- [x] Em produção, com conexão saudável real: job automático das 00h e 06h UTC de 29/09/2026 encontrou `crm-2-88ff58af` viva → `checked: 1, marked_dead: 0`, status intacto.
+- Nota histórica (18/09/2026): no momento do teste em produção (18/09/2026), **nenhuma das conexões WhatsApp existentes estava saudável** (as 3 contas de cliente já estavam mortas na UazAPI, achado do próprio teste — ver nota abaixo). Não há hoje uma conexão real "saudável" para servir de amostra positiva. Retomar este check assim que algum cliente reconectar com sucesso.
+- **Validado em:** 18/09/2026 (local) + 29/09/2026 (produção, conexão saudável real)
 
 ### Cenário C2 — Job detecta conexão morta e dispara alerta
 - [x] Chamar o trigger manual com uma conexão cujo token a UazAPI não reconhece mais (validado localmente com token fake, UazAPI real) → sumário mostrou `marked_dead: 1`, status virou `disconnected` no banco
@@ -239,10 +241,11 @@ backend-core tem 8 falhas em `test_ai_profile_*`, **idênticas no `main`**
 **Para validar:** Cenário P2 (abaixo), depois do deploy. Fecha também o P1.
 
 ### Cenário P2 — Email de reconexão sai ao reconectar pela tela do CRM
-- [ ] Após o deploy desta fase: com a instância de teste conectada, desconectar o aparelho no telemóvel
-- [ ] Confirmar: chega o email "A tua Lara desconectou…"
-- [ ] Reconectar pela tela Conexão (Reconectar QR)
-- [ ] Confirmar: chega o email "A tua Lara reconectou…" (é este que falhava)
+- [x] Após o deploy desta fase: com a instância de teste conectada, desconectar o aparelho no telemóvel
+- [x] Confirmar: chega o email "A tua Lara desconectou…"
+- [x] Reconectar pela tela Conexão (Reconectar QR)
+- [x] Confirmar: chega o email "A tua Lara reconectou…" (é este que falhava)
+- **Validado em:** 29/09/2026 — deploy `06b76a7` no Railway; utilizador desconectou e reconectou `crm-2-88ff58af` pela tela do CRM e recebeu os dois emails; logs mostram `disconnected → connecting → connected`.
 
 ---
 
