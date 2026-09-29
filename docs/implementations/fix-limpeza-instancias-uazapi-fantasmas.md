@@ -100,7 +100,13 @@ A suíte completa tem 8 falhas em `test_ai_profile_*`, idênticas no `main`
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(pendente)_ | Reconciliação + auto-recuperação de vagas na UazAPI |
+| 1 | `192233c` | Reconciliação + auto-recuperação de vagas na UazAPI |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** instâncias mortas ou esquecidas ficavam para sempre na UazAPI. Quando chegavam a 6, ninguém mais conseguia conectar WhatsApp até alguém as apagar à mão no painel.
+**Agora:** se um cliente tentar conectar com o teto cheio, o sistema apaga sozinho uma instância morta (primeiro as esquecidas, que não pertencem a ninguém) e o QR aparece normalmente. Todos os dias às 03:00 UTC (04h em Lisboa) também apaga as esquecidas. Nunca toca num WhatsApp ligado nem num QR a ser lido, e só apaga em produção.
+**Para validar:** Cenários C1, C2 e C3, abaixo, depois do deploy.
 
 ### Fase 2 — Erro visível na tela de Conexão (frontend-crm)
 
@@ -109,6 +115,21 @@ A suíte completa tem 8 falhas em `test_ai_profile_*`, idênticas no `main`
 | Arquivo | O que muda |
 |---|---|
 | `frontend-crm/src/components/agente/ConexaoNumero.tsx` | `catch` de connect/refresh mostra toast com a mensagem do backend |
+
+Type-check (`tsc -p tsconfig.app.json`): nenhum erro em `ConexaoNumero.tsx`;
+o total de erros (86 linhas) é igual ao do `main` (pré-existentes).
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `b586945` | Toast com o motivo quando o "Reconectar QR" falha |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** se o "Reconectar QR" falhasse, o botão simplesmente não fazia nada visível. O cliente ficava sem saber o que se passava.
+**Agora:** aparece um aviso vermelho "Não foi possível gerar o QR code" com o motivo, por exemplo "Limite de conexões WhatsApp do servidor atingido. Contacte o suporte…".
+**Para validar:** Cenário P1, abaixo.
 
 ---
 
