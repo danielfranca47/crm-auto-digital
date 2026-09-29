@@ -177,6 +177,26 @@ interesse ("quero saber mais") passa a ser lead com pedido de contacto, com regi
 origem, e entra na fila da Lara. Assim a IA liga só para quem já demonstrou interesse, o número não
 queima e a base legal fica sólida. Ligação fria direta fica com o cold caller humano.
 
+**Variante proposta pelo utilizador (29/09/2026) — cold caller faz o 1.º contacto, a Lara liga
+aos interessados:** avaliada como **boa em parte**.
+- **Certo:** o consentimento para a ligação da IA é recolhido por uma pessoa → base legal sólida para
+  a Lara. O cold caller tem de perguntar explicitamente ("posso pedir à Lara, a nossa assistente
+  virtual, que lhe ligue?") e registar no CRM (data, quem recolheu).
+- **Ajuste:** se o lead já mostrou interesse ao cold caller, **o cold caller deve marcar a demo na
+  hora** — é o momento de maior conversão; uma 2.ª ligação para agendar acrescenta atrito e o lead
+  pode não atender. A Lara entra onde a pessoa não tem tempo: quem disse "ligue-me depois" / "mande
+  mais informação", confirmação e lembrete da demo, reagendamento e quem faltou (no-show).
+- **Continua a valer para a 1.ª ligação (do humano):** legítimo interesse (LGPD), classificação como
+  telemarketing (0303/CNPJ) e **número diferente do da Lara**, para o número dela não ser marcado
+  como spam.
+
+**Vários públicos (pequenas a grandes empresas):** exige que cada campanha tenha roteiro, perfil de
+público e métricas próprias (entidade "campanha" no CRM, não um roteiro único). Cautelas: com ~10
+leads/dia, testar muitos públicos em paralelo dá amostras pequenas demais para concluir — testar
+**1–2 públicos de cada vez** (~100+ leads cada); empresas maiores têm recepcionista/filtro e decisor
+difícil de alcançar (pior para IA) e ciclo de venda longo; o produto (R$ 147/mês) é desenhado para
+pequenos negócios — públicos maiores tocam na M5, que só entra depois da M1.
+
 **No produto:** permitir que clientes usem a IA em listas frias aumenta o risco para a plataforma
 (bloqueio de números e da conta Twilio, LGPD solidária). Regra em código: a campanha de voz só aceita
 leads com origem/consentimento registado; listas frias ficam fora até haver parecer jurídico.
