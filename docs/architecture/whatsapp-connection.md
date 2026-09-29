@@ -254,12 +254,59 @@ instância já não existe lá), porque é uma ação explícita do admin. Botã
 "Apagar" (com confirmação) em `frontend-admin/src/pages/AdminInstances.tsx`,
 ao lado do "Reconectar" já existente.
 
-Para auditar manualmente todas as instâncias que realmente existem na
-UazAPI (fora do nosso banco) — útil para detectar drift entre o painel
-deles e a nossa tabela `whatsapp_connections` — usar `GET
-{UAZAPI_BASE_URL}/instance/all` (header `admintoken`); não tem wrapper em
-`uazapi_admin.py` hoje por não ter caso de uso automatizado, mas é o mesmo
-padrão de `_request()`.
+Estes pontos não cobrem todos os caminhos que deixam órfãs. Por exemplo, o
+"Apagar" do painel admin remove a linha local mesmo quando a UazAPI falha. A
+rede de segurança é a reconciliação descrita a seguir.
+
+---
+
+## Capacidade de instâncias na UazAPI
+
+O plano UazAPI tem **dois tetos**: 3 instâncias conectadas ao mesmo tempo e
+**6 registadas no total, mesmo desconectadas** (`max_instances`/`double_limit`).
+Com o segundo teto cheio, `POST /instance/init` devolve **429** com o corpo
+`"Maximum number of instances reached"`. Não é rate limit: esperar não
+resolve, e nenhum cliente consegue conectar.
+
+`backend-core/app/services/uazapi_capacity.py` reconcilia o que existe de
+facto na UazAPI (`uazapi_admin.list_instances()` → `GET /instance/all`,
+header `admintoken`; cada item traz `name`, `token`, `status`, `created`,
+`lastDisconnect`) com `whatsapp_connections`:
+
+| Tipo | Critério | Quem apaga |
+|---|---|---|
+| Órfã | Na UazAPI, sem linha local, `disconnected`, criada há mais de 10 min | Limpeza diária e reclaim por demanda |
+| Órfã recente | Igual, mas com menos de 10 min (pode ser um init cujo upsert ainda não gravou) | Ninguém |
+| Morta | Na UazAPI `disconnected` **e** no banco com status inativo | Só o reclaim por demanda (apaga também a linha local) |
+| Viva / a conectar | `connected`, `connecting`, ou o banco ainda a acha ativa | Ninguém |
+
+- O `DELETE /instance` usa o **token que vem da própria listagem**, por isso
+  funciona mesmo quando o nosso banco já perdeu o token. Um 404 conta como
+  sucesso.
+- **Reclaim por demanda** (`reclaim_instance_slots`): em
+  `POST /whatsapp-instances/init`, um 429 de teto
+  (`uazapi_admin.is_instance_limit_error`) liberta 1 vaga (primeiro órfãs,
+  pela criação mais antiga; depois mortas, pela queda mais antiga) e repete o
+  init uma única vez. Se não houver nada apagável, ou o retry voltar a bater
+  no teto, devolve **503** com a mensagem "Limite de conexões WhatsApp do
+  servidor atingido…". Um 429 de rate limit comum segue o caminho normal, sem
+  limpeza.
+- Apagar uma instância morta de cliente remove a linha local, e o banner de
+  desconexão desse cliente some. O próximo "Reconectar QR" cria uma instância
+  nova pelo fluxo normal (`connect_whatsapp` quando não há conexão). O
+  Agente Espião e o monitor de colaborador recriam a instância com o mesmo
+  `instance_id` nos seus fluxos de reconexão (connect falha → init → connect).
+- **Limpeza diária** (`app/jobs/uazapi_cleanup_jobs.py`, APScheduler 03:00
+  UTC; trigger manual `POST /admin/cron/uazapi-cleanup`, `require_admin`):
+  apaga só órfãs e loga `event=uazapi_capacity {total_before, deleted_orphans,
+  young_orphans_skipped, dead_with_record, total_after}`.
+- **Trava de ambiente** (`cleanup_enabled()`): nada é apagado fora do
+  Railway. Um backend-core local costuma apontar para a UazAPI de produção com
+  um SQLite local que não conhece os clientes reais, e ali todas as instâncias
+  de produção pareceriam órfãs. Liga por omissão quando `RAILWAY_ENVIRONMENT`
+  ou `RAILWAY_ENVIRONMENT_NAME` existem; `UAZAPI_INSTANCE_CLEANUP_ENABLED=true|false`
+  força explicitamente. Desligado, o reclaim devolve vazio (logo, 503 no teto)
+  e a limpeza diária devolve `{"skipped": "cleanup_disabled"}`.
 
 ---
 
@@ -308,9 +355,9 @@ Rede de segurança para o caso de o webhook `connection` nunca chegar.
   (`backend-core/app/api/cron.py`, protegido por `require_admin`, token com
   `role=admin`), que chama a versão async com `await`.
 - Uma conexão marcada `disconnected` sai da consulta seguinte. O job não
-  continua a bater na UazAPI por uma instância já morta, **mas também não a
-  apaga na UazAPI**: a instância continua a ocupar vaga no limite do plano
-  (6 registadas, 3 conectadas).
+  continua a bater na UazAPI por uma instância já morta, e também não a
+  apaga. Libertar a vaga é trabalho da secção "Capacidade de instâncias na
+  UazAPI", acima.
 
 `backend-core/app/main.py` chama `logging.basicConfig(level=logging.INFO)`.
 Sem isso, os `logger.info(...)` do serviço (incluindo o APScheduler e este

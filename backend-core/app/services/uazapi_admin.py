@@ -302,6 +302,32 @@ async def delete_instance(
     )
 
 
+async def list_instances(*, base_url: str, admin_token: str) -> list[Dict[str, Any]]:
+    """`GET /instance/all` — todas as instâncias que existem de facto na UazAPI
+    (inclusive as que o nosso banco já não conhece). Cada item traz `name`,
+    `token`, `status`, `created`, `lastDisconnect`."""
+    data: Any = await _request(
+        base_url=base_url,
+        token=admin_token,
+        method="GET",
+        path="/instance/all",
+    )
+    if isinstance(data, dict):
+        for key in ("instances", "data"):
+            if isinstance(data.get(key), list):
+                data = data[key]
+                break
+    if not isinstance(data, list):
+        return []
+    return [item for item in data if isinstance(item, dict)]
+
+
+def is_instance_limit_error(exc: UazapiAdminError) -> bool:
+    """429 do `/instance/init` quando o plano atingiu o teto de instâncias
+    registadas (não é rate limit — esperar não resolve)."""
+    return exc.status_code == 429 and "maximum number of instances" in (exc.body or "").lower()
+
+
 async def configure_webhook(
     *,
     base_url: str,

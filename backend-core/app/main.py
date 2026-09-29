@@ -73,14 +73,16 @@ def on_startup() -> None:
         from apscheduler.triggers.cron import CronTrigger
         from app.jobs.subscription_jobs import run_daily_subscription_jobs
         from app.jobs.whatsapp_connection_check_jobs import run_whatsapp_connection_check
+        from app.jobs.uazapi_cleanup_jobs import run_uazapi_cleanup
 
         _scheduler = BackgroundScheduler(timezone="UTC")
         _scheduler.add_job(run_daily_subscription_jobs, CronTrigger(hour=12, minute=0, timezone="UTC"))  # 09:00 Brasília (UTC-3)
         _scheduler.add_job(run_whatsapp_connection_check, CronTrigger(hour="0,6,12,18", minute=0, timezone="UTC"))
+        _scheduler.add_job(run_uazapi_cleanup, CronTrigger(hour=3, minute=0, timezone="UTC"))
         _scheduler.start()
         import logging
         logging.getLogger(__name__).info(
-            "APScheduler iniciado — job diário às 12:00 UTC (09:00 Brasília) + verificação de conexões WhatsApp a cada 6h"
+            "APScheduler iniciado — job diário às 12:00 UTC (09:00 Brasília) + verificação de conexões WhatsApp a cada 6h + limpeza de instâncias órfãs às 03:00 UTC"
         )
         # Processar pendentes de quando o servidor estava offline
         run_daily_subscription_jobs()

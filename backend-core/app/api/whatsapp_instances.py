@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.services import uazapi_admin
+from app.services import uazapi_capacity
 from app.services import whatsapp_connections as connections_service
 from app.utils.crypto import SecretEncryptionError, decrypt_secret
 
@@ -126,6 +127,12 @@ def _resolve_instance_token(db: Session, instance_id: str) -> str:
 
 
 
+_INSTANCE_LIMIT_DETAIL = (
+    "Limite de conexões WhatsApp do servidor atingido. "
+    "Contacte o suporte para libertar espaço."
+)
+
+
 def _raise_uazapi_http_error(exc: uazapi_admin.UazapiAdminError) -> None:
     if exc.status_code == 429:
         headers = {}
@@ -155,21 +162,43 @@ async def init_instance(
     payload_data = payload.dict(exclude={"user_id", "instance_id", "role"}, exclude_unset=True)
     extra_payload = _format_admin_payload({k: v for k, v in payload_data.items() if k != "instance_id"})
 
-    started = time.perf_counter()
-    try:
-        raw = await uazapi_admin.init_instance(
-            base_url=base_url,
-            admin_token=admin_token,
-            instance_id=normalized_instance_id,
-            payload=extra_payload,
-        )
-    except uazapi_admin.UazapiAdminError as exc:
+    async def _init() -> Dict[str, Any]:
+        started = time.perf_counter()
+        try:
+            result = await uazapi_admin.init_instance(
+                base_url=base_url,
+                admin_token=admin_token,
+                instance_id=normalized_instance_id,
+                payload=extra_payload,
+            )
+        except uazapi_admin.UazapiAdminError as exc:
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            _log_connect_attempt(endpoint="init", instance_id=normalized_instance_id, status_code=exc.status_code or 502, elapsed_ms=elapsed_ms)
+            raise
         elapsed_ms = (time.perf_counter() - started) * 1000
-        _log_connect_attempt(endpoint="init", instance_id=normalized_instance_id, status_code=exc.status_code or 502, elapsed_ms=elapsed_ms)
-        _raise_uazapi_http_error(exc)
+        _log_connect_attempt(endpoint="init", instance_id=normalized_instance_id, status_code=200, elapsed_ms=elapsed_ms)
+        return result
 
-    elapsed_ms = (time.perf_counter() - started) * 1000
-    _log_connect_attempt(endpoint="init", instance_id=normalized_instance_id, status_code=200, elapsed_ms=elapsed_ms)
+    try:
+        raw = await _init()
+    except uazapi_admin.UazapiAdminError as exc:
+        if not uazapi_admin.is_instance_limit_error(exc):
+            _raise_uazapi_http_error(exc)
+        # Teto de instâncias registadas atingido: liberta uma vaga (órfã ou
+        # instância morta) e tenta de novo uma única vez.
+        try:
+            reclaimed = await uazapi_capacity.reclaim_instance_slots(db, needed=1)
+        except uazapi_admin.UazapiAdminError as reclaim_exc:
+            logger.warning("event=uazapi_reclaim_failed status=%s", reclaim_exc.status_code)
+            reclaimed = []
+        if not reclaimed:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_INSTANCE_LIMIT_DETAIL) from exc
+        try:
+            raw = await _init()
+        except uazapi_admin.UazapiAdminError as retry_exc:
+            if uazapi_admin.is_instance_limit_error(retry_exc):
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_INSTANCE_LIMIT_DETAIL) from retry_exc
+            _raise_uazapi_http_error(retry_exc)
 
     instance_id, instance_token, phone_e164 = _parse_instance_payload(
         raw, fallback_instance_id=normalized_instance_id

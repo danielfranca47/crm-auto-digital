@@ -31,3 +31,14 @@ async def trigger_whatsapp_connection_check(_: dict = Depends(require_admin)) ->
 
     result = await run_whatsapp_connection_check_async()
     return {"ok": True, **result}
+
+
+@router.post("/uazapi-cleanup")
+async def trigger_uazapi_cleanup(_: dict = Depends(require_admin)) -> Dict[str, Any]:
+    """Executa manualmente a limpeza de instâncias órfãs na UazAPI
+    (normalmente diária, 03:00 UTC). Usa a versão async — esta rota já corre
+    dentro do event loop do FastAPI."""
+    from app.jobs.uazapi_cleanup_jobs import run_uazapi_cleanup_async
+
+    result = await run_uazapi_cleanup_async()
+    return {"ok": True, **result}
