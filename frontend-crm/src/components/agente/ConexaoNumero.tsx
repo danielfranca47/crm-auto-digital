@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import type { WhatsappConnectResponse, WhatsappStatusResponse } from '@/services/api';
+import { ApiError } from '@/lib/api-client';
+import { useToast } from '@/hooks/use-toast';
 
 interface SessionHistoryEntry {
   date: string;
@@ -17,7 +19,16 @@ function getQrSrc(qr: WhatsappConnectResponse['qr']): string | null {
   return null;
 }
 
+// O backend-crm repassa o erro do core como "Core WhatsApp init falhou (status=503): <motivo>"
+// — para o cliente só interessa o motivo.
+function connectErrorMessage(error: unknown): string {
+  const raw = error instanceof ApiError ? (error.data as { detail?: unknown } | undefined)?.detail ?? error.message : (error as Error)?.message;
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/^Core WhatsApp \w+ falhou \(status=\d+\):\s*/, '').trim();
+}
+
 export function ConexaoNumero() {
+  const { toast } = useToast();
   const [status, setStatus] = useState<WhatsappStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [reconnecting, setReconnecting] = useState(false);
@@ -80,11 +91,19 @@ export function ConexaoNumero() {
         const updated = await api.crm.whatsappStatus();
         setStatus(updated);
       }
-    } catch {
-      // silencioso — o toast de erro é gerenciado pelo hook global
+    } catch (error) {
+      showConnectError(error);
     } finally {
       setReconnecting(false);
     }
+  }
+
+  function showConnectError(error: unknown) {
+    toast({
+      title: 'Não foi possível gerar o QR code',
+      description: connectErrorMessage(error) || 'Tente novamente em alguns instantes.',
+      variant: 'destructive',
+    });
   }
 
   async function handleRefreshQr() {
@@ -95,8 +114,8 @@ export function ConexaoNumero() {
       const resp = await api.crm.whatsappRefreshQr(phone);
       setQrPayload(resp);
       startPolling(resp.pair_code ? 280_000 : 90_000);
-    } catch {
-      // silencioso
+    } catch (error) {
+      showConnectError(error);
     } finally {
       setReconnecting(false);
     }
