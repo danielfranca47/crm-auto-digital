@@ -230,8 +230,14 @@ leads com origem/consentimento registado; listas frias ficam fora até haver par
 **Execução do beta por representante comercial (29/09/2026):** o utilizador quer terceirizar a
 operação a uma equipa/representante que invista no projeto, com **20% de comissão recorrente**
 sobre a mensalidade dos clientes retidos. A meta do beta passa a ser a do plano progressivo do
-representante. Simulador (24 meses, 3 fases, 3 modelos de comissão):
-https://claude.ai/artifact/5CdUQe5T92GQeiZFaeDXUh
+representante. Duas páginas (privadas até partilhar):
+- Simulador interno de Daniel (24 meses, 3 modelos de comissão, receita da firma):
+  https://claude.ai/artifact/5CdUQe5T92GQeiZFaeDXUh
+- Proposta para o representante (sem dados de receita da firma; modelo 20% por 24 meses + bônus
+  de 1 mensalidade; ferramentas por conta dele — telefonia VoIP ilimitada ex. Api4com R$ 169,90/mês
+  e headset ~R$ 200 uma vez — reembolsadas por Daniel nos meses com meta de demos realizadas
+  batida; metas 12/22/35 demos realizadas por mês nas fases 1/2/3):
+  https://claude.ai/artifact/Ss7QLNGHmWSPWBXLTh2scs
 
 Resultado com as premissas padrão (50→70→100 discagens/dia, preço R$147→197, churn 8%/mês):
 - **Só 20% recorrente:** representante ganha < R$ 1.000/mês nos primeiros 6 meses (R$ 964 no
@@ -256,6 +262,8 @@ Resultado com as premissas padrão (50→70→100 discagens/dia, preço R$147→
 - [Twilio — Brazil Regulatory Guidelines](https://www.twilio.com/en-us/guidelines/br/regulatory)
 - [Twilio — Brazil Voice Guidelines](https://www.twilio.com/en-us/guidelines/br/voice)
 - [Twilio — Regulatory FAQ (prazo de aprovação)](https://www.twilio.com/docs/phone-numbers/regulatory/faq)
+- [Api4com — planos](https://www.api4com.com/)
+- [Claro — plano Controle](https://www.claro.com.br/celular/controle)
 - [Contabilizei — Profissional de TI pode ser MEI?](https://www.contabilizei.com.br/contabilidade-online/profissional-de-ti-pode-ser-mei/)
 - [Wetax — Programador pode ser MEI em 2026?](https://wetax.com.br/programador-pode-ser-mei-em-2026)
 - [Contabilidade.com — CNAE 8220-2/00 teleatendimento](https://contabilidade.com/blog/cnae-8220200-atividades-de-teleatendimento-simples-nacional-fator-r-e-abertura-de-empresa/)
