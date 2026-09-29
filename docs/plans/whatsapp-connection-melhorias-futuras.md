@@ -106,76 +106,37 @@ a explicação provável para quedas futuras).
 
 ---
 
-## M4 — Instâncias antigas/desconectadas acumulam-se na UazAPI sem limpeza
+## M4 — `upsert_connection()` ainda grava status sem passar pela lógica de emails
 
-**Prioridade:** BAIXA (a confirmar se é urgente)
+**Prioridade: BAIXA**
 
-**Contexto:** descoberto em 30/08/2026, durante a correção do
-`UAZAPI_BASE_URL` de produção (ver M3, acima). O fluxo de reconexão
-(`backend-crm/routes/whatsapp_connect.py::connect_whatsapp`) — quando a
-instância existente falha (5xx), cria automaticamente uma **instância nova**
-via `init_core_whatsapp_instance` + `_generate_instance_id`, mas nunca apaga
-a antiga na UazAPI. Confirmado que não existe, em todo o repositório,
-nenhuma chamada a um endpoint de "apagar/logout de instância" da UazAPI.
+**Contexto:** surgiu como "Ajuste possível" na graduação de
+`feat-whatsapp-connection-health-check.md`. Todo status real vindo da
+UazAPI passa por `apply_connection_status_change()`
+(`backend-core/app/services/whatsapp_connections.py`), exceto
+`upsert_connection()`/`upsert_connection_optional_token()`, chamados por
+`/whatsapp-instances/init` e `/connect`. Eles gravam direto o status devolvido
+pela UazAPI. Hoje isso só grava `connecting`/"Already connected", por isso o
+risco é baixo. Um caso possível: uma conexão marcada como ativa, mas já morta
+sem webhook, é sobrescrita com `connecting` quando o cliente clica "Reconectar
+QR". A queda fica então sem email.
 
-O painel da UazAPI (agora visível, porque produção passou a apontar para o
-servidor pago) já mostra 4 instâncias registadas para o mesmo número/conta
-de teste, 3 delas `disconnected` — todas geradas pelo mesmo padrão de
-auto-recuperação. Como **todos** os utilizadores em produção vão passar por
-este mesmo fluxo de reconexão (efeito da correção do M3), é esperado que o
-número de instâncias "fantasma" cresça rapidamente.
-
-**Risco a confirmar:** o plano pago mostra "Limite de dispositivos (instâncias)
-que podem ser conectados: 3" separado de "N total de instâncias" — não está
-confirmado se esse limite de 3 é só sobre ligações *simultaneamente
-conectadas*, ou se há também um teto sobre o total de instâncias
-*registadas* (mesmo desconectadas) que, uma vez atingido, bloquearia novas
-reconexões para toda a conta (não só um utilizador). Se for o segundo caso,
-isto torna-se urgente rapidamente à medida que mais utilizadores reconectam.
-
-**Ideia de correção (a avaliar em Plan Mode):** antes de criar uma instância
-nova, tentar apagar/desligar a antiga na UazAPI (se existir endpoint para
-isso), ou pelo menos confirmar junto do suporte da UazAPI se instâncias
-`disconnected` contam para algum limite.
+**Por que não foi feito junto:** passar esse caminho pela função central
+dispararia um email de "desconectou" no exato momento em que o cliente clica
+"Reconectar QR". Precisa de uma regra própria (ex.: não tratar `connecting`
+como queda). Reavaliar só se aparecer algum email em falta ou trocado.
 
 ---
 
-## M5 — Verificação periódica de status das conexões (health-check)
+## M5 — Job de 6h não redescobre conexões que voltaram sozinhas
 
-**Prioridade:** BAIXA — rebaixada de "Urgente" em 31/08/2026
+**Prioridade: BAIXA**
 
-**Contexto:** movido de `docs/implementations/whatsapp-status-healthcheck.md`
-(nasceu como "Ajuste possível" na graduação de `alerta-desconexao-whatsapp.md`).
-Motivação original: o alerta por email de desconexão depende inteiramente do
-webhook `event="connection"` da UazAPI chegar — se a entrega falhar
-(instabilidade de rede, `CRM_PUBLIC_BASE_URL` fora do ar, etc.), o status
-volta a ficar "congelado" sem ninguém ser avisado. Este item propunha uma
-rede de segurança independente: um job periódico a consultar
-`GET /instance/status` diretamente, sem depender do webhook.
-
-**Por que a prioridade baixou:** a causa raiz que motivava o "Urgente"
-original (utilizadores a ficar sem saber que o WhatsApp caiu) já está
-resolvida por outro caminho — ver M3, acima (produção apontava para o
-servidor free da UazAPI, corrigido em 30/08/2026). Durante os testes reais
-desta investigação, o caminho do webhook funcionou de forma consistente em
-todas as reconexões — sem nenhuma falha de entrega observada. O risco que
-este item protege continua real em teoria (rede pode falhar), mas deixou de
-ser a explicação provável de um problema atual.
-
-**Ainda vale a pena no futuro:** sim, como rede de segurança de baixo custo
-— mas sem necessidade de avançar para Plan Mode agora. Reavaliar se algum
-caso real de "status congelado sem aviso" voltar a acontecer apesar da
-correção do M3.
-
-**Diagnóstico já levantado (reaproveitar quando for avaliado):**
-- Definir a frequência do health-check (ex.: a cada N minutos por conexão
-  ativa) — balancear deteção rápida vs. carga extra na UazAPI.
-- Decidir onde roda: novo job em `backend-executors` (mesmo padrão de
-  `whatsapp.followup.tick`), ou um cron simples no `backend-core`.
-- Reaproveitar `uazapi_admin.get_status` + a lógica de transição
-  active→inactive + `render_whatsapp_disconnected_email` já criadas em
-  `alerta-desconexao-whatsapp.md` — extrair para função partilhada entre o
-  endpoint do webhook e este health-check, evitar duplicar o disparo do
-  email.
-- Confirmar se a consulta corre para todas as conexões ou só as marcadas
-  como "active" no banco.
+**Contexto:** surgiu como "Ajuste possível" na graduação de
+`feat-whatsapp-connection-health-check.md`. `run_whatsapp_connection_check`
+(`backend-core/app/jobs/whatsapp_connection_check_jobs.py`) só consulta
+conexões com status normalizado `active`. Uma conexão marcada como
+`disconnected` que volte a ficar viva na UazAPI sem webhook continua
+"desligada" no banco até outro evento. Até hoje não causou problema real.
+Se causar, basta alargar a query do job, com atenção ao custo de chamadas à
+UazAPI e ao email de reconexão que isso dispararia.
