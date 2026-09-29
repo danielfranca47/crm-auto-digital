@@ -158,6 +158,29 @@ roteiro atual.
 zero reclamações; 3–5 clientes que aceitem pagar o adicional com o preço na mesa; cadastro de número
 testado com 1 cliente real; parecer jurídico (Anatel/LGPD).
 
+### Variante — prospects novos (lista fria, ex.: Google Maps via agent-local)
+
+A recomendação acima vale para **carteira + leads que pediram contacto**. Para prospects novos, sem
+pedido de contacto, muda o seguinte:
+
+| Tema | Leads com pedido de contacto | Prospects novos (lista fria) |
+|---|---|---|
+| Base legal (LGPD) | Consentimento / relação prévia | Só "legítimo interesse": exige registo do teste de balanceamento, dizer na ligação de onde veio o contacto, opt-out imediato. Massoterapeutas autónomos usam telemóvel pessoal → dado pessoal, risco maior |
+| Classificação | Defensável como relacionamento | **Telemarketing ativo** claro → Twilio exige número 0303 (ou a confirmar "Chamada Verificada") → na prática **exige CNPJ (ME)**; o celular em pessoa física não serve |
+| Número | Risco baixo | Alto risco de ser marcado como "suspeita de spam" nos celulares — atende menos e contamina o número usado para os leads quentes |
+| Conversão | 10–25% de demo por conversa (premissa) | Cold call humano ~2–3%; com IA a rejeição tende a ser maior → custo por demo sobe para **R$ 100+** |
+| Quem liga | IA sozinha (com regras em código) | **Humano** (cold caller), não a IA sozinha |
+
+**Caminho recomendado para prospects novos — "aquecer primeiro, ligar depois":** o primeiro
+contacto é pelo canal que já existe (prospecção WhatsApp/email do agent-local). Quem responder com
+interesse ("quero saber mais") passa a ser lead com pedido de contacto, com registo da data e da
+origem, e entra na fila da Lara. Assim a IA liga só para quem já demonstrou interesse, o número não
+queima e a base legal fica sólida. Ligação fria direta fica com o cold caller humano.
+
+**No produto:** permitir que clientes usem a IA em listas frias aumenta o risco para a plataforma
+(bloqueio de números e da conta Twilio, LGPD solidária). Regra em código: a campanha de voz só aceita
+leads com origem/consentimento registado; listas frias ficam fora até haver parecer jurídico.
+
 ## Pontuação RICE
 
 | R | I | C | E | Score |
