@@ -2,7 +2,7 @@
 
 ---
 
-**Status:** Em investigação — recomendação revista (v2) feita, aguardando 3 respostas do utilizador
+**Status:** Pronta para decisão — falta confirmar endereço no Brasil e meta de sucesso do beta
 **Origem:** pedido do utilizador em 28/09/2026 + briefing do arquiteto de soluções
 (`C:\projetos\modelos-agents\briefings\2026-09-28-agente-ligacoes-prospeccao.md`, fora do repo) +
 protótipo próprio `C:\projetos\ai-coldcall-agent-study` (fora do repo)
@@ -28,6 +28,25 @@ pago? Se sim, construímos a tecnologia de voz ou compramos?
    **tecnologia própria** (não revender terceiro), para baratear e dar a cada cliente o seu número
    e plano.
 3. **Etapa humana:** pode contratar um cold caller para fazer a operação e passar os dados.
+
+**Respostas do utilizador (29/09/2026, 2.ª ronda):**
+4. **Empresa:** sem CNPJ hoje; considera abrir MEI no próprio nome.
+5. **Marca no MVP:** o próprio nome e o nome do produto — "Lara", assistente virtual de Daniel França.
+6. **Volume:** ~10 leads/dia (~220/mês).
+
+**Telefonia sem CNPJ (verificado):**
+- A Twilio **dá número celular brasileiro a pessoa física** (documento de identidade + comprovante
+  de endereço **no Brasil**). Números fixo/nacional e 0800 exigem CNPJ. Aprovação do cadastro em até
+  3 dias úteis. → **O beta não depende de abrir empresa.**
+- **O MEI não serve para este negócio:** desenvolvimento/licenciamento de software (CNAE 6201/6203)
+  e teleatendimento/telemarketing (8220-2/00) **não são atividades permitidas ao MEI**. Vender o CRM
+  ou o serviço de ligações como produto exige ME (Simples Nacional). Decisão para a fase de produto,
+  com contabilista.
+- **Ponto a confirmar com a Twilio:** a página de voz BR da Twilio ainda diz que quem é classificado
+  como telemarketing tem de ligar de números 0303 (regra de 2022). A Anatel tornou o 0303 opcional
+  desde ago/2025 para quem adere à "Chamada Verificada". Ligar para a própria carteira e para leads
+  que pediram contacto é defensável como relacionamento, mas confirmar com o suporte Twilio antes do
+  piloto real.
 
 **No CRM já existe quase tudo menos a voz:** Kanban com `origin` inbound/outbound
 ([leads-schema.md](../architecture/leads-schema.md)), importação por planilha, agenda com Google
@@ -121,10 +140,19 @@ B (ElevenLabs Agents) como plano de saída.**
 - **A IA não pode apresentar-se como "Daniel"** — deve dizer na primeira frase que é assistente
   virtual a falar em nome dele/da empresa.
 
-**Custo do beta** (~300 leads/mês, até 3 tentativas ≈ 700 min): **~R$ 400–770/mês** (minutos
-R$ 350–690 + número ~R$ 25 + servidor ~R$ 30–50) + cold caller pontual ~R$ 1.000–2.000.
-Estimativa **~R$ 10–60 por demo** e ~R$ 50–300 por cliente fechado. Preços de agregadores marcados
-como tal; confirmar nas páginas oficiais.
+**Custo do beta** (~10 leads/dia ≈ 220/mês, até 3 tentativas ≈ 500 min): **~R$ 300–600/mês**
+(minutos R$ 250–500 + número celular + servidor ~R$ 50–100) + cold caller pontual ~R$ 1.000–2.000.
+Estimativa **~R$ 10–60 por demo**. Preços de agregadores marcados como tal; confirmar nas páginas
+oficiais.
+
+**Nota honesta sobre o volume:** 10 leads/dia uma pessoa liga em ~1 h/dia. Neste volume a IA não
+poupa tempo que valha o desenvolvimento — o valor do beta é **validar o produto** (roteiro, funil,
+integração, custo real por minuto) antes de o vender aos clientes. Manter o prazo curto (~8 semanas)
+para não roubar foco da M1.
+
+**Abertura da ligação no MVP:** "Olá, [nome]! Aqui é a Lara, assistente virtual do Daniel França —
+esta ligação é gravada. Você pediu informações sobre…". Remove "Aqui é o Daniel" e "Digital Pro" do
+roteiro atual.
 
 **Critério para virar produto:** taxa de demo ≥ ~70% da do cold caller com custo por demo menor;
 zero reclamações; 3–5 clientes que aceitem pagar o adicional com o preço na mesa; cadastro de número
@@ -151,13 +179,11 @@ testado com 1 cliente real; parecer jurídico (Anatel/LGPD).
 
 ## Perguntas ao utilizador
 
-1. **A Auto Digital tem CNPJ e endereço no Brasil para registar o número de telefone? E os leads
-   estão no Brasil, em Portugal ou nos dois?** Sem CNPJ/endereço BR a Twilio não dá número fixo
-   brasileiro; leads na UE obrigam à lei europeia de IA.
-2. **Com que nome e marca a IA se apresenta (Auto Digital? Digital Pro?), e aceita que ela diga logo
-   na primeira frase que é uma assistente virtual a falar em seu nome?**
-3. **Quantos leads (anúncio + carteira) tem por mês, e que meta define o sucesso do beta?** Ex.:
-   "X demos por mês a no máximo R$ Y por demo".
+1. **Tem comprovante de endereço no Brasil em seu nome** (conta de luz, água, contrato de aluguel)?
+   E os leads estão só no Brasil? — sem endereço BR, a Twilio não dá o número celular a pessoa física.
+2. **Que meta define o sucesso do beta?** Ex.: "pelo menos X demos por mês a no máximo R$ Y por demo".
+
+(Respondidas: marca "Lara, assistente virtual de Daniel França"; volume ~10 leads/dia; sem CNPJ.)
 
 ## Em aberto
 
@@ -170,6 +196,11 @@ testado com 1 cliente real; parecer jurídico (Anatel/LGPD).
 
 - [Twilio Voice Pricing Brazil](https://www.twilio.com/en-us/voice/pricing/br)
 - [Twilio — Brazil Regulatory Guidelines](https://www.twilio.com/en-us/guidelines/br/regulatory)
+- [Twilio — Brazil Voice Guidelines](https://www.twilio.com/en-us/guidelines/br/voice)
+- [Twilio — Regulatory FAQ (prazo de aprovação)](https://www.twilio.com/docs/phone-numbers/regulatory/faq)
+- [Contabilizei — Profissional de TI pode ser MEI?](https://www.contabilizei.com.br/contabilidade-online/profissional-de-ti-pode-ser-mei/)
+- [Wetax — Programador pode ser MEI em 2026?](https://wetax.com.br/programador-pode-ser-mei-em-2026)
+- [Contabilidade.com — CNAE 8220-2/00 teleatendimento](https://contabilidade.com/blog/cnae-8220200-atividades-de-teleatendimento-simples-nacional-fator-r-e-abertura-de-empresa/)
 - [ElevenLabs — Agents pricing](https://elevenlabs.io/pricing/agents)
 - [ElevenLabs — corte de preço conversational AI](https://elevenlabs.io/blog/we-cut-our-pricing-for-conversational-ai)
 - [UsagePricing — mudança de preço ElevenLabs (05/2026)](https://www.usagepricing.com/blueprint/activity/elevenlabs-2026-05-07-price-change)

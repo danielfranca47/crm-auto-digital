@@ -10,7 +10,7 @@
 
 | Investigação | Meta | Score RICE | Veredito proposto | Perguntas pendentes |
 |---|---|---|---|---|
-| — | | | | |
+| [agente-ligacoes-prospeccao-voz](agente-ligacoes-prospeccao-voz.md) | M1 (M5 se virar produto) | 0.40 | Implementations — protótipo próprio (Twilio + OpenAI Realtime) + integração CRM; número celular BR em pessoa física | Endereço no Brasil para a Twilio; meta de sucesso do beta |
 
 ## Em investigação / Levantadas
 
@@ -20,7 +20,6 @@
 | [alucinacao-escape-hatch-cobertura](alucinacao-escape-hatch-cobertura.md) | M2 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
 | [prompt-caching-custo-tokens](prompt-caching-custo-tokens.md) | M4 | Levantado | levantamentos/2026-09-23-busca-vetorial-gemini.txt |
 | [base-dados-inteligencia-estudos](base-dados-inteligencia-estudos.md) | — (processo) | Levantado | Sugestão do utilizador na graduação da discovery |
-| [agente-ligacoes-prospeccao-voz](agente-ligacoes-prospeccao-voz.md) | M1 (M5 se virar produto) | Em investigação — v2 feita (RICE 0.40, tendência Implementations), aguarda 3 respostas | Pedido do utilizador 28/09/2026 + briefing do arquiteto (`modelos-agents`) + protótipo `ai-coldcall-agent-study` |
 
 ## Stand-by (gatilhos)
 
