@@ -42,7 +42,10 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `app/api/ai_profiles.py` | CRUD `/ai-profiles/me` |
 | `app/api/whatsapp_connections.py` | CRUD do registo de conexão (`/whatsapp-connections/me`), `/resolve-token`, `/resolve-by-user` |
 | `app/api/whatsapp_instances.py` | Proxy service-to-service para a UazAPI: `/whatsapp-instances/init`, `/connect`, `/status` — ver [`whatsapp-connection.md`](whatsapp-connection.md) |
-| `app/services/uazapi_admin.py` | Cliente admin da UazAPI (`connect_instance`, `extract_connection_meta` — QR/pair_code/status) |
+| `app/services/uazapi_admin.py` | Cliente admin da UazAPI (`connect_instance`, `extract_connection_meta` — QR/pair_code/status; `list_instances`, `is_instance_limit_error`) |
+| `app/services/uazapi_capacity.py` | Reconciliação UazAPI ↔ `whatsapp_connections`: reclaim de vaga quando o teto de instâncias é atingido e limpeza de órfãs — ver [`whatsapp-connection.md`](whatsapp-connection.md#capacidade-de-instâncias-na-uazapi) |
+| `app/jobs/uazapi_cleanup_jobs.py` | Job diário (03:00 UTC) de limpeza de instâncias órfãs na UazAPI |
+| `app/api/cron.py` | Triggers manuais dos jobs agendados (`/admin/cron/*`, `require_admin`) |
 | `app/api/whatsapp_send.py` | Endpoint `/whatsapp/send` (despacha para UazAPI) |
 | `app/api/plans.py` | Planos e assinaturas |
 | `app/api/admin.py` | Endpoints admin (`/admin/*`) |

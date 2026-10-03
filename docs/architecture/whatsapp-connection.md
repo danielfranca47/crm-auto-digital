@@ -114,6 +114,12 @@ Componente usado em `AiProfile.tsx` (aba "Conexão"). Estado local relevante:
   reais da UazAPI (2min / 5min).
 - Polling de status a cada 3s enquanto um QR/código está pendente; para
   automaticamente ao detectar `status === 'connected' | 'open'`.
+- Falha em `/connect` ou `/qr/refresh` → `showConnectError()` mostra um toast
+  `destructive` "Não foi possível gerar o QR code" com a mensagem do backend
+  (`connectErrorMessage()` remove o prefixo `Core WhatsApp … falhou
+  (status=N):`). É por aqui que o cliente vê o 503 "Limite de conexões
+  WhatsApp do servidor atingido…" (ver "Capacidade de instâncias na UazAPI").
+  Erros pontuais do polling continuam silenciosos.
 
 `src/services/api.ts` — `whatsappConnect(phone?)` e `whatsappRefreshQr(phone?)`
 só enviam corpo quando `phone` é informado; `WhatsappConnectResponse.pair_code`
