@@ -45,8 +45,11 @@ import Register from "./pages/Register";
 import { useEffect, useState } from "react";
 import { api } from "./services/api";
 import { useApiErrorHandler } from "./hooks/useApiErrorHandler";
+import { useSubscriptionStatus } from "./hooks/useSubscriptionStatus";
 import UsageAlertBanner from "./components/UsageAlertBanner";
 import WhatsappDisconnectBanner from "./components/WhatsappDisconnectBanner";
+import SubscriptionGate from "./components/SubscriptionGate";
+import LockedShell from "./components/LockedShell";
 
 const queryClient = new QueryClient();
 
@@ -66,7 +69,7 @@ function GoogleAuthHandler() {
   return null;
 }
 
-/** Wrapper que valida a sessão e redireciona para /login caso não autenticado */
+/** Wrapper que valida a sessão (redireciona para /login caso não autenticado) e a assinatura */
 function Protected({ children }: { children: React.ReactNode }) {
   const [ok, setOk] = useState<null | boolean>(null);
   const { handleError } = useApiErrorHandler();
@@ -90,11 +93,19 @@ function Protected({ children }: { children: React.ReactNode }) {
   if (ok === null) {
     return <div style={{ padding: 24 }}>Carregando…</div>;
   }
-  return <>{children}</>;
+  if (!ok) {
+    return <>{children}</>;
+  }
+  return <SubscriptionGate>{children}</SubscriptionGate>;
 }
 
 /** Layout do app autenticado (Sidebar + Header + Outlet) */
 function AppShell() {
+  const { hasAccess } = useSubscriptionStatus();
+  if (!hasAccess) {
+    return <LockedShell />;
+  }
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">

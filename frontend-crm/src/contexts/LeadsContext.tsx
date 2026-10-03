@@ -5,6 +5,7 @@ import { KANBAN_COLUMNS, ARCHIVED_COLUMNS } from '@/data/mockData';
 import { api } from '../services/api';
 import { readAuthToken } from '../lib/auth-token';
 import { useApiErrorHandler } from '@/hooks/useApiErrorHandler';
+import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import { ApiError } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -173,6 +174,7 @@ function toProspectionLead(l: Lead): ProspectionLead {
 
 export function LeadsProvider({ children }: LeadsProviderProps) {
   const { handleError } = useApiErrorHandler();
+  const { hasAccess, isLoading: subscriptionLoading } = useSubscriptionStatus();
   const { toast } = useToast();
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
   const [archivedColumns, setArchivedColumns] = useState<KanbanColumn[]>([]);
@@ -250,7 +252,10 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       );
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-        return; // auth errors são tratados pelo Protected — não redirecionar daqui
+        // 401 é tratado pelo Protected — não redirecionar daqui. 403 a meio do uso costuma
+        // ser plano que caducou: o handler revalida a assinatura e o SubscriptionGate reage.
+        if (error.status === 403) handleError(error, { silent: true });
+        return;
       }
       const result = handleError(error, {
         silent: true,
@@ -292,8 +297,10 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
   // carregamento inicial — só dispara se existir token (evita redirect para /login em rotas públicas)
   // + polling leve: reflete mudanças feitas pelo bot em segundo plano (categoria, bot_disabled)
   // sem precisar de F5 — o board não tinha nenhum mecanismo de auto-refresh antes.
+  // Sem plano activo o backend-crm responde 403 a tudo — não vale a pena pedir.
   useEffect(() => {
     if (!readAuthToken()) return;
+    if (subscriptionLoading || !hasAccess) return;
     reloadAllLeads();
     loadBotPauseStatus();
     const intervalId = setInterval(() => {
@@ -302,7 +309,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     }, 30_000);
     return () => clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [subscriptionLoading, hasAccess]);
 
   // --------- operações no CRM (columns) ----------
   const updateLead = async (leadId: string, updates: Partial<Lead>) => {

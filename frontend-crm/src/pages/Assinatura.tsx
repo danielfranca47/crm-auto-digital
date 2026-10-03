@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApiErrorHandler } from "@/hooks/useApiErrorHandler";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useToast } from "@/hooks/use-toast";
-import { api, CorePlan, EntitlementsResponse } from "@/services/api";
+import { SUBSCRIPTION_STATE_LABELS } from "@/lib/subscription";
+import { api, CorePlan } from "@/services/api";
 import {
   AlertCircle,
   ArrowRight,
@@ -17,6 +19,8 @@ import {
   CreditCard,
   ExternalLink,
   Info,
+  Loader2,
+  Lock,
   Rocket,
 } from "lucide-react";
 
@@ -76,21 +80,32 @@ export default function Assinatura() {
   const upgraded = searchParams.get("upgraded") === "1";
 
   const [plans, setPlans] = useState<CorePlan[]>([]);
-  const [entitlements, setEntitlements] = useState<EntitlementsResponse | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recheckingPayment, setRecheckingPayment] = useState(false);
 
-  const crmProduct = useMemo(
-    () => entitlements?.products?.find((product) => product?.product_code === "crm"),
-    [entitlements]
-  );
+  const {
+    state: subscriptionState,
+    product: crmProduct,
+    isLoading: subscriptionLoading,
+    refetch: refetchSubscription,
+  } = useSubscriptionStatus();
+  const isActive = subscriptionState === "active";
+  // Sem plano activo confirmado (expirado, cancelado ou nunca subscrito) — "unknown" não conta
+  const isLocked = !isActive && subscriptionState !== "unknown";
 
   const renewalDate = useMemo(() => {
-    const end = (crmProduct as any)?.current_period_end;
+    const end = crmProduct?.current_period_end;
     if (!end) return null;
     return new Date(end).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
   }, [crmProduct]);
+
+  const currentPlanName = useMemo(() => {
+    const code = crmProduct?.plan_code;
+    if (!code) return null;
+    return plans.find((plan) => plan.code === code)?.name ?? code;
+  }, [crmProduct, plans]);
 
   // Botões activos se existe pelo menos um URL de checkout ou número WhatsApp configurado
   const contactAvailable = Boolean(
@@ -103,14 +118,12 @@ export default function Assinatura() {
     setLoading(true);
     setError(null);
     try {
-      const [plansResponse, entitlementsResponse, meResponse] = await Promise.all([
+      const [plansResponse, meResponse] = await Promise.all([
         api.core.getPlans("crm"),
-        api.core.getEntitlements(),
         api.auth.me(),
       ]);
 
       setPlans(Array.isArray(plansResponse) ? plansResponse : []);
-      setEntitlements(entitlementsResponse ?? null);
       setUserEmail(meResponse?.email ?? null);
     } catch (err) {
       const { message } = handleError(err, {
@@ -150,6 +163,40 @@ export default function Assinatura() {
     [toast, userEmail]
   );
 
+  const scrollToPlans = useCallback(() => {
+    document.getElementById("planos")?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  const handleRenew = useCallback(() => {
+    const planCode = crmProduct?.plan_code;
+    const checkoutUrl = crmProduct?.renewal_checkout_url || (planCode ? buildCheckoutUrl(planCode) : null);
+    if (checkoutUrl) {
+      window.open(checkoutUrl, "_blank", "noopener");
+      return;
+    }
+    scrollToPlans();
+  }, [crmProduct, scrollToPlans]);
+
+  const handleRecheckPayment = useCallback(async () => {
+    setRecheckingPayment(true);
+    try {
+      const { data } = await refetchSubscription();
+      const active = data?.products?.some((p) => p?.product_code === "crm" && p?.status === "active");
+      toast(
+        active
+          ? { title: "Plano ativo!", description: "O acesso ao CRM foi liberado." }
+          : {
+              title: "Pagamento ainda não confirmado",
+              description: "A confirmação pode levar alguns minutos. Tenta novamente daqui a pouco.",
+            }
+      );
+    } finally {
+      setRecheckingPayment(false);
+    }
+  }, [refetchSubscription, toast]);
+
+  const supportUrl = buildWhatsAppUrl(crmProduct?.plan_code ?? "crm", currentPlanName ?? undefined, userEmail);
+
   const isLoadingList = loading && !plans.length;
 
   return (
@@ -167,6 +214,53 @@ export default function Assinatura() {
           <AlertTitle className="text-green-600">Plano activado com sucesso!</AlertTitle>
           <AlertDescription>
             O teu novo plano já está activo. As funcionalidades foram desbloqueadas — podes fechar esta mensagem e começar a usar.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isLocked && (
+        <Alert className="max-w-3xl border-amber-500/50 bg-amber-500/10">
+          <Lock className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-700 dark:text-amber-400">
+            {subscriptionState === "none"
+              ? "Ainda não tens um plano ativo"
+              : subscriptionState === "expired"
+              ? `O teu plano ${currentPlanName ?? ""} expirou${renewalDate ? ` em ${renewalDate}` : ""}`
+              : `A tua assinatura ${currentPlanName ?? ""} foi cancelada`}
+          </AlertTitle>
+          <AlertDescription className="space-y-3 text-sm">
+            {subscriptionState === "none" ? (
+              <p>Escolhe um plano para começar a usar o CRM e pôr a Lara a responder aos teus clientes.</p>
+            ) : (
+              <p>
+                Os teus leads, conversas e configurações continuam guardados. A Lara está em pausa e
+                não responde aos teus clientes até {subscriptionState === "expired" ? "renovares" : "reativares"} o plano.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {subscriptionState === "none" ? (
+                <Button onClick={scrollToPlans}>Escolher plano</Button>
+              ) : (
+                <Button onClick={handleRenew}>
+                  {subscriptionState === "expired" ? "Renovar agora" : "Reativar plano"}
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleRecheckPayment} disabled={recheckingPayment}>
+                {recheckingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Já paguei — atualizar
+              </Button>
+              {supportUrl && (
+                <Button asChild variant="ghost">
+                  <a href={supportUrl} target="_blank" rel="noopener noreferrer">
+                    Falar com suporte
+                  </a>
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Depois do pagamento, o acesso é ativado automaticamente assim que a confirmação chega
+              (pode levar alguns minutos).
+            </p>
           </AlertDescription>
         </Alert>
       )}
@@ -193,7 +287,7 @@ export default function Assinatura() {
             <CardDescription>Produto CRM</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {loading ? (
+            {subscriptionLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-6 w-40" />
                 <Skeleton className="h-4 w-28" />
@@ -204,15 +298,18 @@ export default function Assinatura() {
                   {crmProduct?.plan_code || "Sem plano"}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Badge variant={crmProduct?.status === "active" ? "default" : "secondary"}>
-                    {crmProduct?.status ?? "indefinido"}
+                  <Badge variant={isActive ? "default" : "secondary"}>
+                    {subscriptionState === "unknown" ? "indefinido" : SUBSCRIPTION_STATE_LABELS[subscriptionState]}
                   </Badge>
                   <span>Produto: CRM</span>
                 </div>
                 {renewalDate && (
                   <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1">
                     <Calendar className="h-3.5 w-3.5 shrink-0" />
-                    <span>Activo até <strong>{renewalDate}</strong></span>
+                    <span>
+                      {isActive ? "Activo até" : subscriptionState === "expired" ? "Expirou em" : "Período terminou em"}{" "}
+                      <strong>{renewalDate}</strong>
+                    </span>
                   </div>
                 )}
               </>
@@ -233,28 +330,26 @@ export default function Assinatura() {
               um canal de contato configurado.
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button
-                variant="default"
-                onClick={() =>
-                  document.getElementById("planos")?.scrollIntoView({
-                    behavior: "smooth",
-                  })
-                }
-              >
+              <Button variant="default" onClick={scrollToPlans}>
                 Ver planos
               </Button>
-              <Button asChild variant="outline">
-                <Link to="/minha-conta">Ver limites</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/uso-do-plano">Ver uso</Link>
-              </Button>
+              {/* Limites e uso vivem no backend-crm — inacessíveis sem plano activo */}
+              {!isLocked && (
+                <>
+                  <Button asChild variant="outline">
+                    <Link to="/minha-conta">Ver limites</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link to="/uso-do-plano">Ver uso</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {crmProduct?.status === "active" && (
+      {isActive && (
         <Alert className="max-w-3xl border-blue-500/40 bg-blue-500/5">
           <Info className="h-4 w-4 text-blue-500" />
           <AlertTitle className="text-blue-700 dark:text-blue-400">Como trocar de plano</AlertTitle>
@@ -308,7 +403,7 @@ export default function Assinatura() {
         {!isLoadingList && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {plans.map((plan) => {
-              const isCurrent = plan.code === crmProduct?.plan_code;
+              const isCurrent = isActive && plan.code === crmProduct?.plan_code;
               const billing = formatBillingPeriod(plan.billing_period);
               const disabled = isCurrent || !contactAvailable;
               const disabledReason = isCurrent

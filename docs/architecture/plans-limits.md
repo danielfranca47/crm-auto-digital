@@ -180,6 +180,36 @@ toast/CTA — mostra a mensagem do backend inline no próprio painel de erro do 
 para manter consistência com o painel de erro inline já existente no componente, não um gap a
 corrigir.
 
+### Conta sem plano activo — `SubscriptionGate`
+
+Sem assinatura `active` do produto `crm`, `require_crm_access` responde `403 Assinatura do produto
+CRM ausente ou inativa` a todas as rotas privadas do backend-crm. O login (backend-core) continua a
+funcionar, por isso o frontend trata o caso à entrada em vez de deixar o utilizador bater no erro:
+
+```
+login OK → Protected (valida sessão em /users/me)
+  → SubscriptionGate → useSubscriptionStatus() → GET /me/entitlements (core)
+      ├─ active   → app normal
+      ├─ unknown  → app normal (core indisponível ou sem token — fail-open; quem decide é o backend-crm)
+      └─ expired / cancelled / none
+           → qualquer rota redireciona para /assinatura
+           → AppShell troca para LockedShell (sem sidebar nem banners, só "Sair")
+           → LeadsContext não arranca o polling de leads/pausa do bot
+```
+
+- `frontend-crm/src/lib/subscription.ts` — `pickCrmSubscription(entitlements)`: a assinatura activa
+  ganha sempre; sem activa, vale a de `current_period_end` mais recente. Estados: `active`,
+  `expired`, `cancelled` (qualquer outro status não-activo), `none` (nunca teve assinatura do CRM).
+- `frontend-crm/src/hooks/useSubscriptionStatus.ts` — React Query, chave `["entitlements"]`
+  (`ENTITLEMENTS_QUERY_KEY`), partilhada por gate, shell, `LeadsContext` e página de Assinatura.
+- `frontend-crm/src/components/SubscriptionGate.tsx` e `LockedShell.tsx`.
+
+**401 vs 403 no handler global** (`useApiErrorHandler`): só `401` significa sessão expirada (toast +
+`/login`). `403` nunca redireciona para o login: invalida `["entitlements"]` — se o plano caducou a
+meio do uso, o gate leva a `/assinatura` — e mostra o toast "Sem acesso" com a mensagem do backend
+(`detail` em texto, ou `detail.message` quando o gate devolve objecto). O polling de leads do
+`LeadsContext` passa os seus 403 pelo handler em modo silencioso, só para disparar essa revalidação.
+
 ### Badge de quota no Playground
 
 `Playground.tsx` usa `useUsage()` para ler `usage.playground_monthly` e exibe badge na barra superior da sessão:
@@ -198,7 +228,25 @@ endpoint de checkout sob demanda da Efí (`{VITE_CRM_BASE_URL}/checkout/efi/{sta
 `VITE_UPGRADE_CHECKOUT_URL` como fallback) — detalhes completos do fluxo em
 [`billing-efi.md`](billing-efi.md).
 
-**Data de renovação:** lida de `entitlements.products[0].current_period_end`. Exibida no card do plano actual como "Renovação: DD/MM/AAAA".
+**Assinatura exibida:** vem de `useSubscriptionStatus()` (ver "Conta sem plano activo" abaixo), não
+da primeira linha de `entitlements.products` — o core devolve uma linha por assinatura que o
+utilizador já teve. O plano só é marcado "Plano atual" (e o botão desabilitado) quando o estado é
+`active`; um plano expirado/cancelado continua seleccionável.
+
+**Data de fim de período:** `current_period_end` da assinatura escolhida. No card do plano actual:
+"Activo até DD/MM/AAAA" (activa), "Expirou em" (expirada) ou "Período terminou em" (cancelada).
+
+**Cartão de plano inactivo:** quando o estado é `expired`, `cancelled` ou `none`, aparece no topo um
+Alert com o que aconteceu, a garantia de que os dados estão guardados e os botões:
+- **Renovar agora / Reativar plano** → `renewal_checkout_url` da assinatura (fallback
+  `buildCheckoutUrl(plan_code)`, e scroll aos planos se não houver link) — ver
+  [`billing-efi.md`](billing-efi.md) para a regra do preço de Fundador
+- **Escolher plano** (estado `none`) → scroll para a lista de planos
+- **Já paguei — atualizar** → refaz a consulta de entitlements; a consulta também se revalida
+  sozinha quando o utilizador volta ao separador depois de pagar
+- **Falar com suporte** → `buildWhatsAppUrl`, só se `VITE_WHATSAPP_UPGRADE_NUMBER` estiver definido
+
+Os atalhos "Ver limites"/"Ver uso" ficam escondidos nesse estado (dependem do backend-crm).
 
 **Aviso de sobreposição:** ao selecionar um plano diferente do actual, exibe alerta explicando que a troca de plano não é automática — o utilizador deve subscrever o novo plano e contactar o suporte para cancelar a assinatura actual.
 

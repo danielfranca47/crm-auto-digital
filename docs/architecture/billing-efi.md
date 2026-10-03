@@ -65,7 +65,8 @@ notificar o sistema quando o cliente paga.
 - `frontend-crm/src/pages/Assinatura.tsx` — upgrade de plano (offer `start`/`growth`)
 - `frontend-crm/src/components/UsageAlertBanner.tsx` — banner de limite atingido (offer `growth`; utilizador já em `crm_growth` é enviado para `/assinatura` em vez de reofertar o mesmo plano)
 - `backend-crm/routes/usage.py` — `checkout_links` no payload de `GET /api/usage`
-- `backend-core/app/jobs/subscription_jobs.py` — links nos emails de aviso/expiração (`_get_checkout_url`, fallback para `{CRM_FRONTEND_URL}/assinatura` se `CRM_PUBLIC_BASE_URL` não estiver definida)
+- `backend-core/app/jobs/subscription_jobs.py` — links nos emails de aviso/expiração (`get_checkout_url` de `app/services/checkout_links.py`, fallback para `{CRM_FRONTEND_URL}/assinatura` se `CRM_PUBLIC_BASE_URL` não estiver definida)
+- `backend-core/app/api/subscriptions.py` — `renewal_checkout_url` em cada produto de `GET /me/entitlements` (`get_offer_checkout_url`, **sem** fallback: `None` quando o plano não tem oferta vendável ou falta `CRM_PUBLIC_BASE_URL`). É o link do botão "Renovar agora" de `Assinatura.tsx` para contas sem plano activo — ver [`plans-limits.md`](plans-limits.md)
 
 **`custom_id` — plan_code + origem da oferta:** `create_subscription_link` recebe
 `custom_id=f"{plan_code}__{offer_key}"` (ex.: `"crm_growth__growth_fundador"`, `"crm_growth__growth"`).
@@ -186,12 +187,15 @@ de `current_period_end`, do menos ao mais urgente: **30, 15, 7, 3, 2, 1, 0 dias*
     preço de fundador em R$197/mês para sempre — novos clientes pagam R$297/mês") vs. copy
     informativa genérica ("a tua Lara renova em breve", pensada como rede de segurança para
     assinaturas normais que já renovam automaticamente via Efí)
-- **Link de checkout correcto por origem:** `_get_checkout_url(plan_code, origin_offer)` — quando
-  `plan_code == "crm_growth"` e `origin_offer == "growth_fundador"`, usa o offer
-  `growth_founder_renewal` (R$197, condição travada); qualquer outro caso usa `growth` (R$297,
-  preço normal). Aplica-se tanto ao aviso antecipado quanto ao email final de "expirado" — um
-  Fundador que reactive a qualquer momento pelo link do email mantém o preço travado; só voltando
-  a assinar do zero pelo checkout público (sem esse contexto) é que pagaria R$297.
+- **Link de checkout correcto por origem:** `get_checkout_url(plan_code, origin_offer)`
+  (`backend-core/app/services/checkout_links.py`) — quando `plan_code == "crm_growth"` e
+  `origin_offer == "growth_fundador"`, usa o offer `growth_founder_renewal` (R$197, condição
+  travada); qualquer outro caso usa `growth` (R$297, preço normal). Aplica-se ao aviso antecipado,
+  ao email final de "expirado" e ao `renewal_checkout_url` de `/me/entitlements` (botão "Renovar
+  agora" dentro da app) — um Fundador que reactive pelo email ou pela app mantém o preço travado;
+  só voltando a assinar do zero pelo checkout público (sem esse contexto) é que pagaria R$297.
+  Em `/me/entitlements` a condição travada só vale para assinaturas `active`/`expired` (os mesmos
+  estados que recebem os emails); uma assinatura `cancelled` recebe o link de preço normal.
 
 **Nota de design:** o webhook não distingue com certeza "1ª cobrança" de "renovação" — qualquer
 cobrança `paid` gera acção `renew`. `payment_event` já sabia estender uma subscrição activa
