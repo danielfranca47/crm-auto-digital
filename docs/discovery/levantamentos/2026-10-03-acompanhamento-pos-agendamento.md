@@ -82,9 +82,26 @@ conhecidas do mercado fazem, imaginá-los no nosso sistema e avaliar como promov
 
 ---
 
+## Complemento do utilizador (mesmo dia, depois de ler a primeira análise)
+
+Em vez de criar uma "jornada de atendimento", poderia ser um novo workflow similar
+ao padrão que é o fluxo de vendas, mas com gatilhos personalizáveis em cima dessas
+variáveis — os horários de atendimento, ou algum outro que eu queira configurar,
+como "cliente entrou na lista de clientes (pós-venda)". Em resumo, gostaria das
+funcionalidades mais similares ao ManyChat, onde a gente consegue configurar cenários
+para diversos tipos de gatilhos, sendo o principal e padrão o fluxo de venda dos
+agentes.
+
+Também gostaria de alterar a visualização desses workflows para algo de ligar nós,
+mais livre ao usuário. Tanto na horizontal como na vertical. Algo mais personalizável
+e customizável.
+
+---
+
 ## Gaps derivados
 
 | Gap | Destino |
 |---|---|
-| Cenários 1, 2, 4a, 4b, 4c — o que o cliente recebe entre o agendamento e o pós-sessão | [`jornada-pos-agendamento.md`](../jornada-pos-agendamento.md) |
+| Cenários 1, 2, 4a, 4b, 4c — o que o cliente recebe entre o agendamento e o pós-sessão (solução: workflows por gatilho) | [`jornada-pos-agendamento.md`](../jornada-pos-agendamento.md) |
 | Cenário 3 — tags de contato e relação com "disparar uma vez por lead" | [`tags-de-contato.md`](../tags-de-contato.md) |
+| Complemento — tela de nós ligados livremente (canvas) | [`workflows-canvas-de-nos.md`](../workflows-canvas-de-nos.md) |

@@ -64,7 +64,7 @@ agente na sua base existente.
 
 | Referência | Como resolve | Aplica-se a nós? |
 |---|---|---|
-| **ManyChat** | Tags = etiquetas visíveis no contato para agrupar ("Cliente VIP", "Lead qualificado"); campos personalizados guardam dados. Os fluxos usam condições por tag e as campanhas filtram a audiência por tag | **Sim** — é o modelo que o utilizador descreveu: etiqueta simples, usada como condição |
+| **ManyChat** | Tags = etiquetas visíveis no contato para agrupar ("Cliente VIP", "Lead qualificado"); campos personalizados guardam dados. Os fluxos usam condições por tag, as campanhas filtram a audiência por tag, e as Regras têm os gatilhos "tag aplicada" / "tag removida" | **Sim** — é o modelo que o utilizador descreveu: etiqueta simples, usada como condição, ação e gatilho |
 | **GoHighLevel** | Tag é ao mesmo tempo gatilho, condição (ramo Se/Senão "tem a tag") e ação ("adicionar/remover tag") dentro dos fluxos; convive com o estado do compromisso | **Sim** — confirma os três usos (ver, condicionar, carimbar). O construtor em si é mais complexo do que precisamos |
 | **Fresha** | Tem uma mensagem automática própria de boas-vindas a clientes novos — é o sistema que reconhece quem é novo, sem o dono carimbar nada | **Parcial** — funciona quando todo o histórico do cliente nasce dentro da ferramenta. Nós recebemos clientes com histórico fora do sistema, por isso precisamos de um carimbo manual além do automático |
 
@@ -83,14 +83,15 @@ fluxos podem **ler** ("tem / não tem") e **escrever** ("adicionar") etiquetas.
 - **O que é:** cada contato ganha uma lista de etiquetas (ex.: `#cliente`,
   `#morada_enviada`). O dono vê e edita no card do lead, filtra o Kanban por
   etiqueta e pode carimbar vários de uma vez (seleção no Kanban ou coluna "tags"
-  na planilha de importação). No Fluxo de Venda e na Jornada do Agendamento
-  entram duas peças novas: a condição **"só se tem / não tem a tag X"** em
-  qualquer gatilho, e a ação **"adicionar tag X"**. O "disparar uma vez"
+  na planilha de importação). No Fluxo de Venda e nos workflows por gatilho
+  entram três peças novas: a condição **"só se tem / não tem a tag X"**, a ação
+  **"adicionar tag X"** e — só nos workflows por gatilho — o gatilho **"tag
+  adicionada / removida"** (como no ManyChat). O "disparar uma vez"
   atual continua igual por baixo — automático, sem o utilizador ter de pensar
   nele. Opcionalmente, a IA passa a receber as etiquetas do contato numa linha
   de contexto ("já é cliente"), para ajustar o tom.
 - **Prós:** resolve o caso do cliente antigo (carimba antes de ligar a IA);
-  serve tanto ao Fluxo de Venda como à Jornada do Agendamento e a futuras
+  serve tanto ao Fluxo de Venda como aos workflows por gatilho e a futuras
   campanhas; não mexe no motor de "uma vez por lead", que está estável e
   coberto por testes; é o padrão que o utilizador já conhece de outras
   ferramentas.
@@ -101,6 +102,10 @@ fluxos podem **ler** ("tem / não tem") e **escrever** ("adicionar") etiquetas.
   1. Etiquetas no contato: guardar, mostrar e editar no card; filtro no Kanban.
   2. Condição "tem / não tem tag" e ação "adicionar tag" no construtor e no motor.
   3. Carimbar em massa (seleção + importação por planilha) e contexto para a IA.
+
+  O gatilho "tag adicionada / removida" não entra aqui — é a fase 4 de
+  [`jornada-pos-agendamento.md`](jornada-pos-agendamento.md), porque depende do
+  motor dos workflows por gatilho e das travas de envio em massa.
 
 ### Opção C — Substituir o "disparar uma vez" por tags
 - **O que é:** todo o controlo de repetição passa a ser por tag visível; os
@@ -139,9 +144,9 @@ recebem uma vez.
 
 ## Veredito proposto
 
-**Implementations** — entra logo a seguir às fases 1–2 da
-[`jornada-pos-agendamento.md`](jornada-pos-agendamento.md), porque a condição
-"primeira vez" dessa jornada depende dela para ser fiável.
+**Implementations** — entra logo a seguir à fase 1 dos workflows por gatilho
+([`jornada-pos-agendamento.md`](jornada-pos-agendamento.md)), porque a condição
+"primeira vez" desses workflows depende dela para ser fiável.
 
 ## Perguntas ao utilizador
 
@@ -159,11 +164,11 @@ recebem uma vez.
 
 - Onde guardar (lista no próprio lead vs. tabela própria) e como filtrar no
   Kanban — decisão técnica do Plan Mode.
-- Ação "remover tag" e tags como gatilho ("quando receber a tag X, faça Y") —
-  não pedidas; deixar para depois de ver o uso real.
+- Ação "remover tag" — não pedida; deixar para depois de ver o uso real.
 
 ## Fontes
 
+- [ManyChat — How to set custom rules with Triggers, Conditions, and Actions](https://help.manychat.com/hc/en-us/articles/14281170185628-How-to-set-custom-rules-with-Triggers-Conditions-and-Actions)
 - [Manychat — The 7 Best WhatsApp Automation Tools (tags e segmentação)](https://manychat.com/blog/best-whatsapp-automation-tools/)
 - [Egrow — ManyChat WhatsApp Automation (tags vs. campos personalizados)](https://blog.egrow.com/en/post/manychat-whatsapp-automation-streamline-your-messaging)
 - [GoHighLevel — If/Else: Appointment filter options](https://help.gohighlevel.com/support/solutions/articles/155000004050-if-else-workflow-action-appointment-filter-options)

@@ -96,9 +96,19 @@ Venda só corre **quando o cliente manda uma mensagem** (`_evaluate_sales_flow_p
 é chamado dentro da construção da resposta — `decision_engine.py:2781, 3125, 3698`).
 O gatilho "Sem resposta" é só um marcador de tela, nunca avaliado
 (`decision_engine.py:823`). Tudo o que foi pedido aqui é disparado **pelo relógio
-ou por um evento do compromisso** (agendou, faltam 60 min, sessão realizada), não
-por uma mensagem recebida. O que serve de base é a fila de lembretes; o que se
-reaproveita do Fluxo de Venda é a **tela** (blocos de mensagem, mídia, variáveis).
+ou por um evento** (agendou, faltam 60 min, sessão realizada, entrou na Lista de
+Clientes), não por uma mensagem recebida. São duas naturezas de execução:
+
+| | Fluxo de Venda (hoje) | Workflow por evento (novo) |
+|---|---|---|
+| Quando corre | Dentro da resposta da IA, a cada mensagem do lead | Quando o evento acontece ou o relógio chega |
+| Onde fica o estado | Carimbos no lead (`triggers_fired`, `sales_flow_wait`…) | Precisa de registo próprio: em que passo cada contato está, e até quando espera |
+| Uma "Espera" | Só é reavaliada na próxima mensagem do lead | Tem de acordar sozinha na hora marcada |
+| Base já existente | `_evaluate_sales_flow_phases` | Fila de jobs com `scheduled_at` — a que hoje envia lembretes e o webhook do Fluxo de Venda (`jobs_service.py`, `sales_flow_webhook_worker.py`) |
+
+O vocabulário de blocos (mensagem, mídia, orientação, espera, condição, webhook),
+as variáveis e os formulários de edição são reaproveitáveis; o **motor** dos
+workflows por evento é novo, apoiado na fila de jobs.
 
 **7. Uso real (produção, 03/10/2026, só leitura, agregado).** 1 compromisso real
 criado em todo o sistema (agosto/2026), 2 lembretes enviados, 0 resultados de sessão
@@ -110,11 +120,12 @@ que mudar este comportamento tem risco baixo de quebrar hábito de alguém.
 
 | Referência | Como resolve | Aplica-se a nós? |
 |---|---|---|
-| **Fresha** (salões/spas) | Lista de "mensagens automáticas" por momento: novo agendamento (data, hora, morada, direções, serviço, preço, política de cancelamento), até 3 lembretes com antecedência escolhida, boas-vindas a cliente novo, agradecimento + pedido de avaliação depois do *checkout* (não é enviado se o checkout for feito mais de 24h depois). Envio por SMS ou WhatsApp | **Sim** — é exatamente o nicho. Confirma o padrão "uma mensagem por momento do compromisso, cada uma liga/desliga e edita" e que o pós-sessão depende de alguém marcar a sessão como concluída |
-| **Calendly Workflows** | Regra "quando isto acontecer → faça isto": gatilhos *evento agendado*, *X antes de começar*, *X depois de terminar*, *cancelado*. Botão "Variáveis" no editor: nome do evento, data, hora, local, nome do convidado, respostas do formulário | **Sim** — modelo mental simples (momento + mensagem) e lista de variáveis de referência |
-| **Acuity Scheduling** | Modelos editáveis por tipo de mensagem (confirmação, lembrete, follow-up) com etiquetas `%first%`, `%time%`, `%type%` (tipo de serviço), `%calendar%` (profissional), `%location%`, inseridas por menu no editor | **Sim** — mostra o conjunto mínimo de variáveis: cliente, data/hora, **serviço**, **profissional**, local |
-| **GoHighLevel** | Construtor de fluxos genérico: gatilho "estado do compromisso mudou" (confirmado, compareceu, faltou, cancelado), espera "até X antes do compromisso", ramos Se/Senão por tag ou estado, ação "adicionar tag" | **Parcial** — a potência é a que o utilizador imagina (compromisso + tag + fluxo), mas é um construtor livre, complexo para um terapeuta. Tirar daqui os estados do compromisso e a condição por tag, não a tela |
-| Guias de redução de faltas | Padrão recorrente: lembrete ~24h antes + outro 2–3h antes, com pedido de confirmação por resposta | **Sim** — o nosso padrão (24h/2h) já está alinhado; o que falta é o conteúdo ser do dono do negócio |
+| **ManyChat** (referência indicada pelo utilizador) | Cada **automação** tem um "passo inicial" com um ou mais **gatilhos** e, a seguir, passos ligados entre si: enviar mensagem, ações (ex.: aplicar tag), espera inteligente (por duração **ou até uma data**), condição, iniciar outra automação. As **Regras** acrescentam gatilhos que não dependem de mensagem: *data/hora* (X antes ou depois de uma data guardada no contato, no fuso do contato), *tag aplicada/removida*, *campo alterado* | **Sim — é o modelo a seguir.** "X antes do horário da sessão" é exatamente o gatilho de data/hora; "entrou na Lista de Clientes" é o gatilho de campo alterado. A diferença: no ManyChat o utilizador monta tudo do zero; os nossos clientes precisam de modelos prontos |
+| **Fresha** (salões/spas) | Lista de "mensagens automáticas" por momento: novo agendamento (data, hora, morada, direções, serviço, preço, política de cancelamento), até 3 lembretes com antecedência escolhida, boas-vindas a cliente novo, agradecimento + pedido de avaliação depois do *checkout* (não é enviado se o checkout for feito mais de 24h depois). Envio por SMS ou WhatsApp | **Sim** — é o nicho. Mostra **quais** automações um negócio de sessões espera encontrar prontas, e que o pós-sessão depende de alguém marcar a sessão como concluída |
+| **Calendly Workflows** | Regra "quando isto acontecer → faça isto": *evento agendado*, *X antes de começar*, *X depois de terminar*, *cancelado*. Botão "Variáveis" no editor: nome do evento, data, hora, local, nome do convidado | **Sim** — lista de gatilhos de compromisso e de variáveis de referência |
+| **Acuity Scheduling** | Modelos editáveis com etiquetas `%first%`, `%time%`, `%type%` (serviço), `%calendar%` (profissional), `%location%`, inseridas por menu | **Sim** — conjunto mínimo de variáveis: cliente, data/hora, **serviço**, **profissional**, local |
+| **GoHighLevel** | Gatilho "estado do compromisso mudou" (confirmado, compareceu, faltou, cancelado), espera "até X antes do compromisso", ramos Se/Senão por tag ou estado, ação "adicionar tag" | **Parcial** — confirma os estados do compromisso como gatilho e a tag como condição |
+| Guias de redução de faltas | Padrão recorrente: lembrete ~24h antes + outro 2–3h antes, com pedido de confirmação por resposta | **Sim** — o nosso padrão (24h/2h) já está alinhado; falta o conteúdo ser do dono do negócio |
 
 Variáveis mais frequentes no mercado → o que proporíamos:
 
@@ -143,78 +154,119 @@ Variáveis mais frequentes no mercado → o que proporíamos:
   no AI Profile), levar o recibo também à filha de agendamento, respeitar a janela
   de horário.
 - **Prós:** rápido (~2 fases); resolve 1 e 4a.
-- **Contras:** continua espalhado por várias telas (recibo num sítio, lembretes
-  noutro, pós-sessão noutro); não cobre morada na 1ª vez, vídeo antes da sessão,
-  "já chegou?", nem pós-sessão. Cada pedido novo vira mais um campo solto — o
-  mesmo problema de "não vejo com clareza" continua.
+- **Contras:** continua espalhado por várias telas; não cobre morada na 1ª vez,
+  vídeo antes da sessão, "já chegou?", nem pós-sessão. Cada pedido novo vira mais
+  um campo solto.
 - **Esforço:** ~2 fases
 
-### Opção C — "Jornada do Agendamento": uma linha do tempo única, por momentos
-- **O que é:** uma secção própria em Configurar Agente (junto ao Fluxo de Venda,
-  mesmo visual) com os **momentos** do compromisso em ordem:
-
-  ```
-  Ao agendar → Lembrete antecipado → Perto do horário → Na hora → Sessão realizada / Não compareceu
-  ```
-
-  Em cada momento o utilizador empilha os mesmos blocos que já conhece do Fluxo de
-  Venda — **Mensagem fixa** (texto dele, com variáveis, sem IA), **Mídia** (vídeo
-  de como chegar), **Orientação à IA** (quando quiser texto gerado) — e define
-  quando dispara (ex.: "60 min antes"), em que janela de horário pode sair, e
-  condições simples ("só no primeiro agendamento deste cliente", "só se agendou
-  com mais de 48h", "só se a chegada não foi confirmada"). Vem pré-preenchida com
-  um modelo pronto por nicho, para funcionar sem configurar nada.
-
-  Por trás: a fila que hoje envia os lembretes passa a enviar qualquer passo da
-  jornada (já sabe agendar em relação ao horário da sessão e refazer tudo ao
-  remarcar/cancelar). O compromisso passa a guardar serviço e profissional, e a
-  confirmação sai **depois** de o compromisso estar gravado, com os dados do banco.
-- **Prós:** responde aos 5 cenários com um só conceito; o utilizador vê numa tela
-  tudo o que o cliente vai receber; reaproveita a tela de blocos, as variáveis e a
-  fila de lembretes — não é um motor novo; entrega em fatias, cada uma já útil.
-- **Contras:** é a opção maior; exige substituir (não duplicar) o recibo e os
-  lembretes atuais para não haver mensagens em dobro; "já chegou?" e pós-sessão
-  dependem de alguém marcar chegada/realização no CRM.
+### Opção C — Linha do tempo fixa do agendamento
+- **O que é:** uma secção com momentos pré-definidos (ao agendar → lembrete →
+  perto do horário → na hora → sessão realizada), cada um com blocos.
+- **Prós:** simples de entender; cobre os 5 cenários.
+- **Contras:** só serve para agendamento. Qualquer outro cenário ("entrou na Lista
+  de Clientes", "recebeu a tag X", aniversário) exigiria outra tela e outro motor.
+  **Descartada por direção do utilizador (03/10/2026)**, que prefere o modelo
+  genérico abaixo.
 - **Esforço:** ~5 fases
-  1. Dados e variáveis: guardar serviço/profissional no compromisso; variáveis
-     `{{agendamento.*}}`; confirmação "Ao agendar" com texto do utilizador
-     (substitui o recibo escrito pela IA) + morada no primeiro agendamento.
-  2. Lembretes editáveis: N lembretes em minutos, texto/mídia do utilizador,
-     janela de horário, regra de antecedência mínima.
-  3. Tela da linha do tempo (momentos + blocos + modelo pronto por nicho).
-  4. Pós-sessão: "Realizada"/"Não compareceu" disparam os blocos do momento;
-     condição "primeira vez"; lembrete ao dono para marcar sessões por confirmar.
-  5. Perto do horário: o agente volta a responder dúvidas práticas (morada, como
-     chegar, estacionamento) sem reabrir venda; marcação "cliente chegou" e a
-     mensagem "já chegou?" quando não marcada.
+
+### Opção D — Workflows por gatilho (modelo ManyChat), com o Fluxo de Venda como workflow principal
+- **O que é:** "Configurar Agente" passa a ter uma lista de **workflows**. O
+  primeiro, sempre presente, é o **Fluxo de Venda** (conduz a conversa, fase a
+  fase — continua a funcionar como hoje). Os outros são criados pelo utilizador
+  ou ligados a partir de modelos prontos; cada um começa por um **gatilho** e
+  segue com os mesmos blocos do Fluxo de Venda.
+
+  **Gatilhos** (por evento ou relógio):
+
+  | Gatilho | Exemplo de uso |
+  |---|---|
+  | Agendamento criado | Confirmação no formato do negócio; morada se for a 1ª vez |
+  | X antes / X depois do horário do agendamento | Lembrete 12h antes; vídeo de como chegar 60 min antes; "já chegou?" 2 min antes |
+  | Agendamento mudou de estado (realizada, não compareceu, cancelado, remarcado) | "O que achou da experiência?"; pedido de avaliação |
+  | Contato entrou numa coluna do Kanban | "Entrou na Lista de Clientes (pós-venda)" |
+  | Tag adicionada / removida | Campanha para quem recebeu `#pack_10_sessoes` |
+
+  **Passos:** Mensagem fixa (texto do utilizador, com variáveis, sem IA), Mídia,
+  Orientação à IA (quando quiser texto gerado), Espera (por duração ou até uma
+  hora), Condição (tem/não tem tag, primeira vez, agendou com mais de X de
+  antecedência, chegada não confirmada), Ações (adicionar tag, mover de coluna,
+  ligar/desligar o bot, webhook).
+
+  **Regras de envio de cada workflow:** janela de horário permitida (ex.: 08h–18h),
+  uma vez por contato ou a cada ocorrência, e cancelamento automático quando o
+  agendamento é cancelado ou remarcado.
+
+  **Modelos prontos** ("Confirmação de agendamento", "Lembrete antecipado", "Como
+  chegar", "Pós-sessão + avaliação") já vêm na conta, por nicho — quem não quiser
+  montar nada só liga e edita o texto.
+
+  Por trás: o motor do Fluxo de Venda não é reescrito. Os workflows por evento
+  ganham um motor próprio apoiado na fila de jobs que hoje envia os lembretes
+  (ver "Evidência", ponto 6). O recibo e os lembretes atuais são **substituídos**
+  pelos modelos equivalentes, para não haver mensagens em dobro.
+- **Prós:** um só conceito para todos os cenários atuais e futuros; é o padrão
+  que o utilizador (e o mercado) já conhece; a lista de workflows dá a
+  visibilidade pedida ("vejo o que o meu cliente vai receber"); reaproveita
+  blocos, variáveis e fila de jobs.
+- **Contras / riscos a tratar no desenho:**
+  - Um construtor livre é mais difícil para um terapeuta sem perfil técnico —
+    por isso os modelos prontos não são opcionais, são parte da entrega.
+  - **Envios em massa por engano:** carimbar 200 contatos com uma tag que tem
+    gatilho, ou arrastar muitos cards para uma coluna, dispararia 200 mensagens
+    de uma vez num WhatsApp ligado por API não oficial (risco de bloqueio do
+    número). Precisa de limite de ritmo e de confirmação ("isto vai enviar para
+    N contatos").
+  - **Ciclos:** workflow A adiciona tag → dispara workflow B → que adiciona outra
+    tag → dispara A. Precisa de trava.
+  - Dois workflows a enviar ao mesmo contato no mesmo minuto — precisa de ordem
+    e intervalo mínimo.
+  - "Já chegou?" e pós-sessão dependem de alguém marcar chegada/realização.
+- **Esforço:** ~6 fases
+  1. Base: workflows por evento (modelo de dados + motor na fila de jobs), gatilhos
+     "agendamento criado" e "X antes/depois do horário", passos Mensagem e Mídia,
+     variáveis `{{agendamento.*}}`, serviço/profissional guardados no compromisso.
+     Entregue como **modelos prontos com formulário simples** (ligar/desligar,
+     texto, antecedência, janela) — substitui o recibo e os lembretes atuais.
+  2. Lista de workflows em Configurar Agente + criar workflow próprio escolhendo
+     gatilho e passos.
+  3. Gatilhos "agendamento mudou de estado" e "entrou numa coluna"; condição
+     "primeira vez"; ação "mover de coluna"; aviso ao dono de sessões por marcar.
+  4. Ligação com tags (gatilho, condição, ação) — depende de
+     [`tags-de-contato.md`](tags-de-contato.md).
+  5. Espera e Condição dentro dos workflows por evento + travas (ritmo, ciclos,
+     confirmação de envio em massa).
+  6. Perto do horário: a Lara volta a responder dúvidas práticas com sessão
+     marcada; marcação "cliente chegou" e condição "chegada não confirmada".
 
 ## Recomendação
 
-**Opção C, entregue por fatias, começando pelas fases 1 e 2.** Só essas duas já
-dão a confirmação no formato do utilizador, a morada na primeira vez e lembretes
-com o texto dele dentro do horário certo — o suficiente para ligar a Lara com
-confiança. A Opção B chegaria ao mesmo ponto um pouco antes, mas deixaria tudo
-espalhado e obrigaria a refazer quando viesse o pós-sessão.
+**Opção D, entregue por fatias, começando pela fase 1.** É o mesmo trabalho de
+motor que a linha do tempo fixa exigiria, mas fica a servir qualquer cenário
+futuro — e a linha do tempo fixa passa a ser simplesmente o conjunto de modelos
+prontos que vem na conta. A fase 1 sozinha já dá confirmação no formato do
+utilizador, morada na primeira vez e lembretes com o texto dele dentro do horário
+certo — o suficiente para ligar a Lara com confiança.
 
-A condição "primeira vez" fica mais fiável com tags (um cliente antigo, cadastrado
-agora, não tem histórico no sistema) — ver [`tags-de-contato.md`](tags-de-contato.md).
-Ordem sugerida: Jornada fases 1–2 → Tags → Jornada fases 3–5.
+Sobre a tela: a edição livre em nós ligados é tratada em
+[`workflows-canvas-de-nos.md`](workflows-canvas-de-nos.md). Para não construir
+duas telas, a fase 1 usa só formulários simples nos modelos prontos; o editor
+completo (fase 2) já nasce no formato que for decidido lá.
 
 ## Pontuação RICE
 
 | R | I | C | E | Score |
 |---|---|---|---|---|
-| 3 | 3 | 0.8 | 5 | **1.44** |
+| 3 | 3 | 0.8 | 6 | **1.20** |
 
-- **R = 3:** afeta todos os clientes dos agentes com agendamento (1 e 3), que são o nicho de entrada.
+- **R = 3:** afeta todos os clientes dos agentes com agendamento (1 e 3), que são o nicho de entrada; os gatilhos de coluna/tag servem também o Agente 2.
 - **I = 3:** bloqueia a adoção pelo cliente-tipo (M1) e é onde o agente hoje responde pior — 1 frase vazia perto da sessão (M2).
 - **C = 0.8:** lacunas confirmadas no código e padrão claro no mercado; mas a dor vem de um utilizador (o dono) e a produção quase não tem compromissos reais para medir.
-- **E = 5:** cinco fases, cada uma entregável sozinha.
+- **E = 6:** seis fases, cada uma entregável sozinha; as fases 1–3 concentram o valor pedido.
 
 ## Veredito proposto
 
-**Implementations** — começar pelas fases 1–2 (confirmação + lembretes do
-utilizador); fases 3–5 seguem depois das tags.
+**Implementations** — começar pela fase 1 (base + modelos prontos de confirmação e
+lembretes).
 
 ## Perguntas ao utilizador
 
@@ -223,9 +275,9 @@ utilizador); fases 3–5 seguem depois das tags.
    depois, ou o cliente escolhe? (Hoje o sistema assume 1 profissional por conta.)
 2. **Dúvidas depois de agendar:** a Lara pode responder dúvidas práticas (morada,
    como chegar, o que levar) **sempre** que o cliente já tem sessão marcada, ou só
-   numa janela perto do horário? Sugestão: sempre — é mais simples e nunca deixa o
-   cliente sem resposta; as janelas ficam só para as mensagens que a Lara envia
-   por iniciativa própria.
+   numa janela perto do horário? Sugestão: sempre — nunca deixa o cliente sem
+   resposta; as janelas ficam só para as mensagens que a Lara envia por iniciativa
+   própria.
 3. **"Cliente chegou":** hoje, como o massagista lhe avisa que o cliente chegou?
    (Isso decide onde pôr o botão: no telemóvel, no CRM, ou responder a uma
    mensagem no WhatsApp.)
@@ -234,20 +286,31 @@ utilizador); fases 3–5 seguem depois das tags.
    depois, a menos que alguém marque "não compareceu"?
 5. **Lembrete antecipado:** confirma a regra "só se agendou com mais de 48h de
    antecedência, enviado ~12h antes, entre 08h e 18h" como padrão de fábrica?
+6. **Envios em massa:** quando uma ação sua (carimbar vários contatos, arrastar
+   vários cards) fosse disparar um workflow para muita gente de uma vez, prefere
+   que o sistema **pergunte antes** ("isto vai enviar para 40 contatos — confirmar?")
+   ou que nunca dispare workflows em ações em massa? Sugestão: perguntar antes e
+   enviar aos poucos.
 
 ## Em aberto
 
 - Configuração atual do Fluxo de Venda e dos lembretes da conta do utilizador em
   produção não foi lida (está no backend-core) — verificar no Plan Mode da fase 1
   para não gerar mensagens em dobro com blocos que ele já tenha configurado.
-- Como o resultado da sessão deve mover o card no Kanban (ex.: "Realizada" →
-  Lista de Clientes) — decidir junto com a fase 4 e com as tags.
+- Onde os workflows ficam guardados (junto do AI Profile, como o Fluxo de Venda,
+  ou em tabela própria no CRM, perto da fila de jobs) — decisão técnica do Plan Mode.
+- O follow-up por inatividade e o check-in de clientes (`docs/architecture/followup.md`)
+  são, na prática, workflows com gatilho de tempo. Migrá-los para este modelo não
+  está no escopo — avaliar depois de o motor novo estar validado.
 - Agentes com vários profissionais por conta continuam fora (ver
   `docs/plans/agentes-agenda-melhorias-futuras.md`, M1); a resposta à pergunta 1
   diz se isso sobe de prioridade.
 
 ## Fontes
 
+- [ManyChat — How to set custom rules with Triggers, Conditions, and Actions](https://help.manychat.com/hc/en-us/articles/14281170185628-How-to-set-custom-rules-with-Triggers-Conditions-and-Actions)
+- [ManyChat — How to build a Manychat automation](https://help.manychat.com/hc/en-us/articles/14281166306332-How-to-build-a-Manychat-automation)
+- [ManyChat — Smart Delay](https://help.manychat.com/hc/en-us/articles/14281197046812-Smart-Delay)
 - [Fresha — Automated messages overview](https://www.fresha.com/help-center/knowledge-base/marketing/125-automated-messages-overview)
 - [Fresha — Send appointment reminders](https://www.fresha.com/help-center/knowledge-base/calendar/167-send-appointment-reminders)
 - [Calendly — How to customize emails and texts for Workflows (variáveis)](https://help.calendly.com/hc/en-us/articles/4405711728023-Using-variables-and-event-types-in-Workflows)
