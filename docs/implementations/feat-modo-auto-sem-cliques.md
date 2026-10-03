@@ -89,7 +89,12 @@ Diferenças em relação ao plano aprovado:
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | regras deny/ask, limpeza de intérpretes livres, documentação |
+| 1 | `b55950b` | regras deny/ask, limpeza de intérpretes livres, documentação |
+
+**Detalhes do commit `b55950b`:**
+- `.claude/settings.json` — listas `deny` (32 regras) e `ask` (12 regras) novas; 5 regras `allow` de intérprete livre removidas
+- `docs/ops/local-dev.md` — secção "Modo auto e regras de permissão do Claude Code"
+- `docs/implementations/feat-modo-auto-sem-cliques.md` — este arquivo
 
 ### Relatório da Fase 1 — o que mudou na prática
 
