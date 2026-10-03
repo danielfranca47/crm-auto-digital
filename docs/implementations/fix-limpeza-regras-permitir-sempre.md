@@ -105,7 +105,12 @@ ao nível do desktop, e todo comando que não seja teste.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | Lista `allow` do projeto reduzida ao núcleo + política documentada |
+| 1 | `f2a58a2` | Lista `allow` do projeto reduzida ao núcleo + política documentada |
+
+**Detalhes do commit `f2a58a2`:**
+- `.claude/settings.json` — `allow` reescrita com as 56 regras do núcleo; `deny` e `ask` iguais
+- `docs/ops/local-dev.md` — ponto `allow` reescrito como política; dois pontos novos em "Na máquina" (lista pessoal vazia, `classifyAllShell` desligado)
+- `docs/implementations/fix-limpeza-regras-permitir-sempre.md` — template preenchido
 
 ### Relatório da Fase 1 — o que mudou na prática
 
@@ -143,8 +148,9 @@ correr o script** (`python C:\Temp\limpar-regras-claude.py`).
 - [ ] Confirmar: nenhum pedido de clique, nenhum erro de permissão
 
 ### Cenário A4 — Nada sensível entrou no repositório público
-- [ ] Rever o diff do commit da Fase 1
-- [ ] Confirmar: nenhum valor de `.env`, senha ou token no que foi commitado
+- [x] Rever o diff do commit da Fase 1
+- [x] Confirmar: nenhum valor de `.env`, senha ou token no que foi commitado
+- **Validado em:** 04/10/2026 — as 227 linhas adicionadas foram comparadas com todos os valores dos `.env` locais e com os padrões de credencial: 0 ocorrências
 
 ---
 
