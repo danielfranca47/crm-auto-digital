@@ -565,6 +565,89 @@ noutro dispositivo.
 
 ---
 
+## Modo auto e regras de permissão do Claude Code
+
+O Claude Code trabalha neste projeto em **modo auto**: em vez de pedir um clique
+de permissão a cada comando, um segundo modelo (o "revisor automático") avalia
+cada ação antes de ela correr e bloqueia o que for perigoso. A configuração vive
+em dois sítios — um versionado, outro não.
+
+### No repositório (versionado) — `.claude/settings.json`
+
+Vale em qualquer modo de permissão e em todas as worktrees:
+
+- **`deny` — nunca corre, nem com pedido explícito:** `git push` forçado
+  (`--force`, `-f`), e no Railway tudo o que apaga ou desliga coisas — apagar ou
+  desanexar um volume, apagar ficheiros dentro de um volume (é onde ficam as
+  bases de dados e os backups), `railway down`, `railway delete`,
+  `railway environment delete`.
+- **`ask` — pergunta sempre, mesmo em modo auto:** `railway variable*` (ler
+  expõe segredos; alterar dispara redeploy), `railway run`, `railway ssh`,
+  `railway up`, e enviar ficheiros para um volume (`railway volume files upload`).
+- **`allow`:** não acrescentar regras de intérprete com código livre
+  (`python -c ' *`, `node -e`, `powershell -Command ' *`) nem de término de
+  processo por PID coringa — conteúdo malicioso lido de uma página ou ficheiro
+  poderia ser executado sem revisão.
+
+`git push` normal não leva pergunta: faz parte do fluxo de graduação (ver
+`CLAUDE.md`, "Estratégia de branch por implementação").
+
+Estas regras apanham a forma habitual de escrever o comando, não todas as
+formas possíveis — são uma barreira contra engano, e o revisor automático é a
+segunda camada.
+
+### Na máquina (não versionado) — `~/.claude/settings.json`
+
+O Claude Code não lê a configuração do revisor a partir do repositório, só das
+definições pessoais. Num dispositivo novo, acrescentar a `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "defaultMode": "auto"
+  },
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      "Organization: Daniel França, solo founder. Primary use of Claude Code: software development of the crm-auto-digital SaaS (CRM with WhatsApp sales automation) and a few smaller personal projects.",
+      "Source control: github.com/danielfranca47. Repository visibility: the crm-auto-digital repository is PUBLIC. Secrets, .env contents, customer data, production database files or their backups must never enter a commit, a push, or PR/issue text.",
+      "CI/CD deploy targets: pushing to the main branch of crm-auto-digital automatically deploys to production (Railway redeploys the backends; GitHub Actions deploy the frontends to Cloudflare). The user knows this and treats a normal, non-forced push to main as routine: it is the last step of the project's documented graduation flow (merge the feature branch into main, then push).",
+      "Key internal services: the Railway project linked to the crm-auto-digital folder, environment 'production' (services backend-core, backend-crm, backend-executors and its worker). Read-only Railway CLI commands are routine: status, logs, deployment list, volume list, volume files list/download.",
+      "Sensitive remote targets: the same Railway production environment. Commands that change it (variable set, up, redeploy, run, ssh, volume files upload/rename, anything that deletes or detaches a volume) need the user to have asked for that specific change.",
+      "Trusted internal domains: api.danielfranca.pt and the local development servers on localhost ports 8000, 8001, 8002, 8010, 8080, 5173 and 5174.",
+      "Sensitive data locations & audiences: the .env files inside backend-core, backend-crm, backend-executors and agent-local hold real API keys and payment-provider credentials; the production SQLite databases (core.db, crm.db) and any backup or downloaded copy of them hold customer personal data. Audience: the user only, on this machine. Never copy them into the repository working tree or send them to any external service."
+    ]
+  }
+}
+```
+
+Pontos a saber:
+
+- **Quem aplica é o utilizador, não o Claude.** O revisor automático recusa que
+  o Claude altere as próprias regras de permissão (motivo `[Self-Modification]`)
+  — é o comportamento esperado e não deve ser contornado.
+- **VS Code:** a extensão lembra-se do último modo escolhido. Clicar uma vez no
+  indicador de modo, por baixo da caixa de texto, e escolher **Auto**.
+- **Terminal:** exige a CLI na versão 2.1.283 ou superior
+  (`npm i -g @anthropic-ai/claude-code@latest`); em versões antigas a sessão
+  arranca em modo manual, clique a clique.
+- **As regras são lidas no arranque da sessão, da pasta onde ela foi aberta.**
+  Uma alteração a `.claude/settings.json` só vale em conversas novas, e uma
+  regra que ainda só existe numa worktree não vale numa conversa aberta na pasta
+  principal.
+- **Sessões sem ecrã (`claude -p`):** uma regra `ask` conta como recusa, porque
+  não há quem responda ao pedido. Numa pasta que nunca foi aberta de forma
+  interativa, as regras `allow` do projeto são ignoradas ("this workspace has
+  not been trusted"); as `deny` e `ask` valem na mesma e o revisor automático
+  decide o resto.
+- **Conferir o que está ativo:** `claude auto-mode config` imprime as regras que
+  o revisor está realmente a usar.
+- **Ver o que foi bloqueado:** `/permissions`, separador "Recently denied". Se o
+  mesmo destino legítimo for bloqueado repetidamente, acrescentar uma linha a
+  `autoMode.environment` em vez de criar regras `allow`.
+
+---
+
 ## Pré-requisitos
 
 - Python 3.11+ com `venv` por serviço
