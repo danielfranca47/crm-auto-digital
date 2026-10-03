@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { ENTITLEMENTS_QUERY_KEY } from "@/hooks/useSubscriptionStatus";
 import { ApiError } from "@/lib/api-client";
 import { useRateLimitModal } from "@/contexts/RateLimitModalContext";
 
@@ -19,6 +21,9 @@ type HandleErrorResult = {
 function extractDetail(error: ApiError, fallback: string) {
   const dataDetail = (error.data as any)?.detail;
   if (typeof dataDetail === "string" && dataDetail.trim()) return dataDetail;
+  // Gates de plano devolvem detail como objecto { error, message }
+  if (typeof dataDetail?.message === "string" && dataDetail.message.trim()) return dataDetail.message;
+  if (dataDetail && typeof dataDetail === "object") return fallback;
   if (typeof error.message === "string" && error.message.trim()) return error.message;
   return fallback;
 }
@@ -26,6 +31,7 @@ function extractDetail(error: ApiError, fallback: string) {
 export function useApiErrorHandler() {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { openModal } = useRateLimitModal();
 
   const handleError = useCallback(
@@ -41,7 +47,21 @@ export function useApiErrorHandler() {
           return { status, message: detail };
         }
 
-        if (status === 401 || status === 403) {
+        if (status === 403) {
+          // Sessão válida, mas sem acesso — plano inactivo ou gate de plano. Revalida a
+          // assinatura: se caducou a meio do uso, o SubscriptionGate leva a /assinatura.
+          queryClient.invalidateQueries({ queryKey: ENTITLEMENTS_QUERY_KEY });
+          if (!options?.silent) {
+            toast({
+              title: "Sem acesso",
+              description: detail,
+              variant: "destructive",
+            });
+          }
+          return { status, message: detail };
+        }
+
+        if (status === 401) {
           if (!sessionToastDisplayed) {
             toast({
               title: "Sessão expirada",
@@ -76,7 +96,7 @@ export function useApiErrorHandler() {
       }
       return { message: genericMessage };
     },
-    [navigate, openModal, toast]
+    [navigate, openModal, queryClient, toast]
   );
 
   return { handleError } as const;

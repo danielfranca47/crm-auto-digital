@@ -12,34 +12,12 @@ from datetime import datetime, timedelta
 
 from app.db import SessionLocal
 from app import models
-from app.config import settings
+from app.services.checkout_links import get_checkout_url
 
 logger = logging.getLogger(__name__)
 
-FALLBACK_CHECKOUT_URL = (settings.CRM_FRONTEND_URL or "https://crmapp.danielfranca.pt").rstrip("/") + "/assinatura"
-
 # Dias-antes-de-expirar em que um aviso é disparado, do menos ao mais urgente.
 _WARNING_THRESHOLDS = [0, 1, 2, 3, 7, 15, 30]
-
-# offer_key por plano — usados para montar o link de checkout Efí sob demanda (ver
-# docs/architecture/billing-efi.md)
-_PLAN_OFFER_KEYS: dict[str, str] = {
-    "crm_start": "start",
-    "crm_growth": "growth",
-}
-
-
-def _get_checkout_url(plan_code: str, origin_offer: str | None = None) -> str:
-    # Fundador renovando mantém a condição travada (R$197); qualquer outro caso usa o preço
-    # normal do plano (ex.: Growth R$297) — ver docs/architecture/billing-efi.md
-    if plan_code == "crm_growth" and origin_offer == "growth_fundador":
-        offer_key = "growth_founder_renewal"
-    else:
-        offer_key = _PLAN_OFFER_KEYS.get(plan_code)
-    crm_base = (settings.CRM_PUBLIC_BASE_URL or "").rstrip("/")
-    if not offer_key or not crm_base:
-        return FALLBACK_CHECKOUT_URL
-    return f"{crm_base}/checkout/efi/{offer_key}"
 
 
 def run_daily_subscription_jobs() -> dict:
@@ -82,7 +60,7 @@ def run_daily_subscription_jobs() -> dict:
                 user = db.query(models.User).filter(models.User.id == sub.user_id).first()
                 plan = db.query(models.Plan).filter(models.Plan.id == sub.plan_id).first()
                 if user and plan:
-                    checkout_url = _get_checkout_url(plan.code, sub.origin_offer)
+                    checkout_url = get_checkout_url(plan.code, sub.origin_offer)
                     html, text = render_subscription_expired_email(user.name, plan.name, checkout_url)
                     send_email(
                         to=user.email,
@@ -125,7 +103,7 @@ def run_daily_subscription_jobs() -> dict:
                 user = db.query(models.User).filter(models.User.id == sub.user_id).first()
                 plan = db.query(models.Plan).filter(models.Plan.id == sub.plan_id).first()
                 if user and plan:
-                    checkout_url = _get_checkout_url(plan.code, sub.origin_offer)
+                    checkout_url = get_checkout_url(plan.code, sub.origin_offer)
                     html, text = render_subscription_expiring_email(
                         user.name,
                         plan.name,

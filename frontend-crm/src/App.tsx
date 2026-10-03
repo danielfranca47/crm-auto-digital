@@ -44,9 +44,14 @@ import ResetPassword from "./pages/ResetPassword";
 import Register from "./pages/Register";
 import { useEffect, useState } from "react";
 import { api } from "./services/api";
+import { ApiError } from "./lib/api-client";
+import { clearAuthToken } from "./lib/auth-token";
 import { useApiErrorHandler } from "./hooks/useApiErrorHandler";
+import { useSubscriptionStatus } from "./hooks/useSubscriptionStatus";
 import UsageAlertBanner from "./components/UsageAlertBanner";
 import WhatsappDisconnectBanner from "./components/WhatsappDisconnectBanner";
+import SubscriptionGate from "./components/SubscriptionGate";
+import LockedShell from "./components/LockedShell";
 
 const queryClient = new QueryClient();
 
@@ -66,7 +71,7 @@ function GoogleAuthHandler() {
   return null;
 }
 
-/** Wrapper que valida a sessão e redireciona para /login caso não autenticado */
+/** Wrapper que valida a sessão (redireciona para /login caso não autenticado) e a assinatura */
 function Protected({ children }: { children: React.ReactNode }) {
   const [ok, setOk] = useState<null | boolean>(null);
   const { handleError } = useApiErrorHandler();
@@ -78,6 +83,9 @@ function Protected({ children }: { children: React.ReactNode }) {
         await api.auth.me();
         if (alive) setOk(true);
       } catch (err) {
+        // Sessão recusada pelo core: o token guardado já não serve — apagá-lo evita que
+        // o resto da app continue a pedir dados com ele depois do redirect para /login.
+        if (err instanceof ApiError && err.status === 401) clearAuthToken();
         handleError(err, { fallbackMessage: "Sessão expirada" });
         if (alive) setOk(false);
       }
@@ -90,11 +98,19 @@ function Protected({ children }: { children: React.ReactNode }) {
   if (ok === null) {
     return <div style={{ padding: 24 }}>Carregando…</div>;
   }
-  return <>{children}</>;
+  if (!ok) {
+    return <>{children}</>;
+  }
+  return <SubscriptionGate>{children}</SubscriptionGate>;
 }
 
 /** Layout do app autenticado (Sidebar + Header + Outlet) */
 function AppShell() {
+  const { hasAccess } = useSubscriptionStatus();
+  if (!hasAccess) {
+    return <LockedShell />;
+  }
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">

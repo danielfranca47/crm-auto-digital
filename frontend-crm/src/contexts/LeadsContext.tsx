@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Lead, KanbanColumn, NewLeadForm, LeadStatus, LeadAppointment } from '@/types/crm';
 import { ProspectionLead, ProspectionColumn, ProspectionMethod } from '@/types/prospection';
 import { KANBAN_COLUMNS, ARCHIVED_COLUMNS } from '@/data/mockData';
 import { api } from '../services/api';
-import { readAuthToken } from '../lib/auth-token';
+import { clearAuthToken, readAuthToken } from '../lib/auth-token';
+import { isPublicPath } from '../lib/public-routes';
 import { useApiErrorHandler } from '@/hooks/useApiErrorHandler';
+import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import { ApiError } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -173,6 +176,9 @@ function toProspectionLead(l: Lead): ProspectionLead {
 
 export function LeadsProvider({ children }: LeadsProviderProps) {
   const { handleError } = useApiErrorHandler();
+  const { hasAccess, isLoading: subscriptionLoading } = useSubscriptionStatus();
+  const { pathname } = useLocation();
+  const onPublicRoute = isPublicPath(pathname);
   const { toast } = useToast();
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
   const [archivedColumns, setArchivedColumns] = useState<KanbanColumn[]>([]);
@@ -213,6 +219,22 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     }
   };
 
+  // --------- 401 no polling: só é sessão expirada se o core confirmar ----------
+  // O backend-crm também devolve 401 quando não consegue falar com o core — isso não pode
+  // deslogar ninguém. Sessão expirada de facto: apaga o token e segue para o login, o que
+  // também pára o polling (o effect abaixo depende da rota).
+  const confirmSessionExpired = async (): Promise<void> => {
+    try {
+      await api.auth.me();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearAuthToken();
+        // resposta atrasada, já numa rota pública: sem aviso nem redirect
+        if (!isPublicPath(window.location.pathname)) handleError(error);
+      }
+    }
+  };
+
   // --------- recarregar tudo do backend e reconstruir quadros ----------
   const reloadAllLeads = async (): Promise<void> => {
     setLeadsError(null);
@@ -250,7 +272,11 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       );
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-        return; // auth errors são tratados pelo Protected — não redirecionar daqui
+        // 403 a meio do uso costuma ser plano que caducou: o handler revalida a assinatura
+        // e o SubscriptionGate reage.
+        if (error.status === 403) handleError(error, { silent: true });
+        else void confirmSessionExpired();
+        return;
       }
       const result = handleError(error, {
         silent: true,
@@ -268,7 +294,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
       setBotGlobalPausedAt(status.paused_at ?? null);
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-        return; // auth errors são tratados pelo Protected — não redirecionar daqui
+        return; // sem aviso aqui — o 401/403 do reloadAllLeads, pedido em conjunto, trata
       }
       handleError(error, { fallbackMessage: 'Não foi possível carregar o estado da pausa do bot.' });
     }
@@ -289,11 +315,15 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     return result.resumed_count;
   };
 
-  // carregamento inicial — só dispara se existir token (evita redirect para /login em rotas públicas)
+  // carregamento inicial — só em rotas privadas e se existir token (o provider envolve também
+  // as rotas públicas, onde não há nada para carregar)
   // + polling leve: reflete mudanças feitas pelo bot em segundo plano (categoria, bot_disabled)
   // sem precisar de F5 — o board não tinha nenhum mecanismo de auto-refresh antes.
+  // Sem plano activo o backend-crm responde 403 a tudo — não vale a pena pedir.
   useEffect(() => {
+    if (onPublicRoute) return;
     if (!readAuthToken()) return;
+    if (subscriptionLoading || !hasAccess) return;
     reloadAllLeads();
     loadBotPauseStatus();
     const intervalId = setInterval(() => {
@@ -302,7 +332,7 @@ export function LeadsProvider({ children }: LeadsProviderProps) {
     }, 30_000);
     return () => clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onPublicRoute, subscriptionLoading, hasAccess]);
 
   // --------- operações no CRM (columns) ----------
   const updateLead = async (leadId: string, updates: Partial<Lead>) => {

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.config import settings
 from app.db import get_db
+from app.services.checkout_links import get_offer_checkout_url
 from app.services.email_service import (
     render_subscription_cancelled_email,
     render_welcome_email,
@@ -66,6 +67,8 @@ class ProductEntitlement(BaseModel):
     status: str
     plan_code: Optional[str]
     current_period_end: Optional[datetime] = None
+    # Link de checkout para renovar este plano (None se o plano não tem oferta vendável)
+    renewal_checkout_url: Optional[str] = None
 
 
 class EntitlementsResponse(BaseModel):
@@ -408,12 +411,19 @@ async def get_entitlements(current_user: models.User = Depends(get_current_user)
             has_active = True
         elif status_value == "expired":
             has_expired = True
+        # Condição travada de Fundador só para quem está activo ou expirou — mesmo critério
+        # dos emails de aviso/expiração (jobs/subscription_jobs.py). Uma sub cancelada
+        # volta ao preço normal do plano.
+        renewal_origin = sub.origin_offer if status_value in ("active", "expired") else None
         product_entries.append(
             ProductEntitlement(
                 product_code=sub.product.code,
                 status=status_value,
                 plan_code=sub.plan.code if sub.plan else None,
                 current_period_end=sub.current_period_end,
+                renewal_checkout_url=(
+                    get_offer_checkout_url(sub.plan.code, renewal_origin) if sub.plan else None
+                ),
             )
         )
 

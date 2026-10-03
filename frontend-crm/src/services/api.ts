@@ -22,8 +22,17 @@ export type CoreUser = {
   created_at?: string;
 };
 
+export type ProductEntitlement = {
+  product_code?: string;
+  plan_code?: string | null;
+  status?: string;
+  current_period_end?: string | null;
+  renewal_checkout_url?: string | null;
+};
+
 export type EntitlementsResponse = {
-  products?: Array<{ product_code?: string; plan_code?: string; status?: string }>;
+  subscription_status?: string;
+  products?: ProductEntitlement[];
   limits?: Record<string, number | null>;
 };
 
