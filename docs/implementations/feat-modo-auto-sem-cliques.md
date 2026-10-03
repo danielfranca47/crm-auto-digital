@@ -1,7 +1,7 @@
 # Modo auto sem cliques de permissão
 
 **Branch:** `worktree-feat+modo-auto-sem-cliques`
-**Status:** Em andamento
+**Status:** Todos os cenários validados
 
 ---
 
@@ -131,13 +131,13 @@ tuas definições pessoais e escolher "Auto" no VS Code.
 
 ### Cenário A4 — Trabalho normal sem cliques
 - [x] Numa sessão em modo auto: correr `pytest` de um backend, um `curl` a localhost e um clique via chrome-devtools
-- [ ] Confirmar: zero pedidos de permissão
-- **Executado em:** 04/10/2026, conversa do VS Code em modo Auto — `pytest` do
+- [x] Confirmar: zero pedidos de permissão
+- **Validado em:** 04/10/2026, conversa do VS Code em modo Auto — `pytest` do
   backend-executors (265 passaram, 73 falharam), arranque do backend-executors
   na porta 8002, `curl http://localhost:8002/health` (HTTP 200) e abrir
   `/docs` + clique em "GET /health" via chrome-devtools. Nenhuma ação foi
-  recusada nem ficou à espera do lado do Claude; falta o utilizador confirmar
-  que não viu nenhum pedido no ecrã.
+  recusada nem ficou à espera do lado do Claude, e o utilizador confirmou que
+  não apareceu nenhum pedido no ecrã.
 - **Nota sobre as 73 falhas:** não têm relação com esta implementação (a branch
   não toca em código de backend). 16 são falta de `.env` na worktree
   (`CRM_SERVICE_TOKEN não configurado`); as restantes são testes desalinhados
