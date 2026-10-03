@@ -120,12 +120,14 @@ tuas definições pessoais e escolher "Auto" no VS Code.
 - **Validado em:** 04/10/2026 — `2.1.288 (Claude Code)`
 
 ### Cenário A2 — Revisor automático com o contexto do projeto
-- [ ] Utilizador aplica a configuração a `~/.claude/settings.json`
-- [ ] `claude auto-mode config` mostra as 7 entradas de ambiente escritas (repositório público, deploy em `main`, Railway, domínios, dados sensíveis)
+- [x] Utilizador aplica a configuração a `~/.claude/settings.json`
+- [x] `claude auto-mode config` mostra as 7 entradas de ambiente escritas (repositório público, deploy em `main`, Railway, domínios, dados sensíveis)
+- **Validado em:** 04/10/2026 — utilizador correu o script; `defaultMode: auto`, 232 regras `allow` (9 removidas), cópia de segurança `settings.json.bak-2026-10-04` criada; `claude auto-mode config` lista as 7 entradas
 
 ### Cenário A3 — VS Code abre em Auto
-- [ ] Abrir uma conversa nova no painel do VS Code
-- [ ] Confirmar: o indicador de modo, por baixo da caixa de texto, diz **Auto**
+- [x] Abrir uma conversa nova no painel do VS Code
+- [x] Confirmar: o indicador de modo, por baixo da caixa de texto, diz **Auto**
+- **Validado em:** 04/10/2026 — captura de ecrã do utilizador: as 6 conversas abertas, incluindo uma acabada de abrir, mostram "Auto" ao lado do modelo
 
 ### Cenário A4 — Trabalho normal sem cliques
 - [ ] Numa sessão em modo auto: correr `pytest` de um backend, um `curl` a localhost e um clique via chrome-devtools
