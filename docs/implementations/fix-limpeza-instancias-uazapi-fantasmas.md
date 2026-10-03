@@ -1,7 +1,7 @@
 # Limpar instâncias mortas na UazAPI antes que o limite bloqueie novas conexões
 
 **Branch:** `fix/limpeza-instancias-uazapi-fantasmas`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (C1 e C2 validados; C3 e P1 pulados por decisão do utilizador)
 
 ---
 
@@ -149,16 +149,18 @@ o total de erros (86 linhas) é igual ao do `main` (pré-existentes).
 - **Nota:** ao ler esse QR, o WhatsApp de 2 telemóveis respondeu "não foi possível, tente mais tarde". A mensagem vem do próprio WhatsApp, depois de o QR ter sido gerado com sucesso, por isso está fora desta correção. Suspeita: bloqueio temporário anti-abuso do WhatsApp após muitas ligações/desligações em pouco tempo (28–29/09). A confirmar se persistir.
 
 ### Cenário C3 — Nunca apaga uma conexão viva
-- [ ] Setup: conta de teste com WhatsApp conectado
-- [ ] Correr a limpeza (trigger ou 03:00 UTC)
-- [ ] Confirmar: a conexão continua ativa no painel e no CRM
-- **Evidência parcial (03/10/2026), cenário ainda em aberto:** não havia nenhum WhatsApp conectado em produção nas 4 limpezas já corridas (30/09 a 03/10) — o job de 6h reporta `checked: 0` desde pelo menos 01/10. Por isso os logs ainda não provam o cenário. O que já está confirmado: (a) a instância de cliente desconectada que tem registo local sobreviveu às 4 limpezas (`dead_with_record: 1`, nunca em `deleted_orphans`); (b) `test_uazapi_capacity.py` passa 12/12, incluindo `test_reclaim_nunca_apaga_vivas_nem_a_conectar` e `test_separa_orfas_recentes_mortas_e_ignora_vivas`; (c) o código só considera apagável o status exato `disconnected` (`_DELETABLE_UAZAPI_STATUSES`).
+- [⏭️] Setup: conta de teste com WhatsApp conectado
+- [⏭️] Correr a limpeza (trigger ou 03:00 UTC)
+- [⏭️] Confirmar: a conexão continua ativa no painel e no CRM
+- **Pulado em 03/10/2026 por decisão do utilizador**, que dá o cenário como ok. Não houve teste ao vivo com um WhatsApp ligado; a retomar se surgir necessidade (registado em `docs/plans/whatsapp-connection-melhorias-futuras.md`).
+- **Evidência parcial (03/10/2026):** não havia nenhum WhatsApp conectado em produção nas 4 limpezas já corridas (30/09 a 03/10) — o job de 6h reporta `checked: 0` desde pelo menos 01/10. Por isso os logs ainda não provam o cenário. O que já está confirmado: (a) a instância de cliente desconectada que tem registo local sobreviveu às 4 limpezas (`dead_with_record: 1`, nunca em `deleted_orphans`); (b) `test_uazapi_capacity.py` passa 12/12, incluindo `test_reclaim_nunca_apaga_vivas_nem_a_conectar` e `test_separa_orfas_recentes_mortas_e_ignora_vivas`; (c) o código só considera apagável o status exato `disconnected` (`_DELETABLE_UAZAPI_STATUSES`).
 - **Para fechar:** conectar um WhatsApp na conta de teste, deixá-lo ligado durante uma limpeza das 03:00 UTC e conferir no log que `total_before` conta com ele, que `deleted_orphans` não o inclui e que o job das 06:00 UTC reporta `checked: 1, marked_dead: 0`.
 
 ### Cenário P1 — Erro visível (Fase 2)
-- [ ] Setup: teto cheio só com instâncias que não podem ser apagadas (conectadas / a ler QR)
-- [ ] Clicar em "Reconectar QR"
-- [ ] Confirmar: aparece um aviso na tela com a mensagem de limite atingido
+- [⏭️] Setup: teto cheio só com instâncias que não podem ser apagadas (conectadas / a ler QR)
+- [⏭️] Clicar em "Reconectar QR"
+- [⏭️] Confirmar: aparece um aviso na tela com a mensagem de limite atingido
+- **Pulado em 03/10/2026 por decisão do utilizador.** O cenário é difícil de montar (teto cheio só com instâncias não apagáveis). O 503 com a mensagem de limite está coberto por `test_teto_atingido_sem_nada_para_libertar_devolve_503_claro`; o que não foi visto ao vivo é o toast na tela. A retomar se surgir necessidade (registado em `docs/plans/whatsapp-connection-melhorias-futuras.md`).
 
 ---
 
