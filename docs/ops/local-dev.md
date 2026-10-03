@@ -631,6 +631,15 @@ Pontos a saber:
 - **Terminal:** exige a CLI na versão 2.1.283 ou superior
   (`npm i -g @anthropic-ai/claude-code@latest`); em versões antigas a sessão
   arranca em modo manual, clique a clique.
+- **As regras são lidas no arranque da sessão, da pasta onde ela foi aberta.**
+  Uma alteração a `.claude/settings.json` só vale em conversas novas, e uma
+  regra que ainda só existe numa worktree não vale numa conversa aberta na pasta
+  principal.
+- **Sessões sem ecrã (`claude -p`):** uma regra `ask` conta como recusa, porque
+  não há quem responda ao pedido. Numa pasta que nunca foi aberta de forma
+  interativa, as regras `allow` do projeto são ignoradas ("this workspace has
+  not been trusted"); as `deny` e `ask` valem na mesma e o revisor automático
+  decide o resto.
 - **Conferir o que está ativo:** `claude auto-mode config` imprime as regras que
   o revisor está realmente a usar.
 - **Ver o que foi bloqueado:** `/permissions`, separador "Recently denied". Se o
