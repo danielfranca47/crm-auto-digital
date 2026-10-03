@@ -338,15 +338,16 @@ lembretes).
 Já decidido (03/10/2026): envios em massa com confirmação e intervalo; o
 profissional da sessão é uma variável do contato criada no workflow (a plataforma
 é multinicho — não fixar "terapeuta"); lembrete antecipado de fábrica como
-sugerido, editável pelo utilizador.
+sugerido, editável pelo utilizador; **agenda separada por profissional** quando a
+conta declara que trabalha com mais de um (com um só, tudo fica como hoje) — é uma
+entrega própria, descrita em `docs/plans/agentes-agenda-melhorias-futuras.md`, M1,
+e não faz parte das fases desta investigação.
 
 Por decidir — nenhuma trava a fase 1, cada uma pode esperar pela fase respetiva:
 
-1. **Lista de profissionais:** para a Lara saber quem atende e em que horários,
-   chega um cadastro simples na Base de Conhecimento (nome, especialidades,
-   horários em texto), ou precisa de **agenda separada por profissional** (a Lara
-   só oferece a Ana quando a Ana está livre)? O primeiro é pequeno; o segundo é o
-   multi-agenda previsto para os planos maiores.
+1. **Agenda por profissional e planos:** a decisão anterior era reservar vários
+   profissionais para os planos Scale/Enterprise. Mantém-se essa regra, ou passa
+   a estar disponível em todos os planos?
 2. **Dúvidas depois de agendar:** a Lara pode responder dúvidas práticas (morada,
    como chegar, o que levar) **sempre** que o cliente já tem sessão marcada, ou só
    numa janela perto do horário? Sugestão: sempre — nunca deixa o cliente sem
@@ -369,9 +370,10 @@ Por decidir — nenhuma trava a fase 1, cada uma pode esperar pela fase respetiv
 - O follow-up por inatividade e o check-in de clientes (`docs/architecture/followup.md`)
   são, na prática, workflows com gatilho de tempo. Migrá-los para este modelo não
   está no escopo — avaliar depois de o motor novo estar validado.
-- Agenda e conflito de horário por profissional continuam fora (ver
-  `docs/plans/agentes-agenda-melhorias-futuras.md`, M1); a resposta à pergunta 1
-  diz se isso sobe de prioridade.
+- Agenda por profissional (`docs/plans/agentes-agenda-melhorias-futuras.md`, M1)
+  é uma entrega à parte. Quando existir, a variável do contato com o
+  profissional da sessão deve poder ser preenchida automaticamente a partir do
+  profissional do compromisso — prever isso no desenho das variáveis da fase 1.
 - Variável do contato vs. agendamento: se o profissional mudar de uma sessão para
   a outra, a variável do contato guarda só o último valor. Avaliar no Plan Mode
   se o compromisso deve guardar uma cópia dos valores no momento da marcação.

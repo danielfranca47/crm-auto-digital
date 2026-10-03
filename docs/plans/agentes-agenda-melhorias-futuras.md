@@ -10,7 +10,9 @@
 
 ## M1 — Suporte a múltiplos profissionais/agendas por conta
 
-**Prioridade: BAIXA** (sem demanda comercial confirmada ainda — depende dos planos Scale/Enterprise)
+**Prioridade: MÉDIA** (pedido confirmado pelo utilizador em 03/10/2026, na discovery
+[`jornada-pos-agendamento.md`](../discovery/jornada-pos-agendamento.md) — entra depois
+da fase 1 dos workflows por gatilho; falta decidir se fica restrito a Scale/Enterprise)
 
 **Estado actual:** o sistema assume **um único profissional/agenda por conta**, para todos os planos (Start e Growth). Isto está hardcoded implicitamente em dois mecanismos:
 
@@ -24,7 +26,24 @@
 - AI Profile — cada agente precisaria de saber a qual profissional está associado
 - UI da Agenda — selector de profissional, ou vista combinada com indicação visual de qual profissional cada evento pertence
 
-**Decisão já tomada pelo utilizador (não reabrir sem novo contexto):** "por enquanto nos planos start e growth será apenas 1 profissional por conta. futuramente nos planos maiores scale e enterprise iremos implementar uma nova feature para gerenciar mais de uma agenda para outros profissionais em uma conta corporativa."
+- Cadastro de profissionais (nome, especialidades, janela de disponibilidade de cada um) — hoje não existe: só há a "Bio do Profissional" (texto único) e várias "Tabelas de Serviços e Preços" com título por profissional; a disponibilidade é uma só por conta
+- A IA precisa de saber qual profissional o cliente escolheu (ou atribuir um livre) antes de confirmar o horário
+
+**Decisão do utilizador (03/10/2026):** a plataforma é multinicho e tem de comportar
+negócios com um ou vários profissionais. Quando a conta declara que trabalha com mais
+de um profissional, cada um tem **agenda separada** (a IA só oferece um profissional
+quando ele está livre); com um só profissional, o comportamento atual mantém-se. O
+profissional da sessão fica disponível nas mensagens como variável do contato (ver
+discovery acima).
+
+**Por confirmar:** a decisão anterior (19/06/2026) reservava vários profissionais para
+os planos Scale/Enterprise ("por enquanto nos planos start e growth será apenas 1
+profissional por conta"). Falta o utilizador dizer se essa restrição por plano se
+mantém.
+
+**Dependência:** `docs/implementations/fix-disponibilidade-campo-duplo-sentido.md` —
+o campo de disponibilidade do profissional está hoje misturado com a janela de
+resposta do agente; separar primeiro.
 
 **Relação com `scale-enterprise-roadmap.md`:** este item é complementar ao roadmap de multi-instância WhatsApp já documentado nesse arquivo (que cobre `max_instances`) — multi-profissional é uma dimensão diferente (agenda/calendário), não substitui nem depende da multi-instância.
 
