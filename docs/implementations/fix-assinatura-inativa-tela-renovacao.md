@@ -113,6 +113,28 @@ A suíte completa do backend-core tem 8 falhas em `test_ai_profile_agent_mode.py
 `test_ai_profile_timezone_persistence.py` que já existem em `main` e não têm relação
 com esta mudança.
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `d443153` | Verificação de assinatura à entrada, ecrã de plano inativo com renovação, separação 401/403, link de renovação com preço de Fundador |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quem tinha o plano expirado, cancelado ou nunca tinha subscrito fazia
+login e era mandado de volta para o login com o aviso "Sessão expirada". Não havia
+forma de chegar à página de assinatura para renovar.
+
+**Agora:** essa pessoa entra e cai directamente na página de Assinatura, com um
+cartão a dizer o que aconteceu ("O teu plano Growth expirou em DD/MM"), que os
+leads e conversas estão guardados, que a Lara está em pausa, e um botão "Renovar
+agora" que abre o pagamento — com o preço de Fundador para quem o tem. Depois de
+pagar, "Já paguei — atualizar" liberta a app sem novo login. "Sessão expirada" só
+aparece quando a sessão expirou de facto.
+
+**Para validar:** Cenários C1 a C8, abaixo. Os essenciais são C1, C2 e C4 (o C4
+confirma que nada mudou para quem tem o plano em dia).
+
 ---
 
 ## Checks de Validação
