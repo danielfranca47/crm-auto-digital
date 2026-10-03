@@ -142,44 +142,80 @@ confirma que nada mudou para quem tem o plano em dia).
 Ambiente local, conta de `_conta-teste-local.md`; estados forçados na tabela
 `subscriptions` do `core.db` local.
 
+Validados em 03/10/2026 via browser (MCP chrome-devtools), em cópias dos bancos locais
+dentro da worktree. O backend-core local correu com `CRM_PUBLIC_BASE_URL=http://localhost:8000`
+definido só no processo (o `.env` local do core não tem a variável; sem ela
+`renewal_checkout_url` vem `None`). O destino de "Renovar agora" foi lido interceptando
+`window.open`, sem abrir o checkout da Efí.
+
 ### Cenário C1 — Conta sem plano
-- [ ] Setup: conta sem nenhuma linha em `subscriptions` (ex.: criada em "Criar conta")
-- [ ] Fazer login
-- [ ] Confirmar: cai em `/assinatura` com "Ainda não tens um plano ativo"; não aparece "Sessão expirada"; não volta ao login
+- [x] Setup: conta sem nenhuma linha em `subscriptions` (ex.: criada em "Criar conta") — 03/10/2026
+- [x] Fazer login — 03/10/2026
+- [x] Confirmar: cai em `/assinatura` com "Ainda não tens um plano ativo"; não aparece "Sessão expirada"; não volta ao login — 03/10/2026
 
 ### Cenário C2 — Plano expirado
-- [ ] Setup: assinatura `crm_growth` com `status='expired'` e `current_period_end` no passado
-- [ ] Fazer login
-- [ ] Confirmar: cartão "O teu plano Growth expirou em DD/MM/AAAA", com a frase dos dados guardados
-- [ ] Confirmar: "Renovar agora" abre `/checkout/efi/growth` em nova aba
+- [x] Setup: assinatura `crm_growth` com `status='expired'` e `current_period_end` no passado — 03/10/2026
+- [x] Fazer login — 03/10/2026
+- [x] Confirmar: cartão "O teu plano Growth expirou em DD/MM/AAAA", com a frase dos dados guardados — 03/10/2026
+- [x] Confirmar: "Renovar agora" abre `/checkout/efi/growth` em nova aba — 03/10/2026
 
 ### Cenário C3 — Bloqueio de navegação
-- [ ] Com conta inativa, abrir `/dashboard` directamente no endereço
-- [ ] Confirmar: volta a `/assinatura`; sem sidebar; botão "Sair" leva ao login
-- [ ] Confirmar na aba Network: não há pedidos repetidos ao backend-crm a devolver 403
+- [x] Com conta inativa, abrir `/dashboard` directamente no endereço — 03/10/2026
+- [x] Confirmar: volta a `/assinatura`; sem sidebar; botão "Sair" leva ao login — 03/10/2026
+- [x] Confirmar na aba Network: não há pedidos repetidos ao backend-crm a devolver 403 — 03/10/2026 (40s de observação: zero pedidos ao backend-crm)
 
 ### Cenário C4 — Conta ativa (regressão)
-- [ ] Setup: conta com assinatura `active` e pelo menos uma antiga `cancelled`
-- [ ] Confirmar: Kanban carrega e atualiza sozinho; sidebar e banners normais
-- [ ] Confirmar: `/assinatura` mostra o plano ativo (não a antiga cancelada), badge "Ativo", sem cartão de bloqueio
+- [x] Setup: conta com assinatura `active` e pelo menos uma antiga `cancelled` — 03/10/2026
+- [x] Confirmar: Kanban carrega e atualiza sozinho; sidebar e banners normais — 03/10/2026 (leads e estado do bot repetem a cada 30s, todos 200)
+- [x] Confirmar: `/assinatura` mostra o plano ativo (não a antiga cancelada), badge "Ativo", sem cartão de bloqueio — 03/10/2026
 
 ### Cenário C5 — Reativação
-- [ ] Com o ecrã de bloqueio aberto, mudar a assinatura para `active` no banco
-- [ ] Clicar "Já paguei — atualizar"
-- [ ] Confirmar: aviso "Plano ativo!", sidebar volta, app utilizável sem novo login
-- [ ] Repetir sem ativar: aviso "Pagamento ainda não confirmado"
+- [x] Com o ecrã de bloqueio aberto, mudar a assinatura para `active` no banco — 03/10/2026
+- [x] Clicar "Já paguei — atualizar" — 03/10/2026
+- [x] Confirmar: aviso "Plano ativo!", sidebar volta, app utilizável sem novo login — 03/10/2026
+- [x] Repetir sem ativar: aviso "Pagamento ainda não confirmado" — 03/10/2026
 
 ### Cenário C6 — Sessão realmente expirada
-- [ ] Com sessão aberta, corromper o token `crm_token` no localStorage e recarregar
-- [ ] Confirmar: aparece "Sessão expirada" e vai para o login
+- [x] Com sessão aberta, corromper o token `crm_token` no localStorage e recarregar — 03/10/2026
+- [x] Confirmar: aparece "Sessão expirada" e vai para o login — 03/10/2026
 
 ### Cenário C7 — Fundador expirado
-- [ ] Setup: assinatura `crm_growth` `expired` com `origin_offer='growth_fundador'`
-- [ ] Confirmar: "Renovar agora" abre `/checkout/efi/growth_founder_renewal`
+- [x] Setup: assinatura `crm_growth` `expired` com `origin_offer='growth_fundador'` — 03/10/2026
+- [x] Confirmar: "Renovar agora" abre `/checkout/efi/growth_founder_renewal` — 03/10/2026
 
 ### Cenário C8 — Core indisponível na verificação (edge)
-- [ ] Bloquear `GET /me/entitlements` (DevTools → Network → block request URL) e recarregar com conta ativa
-- [ ] Confirmar: a app deixa entrar normalmente
+- [x] Bloquear `GET /me/entitlements` (DevTools → Network → block request URL) e recarregar com conta ativa — 03/10/2026 (bloqueio feito por script injectado na página, que faz o pedido falhar como falha de rede)
+- [ ] Confirmar: a app deixa entrar normalmente — ❌ **FALHOU em 03/10/2026**, ver "Problemas encontrados na validação"
+
+---
+
+## Problemas encontrados na validação (03/10/2026)
+
+1. **C8 — app presa em "Carregando…" com rajada de pedidos quando `/me/entitlements`
+   falha.** Conta com plano ativo, verificação do plano a falhar: o ecrã nunca sai de
+   "Carregando…" e o frontend repete sem parar `GET /me/entitlements` (cerca de 2 por
+   segundo) e, a cada ciclo, `GET /api/leads`, `/api/bot-pause/status`, `/api/usage` e
+   `/ai-profiles/me`. O fail-open descrito em "Abordagem" não acontece. Causa provável
+   (lida no código, por confirmar na correção): `SubscriptionGate` esconde os filhos
+   enquanto `isLoading`; quando o pedido falha mostra-os; ao montar, `AppShell` cria um
+   novo observador da query em erro, que volta a pedir e repõe `isLoading`; o gate
+   esconde os filhos de novo — ciclo. `LeadsContext` reage a cada troca de
+   `subscriptionLoading` e dispara leads + estado do bot. **Bloqueia a graduação:** hoje,
+   em `main`, uma falha do core nesta rota não afecta quem já está dentro da app.
+2. **Token inválido continua guardado e o polling corre em `/login`.** Depois do C6, já
+   no ecrã de login, `crm_token` continua no localStorage e `GET /api/leads` +
+   `/api/bot-pause/status` continuam a sair a cada 30s (mais `/me/entitlements` a
+   devolver 401). Já existia antes desta implementação; é o primeiro item de "Ajustes
+   Possíveis", que ali diz "não causa ciclo" — causa pedidos repetidos.
+3. **Catálogo de `/assinatura` mostra planos que não são vendidos.** A lista "Planos
+   disponíveis" vem de `GET /plans?product_code=crm`, que devolve todos os planos com
+   `is_active` — no banco local: CRM Free, CRM Basic, CRM Pro, Start, Growth e Interno.
+   Só Start e Growth têm checkout. Já existia antes, mas agora é o ecrã onde cai quem não
+   tem plano. Também aparecem códigos crus ("Crm_free"), "Monthly" e "Preço: — (definir no
+   checkout)". Por confirmar se a tabela de produção tem os mesmos planos activos.
+4. **Botão "Falar com suporte" não aparece no ambiente local** — depende de
+   `VITE_WHATSAPP_UPGRADE_NUMBER`, que não está no `.env` local. Não é defeito; fica
+   registado para quem validar localmente.
 
 ---
 
