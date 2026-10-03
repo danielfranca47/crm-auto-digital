@@ -98,7 +98,13 @@ fazer a filha de agendamento ler só esse campo.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | Campo `professional_availability`, migração no arranque, leitura pela filha de agendamento, testes |
+| 1 | `ecf6bdc` | Campo `professional_availability`, migração no arranque, leitura pela filha de agendamento, testes |
+
+**Detalhes do commit `ecf6bdc`:**
+- `backend-core/app/db.py` — `ensure_professional_availability_backfill()` separa os dados existentes (só toca perfis com `professional_availability` ainda NULL)
+- `backend-core/app/models/ai_profile.py`, `app/api/ai_profiles.py`, `app/main.py` — coluna, schemas e chamada no arranque
+- `backend-executors/app/services/decision_engine.py` — `_build_child_prompt_agendamento` usa `professional_availability`
+- Testes: 6 de migração (core), 7 do prompt de agendamento (executors), 6 da janela de resposta (crm)
 
 ### Relatório da Fase 1 — o que mudou na prática
 
@@ -109,8 +115,8 @@ como se fosse a agenda do profissional.
 separados sozinhos no próximo arranque do sistema — sem mudar o que a Lara já
 propunha. As telas ainda não mudaram (Fase 2): até lá, a caixa de texto da
 Apresentação continua ligada ao campo antigo.
-**Para validar:** nesta fase só há testes automáticos (20 novos/atualizados,
-todos a passar). Os Cenários P1–P4 e C1, abaixo, validam-se depois da Fase 2.
+**Para validar:** nesta fase só há testes automáticos (19 novos/atualizados,
+todos a passar; a suíte completa do backend-executors, 324 testes, continua verde). Os Cenários P1–P4 e C1, abaixo, validam-se depois da Fase 2.
 
 ### Fase 2 — Telas e documentação
 
