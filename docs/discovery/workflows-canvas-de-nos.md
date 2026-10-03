@@ -64,7 +64,8 @@ pequeno. Um canvas livre é ainda mais difícil de usar num telemóvel do que um
 | Referência | Como resolve | Aplica-se a nós? |
 |---|---|---|
 | **ManyChat — Flow Builder** | Canvas livre: duplo clique cria um passo, arrasta-se do ponto de ligação de um passo até outro para os ligar; "passo inicial" concentra os gatilhos; passos: enviar mensagem, ações, espera inteligente, condição, iniciar outra automação | **Sim** — é a referência pedida. Funciona bem lá porque cada automação é um fluxograma verdadeiro (um passo leva ao seguinte), como serão os nossos workflows por gatilho |
-| **React Flow** (`@xyflow/react`) | Biblioteca aberta (licença MIT) para editores de nós em React: nós personalizados, ligações, zoom, minimapa; organização automática com `dagre`/`elkjs`, com direção configurável (de cima para baixo ou da esquerda para a direita) | **Sim** — encaixa na nossa stack (React 18); o botão "horizontal / vertical" e o "arrumar automaticamente" vêm praticamente prontos |
+| **ManyChat — telemóvel e vista simples** | Mantém dois editores para a mesma automação, com botão para alternar: **Flow Builder** (canvas, com botão "Auto-Arrange" que arruma tudo) e **Basic Builder** (linear, mensagem a mensagem, indicado para automações simples). A app de telemóvel é pensada para conversas e acompanhamento: fluxos feitos na web podem ser abertos e editados, mas não criados do zero (exceto Instagram); a própria documentação recomenda computador para montar fluxos | **Sim** — confirma as duas decisões: manter uma vista em lista ao lado do canvas, e no telemóvel privilegiar ver/ajustar em vez de construir |
+| **React Flow** (`@xyflow/react`) | Biblioteca aberta (licença MIT) para editores de nós em React: nós personalizados, ligações, zoom, minimapa; organização automática com `dagre`/`elkjs`, com direção configurável (de cima para baixo ou da esquerda para a direita); encaixe em grelha (`snapToGrid`); arrastar e ligar nós também em ecrã tátil. As "linhas-guia de alinhamento ao arrastar" só existem como exemplo pago — teríamos de as fazer nós | **Sim** — encaixa na nossa stack (React 18); orientação, arrumação automática e encaixe em grelha vêm praticamente prontos |
 | **GoHighLevel** | Construtor de fluxos em árvore vertical: gatilhos no topo, passos e ramos Se/Senão para baixo — menos livre, mais guiado | **Parcial** — mostra a alternativa "guiada": menos liberdade, menos formas de o utilizador se perder |
 
 ## Opções de solução
@@ -84,9 +85,18 @@ pequeno. Um canvas livre é ainda mais difícil de usar num telemóvel do que um
     desenho atual. Cada fase aparece como uma **moldura** (a IA decide a passagem
     de fase, não uma linha); dentro da moldura o utilizador arrasta, liga e
     reorganiza, e isso traduz-se em ordem/dependência por baixo.
-  - Em ambos: arrastar livre, zoom, minimapa, botão **horizontal / vertical**,
-    "arrumar automaticamente", posições guardadas. A lista atual continua
-    disponível como vista alternativa ("Lista | Canvas"), sobretudo para telemóvel.
+  - Em ambos: abre **da esquerda para a direita** (como o ManyChat), com
+    liberdade total para o utilizador pousar os nós onde quiser; zoom, minimapa,
+    botão **horizontal / vertical**, posições guardadas.
+  - Comando **"Alinhar"**: sem desfazer a arrumação do utilizador, encaixa os nós
+    na grelha do sistema — margens iguais, linhas e colunas direitas, espaçamento
+    padrão. (Diferente do "Auto-Arrange" do ManyChat, que reposiciona tudo; a
+    arrumação automática completa fica só para o primeiro desenho de um workflow
+    que ainda não tem posições, como o Fluxo de Venda atual e os modelos prontos.)
+  - A lista continua disponível como vista alternativa ("Lista | Canvas"). No
+    telemóvel abre em lista por omissão — ver, ligar/desligar e editar textos; o
+    canvas fica disponível para consulta com zoom. Montar um workflow do zero é
+    tarefa de computador, como no ManyChat.
 - **Prós:** entrega o visual pedido nos dois sítios; risco baixo (o motor do
   Fluxo de Venda e os seus testes ficam intactos); a vista em lista serve de rede
   de segurança durante a transição.
@@ -96,7 +106,7 @@ pequeno. Um canvas livre é ainda mais difícil de usar num telemóvel do que um
   vistas do mesmo desenho para manter.
 - **Esforço:** ~3 fases
   1. Canvas dos workflows por gatilho (criar/ligar nós, horizontal/vertical,
-     arrumar, guardar posições) — é o editor da fase 2 de
+     "Alinhar", guardar posições, lista no telemóvel) — é o editor da fase 2 de
      `jornada-pos-agendamento.md`, feito já neste formato em vez de em lista.
   2. Fluxo de Venda visto no canvas (molduras por fase, nós, linhas derivadas;
      clicar num nó abre a mesma janela de edição de hoje).
@@ -145,27 +155,31 @@ workflows estarem a funcionar com clientes reais.
 
 ## Perguntas ao utilizador
 
-1. **Lista como alternativa:** concorda em manter a vista em lista ao lado do
-   canvas (botão "Lista | Canvas")? Sugestão: sim — no telemóvel o canvas é
-   difícil de usar.
-2. **Fases como molduras:** no Fluxo de Venda, aceita que as fases apareçam como
-   molduras fixas (Recepção, Qualificação, Apresentação…) e que as linhas livres
-   fiquem dentro de cada uma? A alternativa (Opção C) é bem mais cara e arriscada.
-3. **Orientação inicial:** ao abrir, prefere da esquerda para a direita (como o
-   ManyChat) ou de cima para baixo (como hoje)? O botão para alternar existe nos
-   dois casos.
+Nenhuma pendente. Decisões do utilizador (03/10/2026), já refletidas na Opção B:
+
+| Tema | Decisão |
+|---|---|
+| Fases do Fluxo de Venda | Aceita como molduras fixas — os agentes já vêm com o seu modelo base, que é o Fluxo de Venda |
+| Vista em lista | Mantida como alternativa ao canvas; telemóvel segue o padrão do ManyChat |
+| Orientação | Da esquerda para a direita por omissão, com liberdade para pousar os nós |
+| Alinhamento | Comando "Alinhar" que acerta margens e mantém linhas/colunas direitas no padrão do sistema |
 
 ## Em aberto
 
-- Comportamento em telemóvel (só ver, ou também editar no canvas) — decidir no
-  Plan Mode da fase 1, depois da resposta à pergunta 1.
 - Teste com um utilizador não técnico antes da fase 3, para confirmar que o
   canvas não piora a compreensão do Fluxo de Venda.
+- Linhas-guia de alinhamento enquanto se arrasta um nó (além do comando
+  "Alinhar") — não pedidas; avaliar o custo no Plan Mode.
 
 ## Fontes
 
 - [ManyChat — How to build a Manychat automation (Flow Builder)](https://help.manychat.com/hc/en-us/articles/14281166306332-How-to-build-a-Manychat-automation)
 - [ManyChat — Smart Delay](https://help.manychat.com/hc/en-us/articles/14281197046812-Smart-Delay)
+- [ManyChat — Manychat Mobile App](https://help.manychat.com/hc/en-us/articles/19858378137756-Manychat-Mobile-App)
+- [ManyChat — Flow Builder: A Visual Editor (Basic Builder, Auto-Arrange)](https://manychat.com/blog/manychat-flow-builder-messenger-marketing/)
+- [React Flow — The ReactFlow component (snapToGrid)](https://reactflow.dev/api-reference/react-flow)
+- [xyflow — v11.5.0 Release (ligações em ecrã tátil)](https://xyflow.com/blog/react-flow-v-11-5)
+- [React Flow — Pro Examples (helper lines)](https://reactflow.dev/pro/examples)
 - [React Flow — Node-Based UIs in React](https://reactflow.dev/)
 - [React Flow — Layouting overview (dagre, d3-hierarchy, elk)](https://reactflow.dev/learn/layouting/layouting)
 - [xyflow/xyflow no GitHub (licença MIT)](https://github.com/xyflow/xyflow)

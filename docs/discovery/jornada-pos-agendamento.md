@@ -214,8 +214,9 @@ Variáveis mais frequentes no mercado → o que proporíamos:
   - **Envios em massa por engano:** carimbar 200 contatos com uma tag que tem
     gatilho, ou arrastar muitos cards para uma coluna, dispararia 200 mensagens
     de uma vez num WhatsApp ligado por API não oficial (risco de bloqueio do
-    número). Precisa de limite de ritmo e de confirmação ("isto vai enviar para
-    N contatos").
+    número). **Decisão do utilizador (03/10/2026):** o sistema pergunta antes
+    ("isto vai enviar para N contatos — confirmar?") e envia aos poucos, com
+    intervalo entre mensagens para não parecer spam.
   - **Ciclos:** workflow A adiciona tag → dispara workflow B → que adiciona outra
     tag → dispara A. Precisa de trava.
   - Dois workflows a enviar ao mesmo contato no mesmo minuto — precisa de ordem
@@ -286,11 +287,9 @@ lembretes).
    depois, a menos que alguém marque "não compareceu"?
 5. **Lembrete antecipado:** confirma a regra "só se agendou com mais de 48h de
    antecedência, enviado ~12h antes, entre 08h e 18h" como padrão de fábrica?
-6. **Envios em massa:** quando uma ação sua (carimbar vários contatos, arrastar
-   vários cards) fosse disparar um workflow para muita gente de uma vez, prefere
-   que o sistema **pergunte antes** ("isto vai enviar para 40 contatos — confirmar?")
-   ou que nunca dispare workflows em ações em massa? Sugestão: perguntar antes e
-   enviar aos poucos.
+
+As perguntas 1 e 5 são as únicas necessárias para começar a fase 1; as restantes
+podem ser respondidas quando a fase respetiva chegar.
 
 ## Em aberto
 
