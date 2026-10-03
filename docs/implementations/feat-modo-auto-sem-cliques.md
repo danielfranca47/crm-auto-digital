@@ -134,6 +134,11 @@ tuas definições pessoais e escolher "Auto" no VS Code.
 ### Cenário A5 — Barreiras duras funcionam
 - [ ] `git push --force --dry-run` é recusado pela regra `deny`
 - [ ] `railway variables` gera pedido de confirmação (cancelar)
+- **Observação (04/10/2026):** tentado na sessão que fez a implementação — o push
+  forçado em modo simulação **não** foi recusado (nada foi enviado, era
+  simulação). A sessão tinha sido aberta na pasta principal e lê as regras de
+  lá, onde ainda não existem. Validar numa sessão nova: aberta nesta worktree
+  antes do merge, ou em qualquer pasta depois do merge em `main`.
 
 ---
 
