@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
@@ -266,6 +268,7 @@ def ensure_ai_profile_columns() -> None:
         "enabled_extensions": {"default": None, "sqlite_type": "TEXT", "pg_type": "JSON"},
         "availability_schedule": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
         "availability_mode": {"default": "24h", "sqlite_type": "TEXT", "pg_type": "VARCHAR"},
+        "professional_availability": {"default": None, "sqlite_type": "TEXT", "pg_type": "TEXT"},
         "first_reply_delay_min_seconds": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "first_reply_delay_max_seconds": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
         "reply_delay_min_seconds": {"default": 0, "sqlite_type": "INTEGER", "pg_type": "INTEGER"},
@@ -405,6 +408,118 @@ def ensure_presentation_variant_direto_backfill() -> None:
                 "WHERE agent_mode IN ('direto', 'closer') AND presentation_variant = 'scheduler'"
             )
         )
+
+
+_WEEKDAY_LABELS_PT = {
+    "mon": "Seg", "tue": "Ter", "wed": "Qua", "thu": "Qui", "fri": "Sex", "sat": "Sáb", "sun": "Dom",
+}
+
+
+def _parse_weekday_schedule(raw: str) -> dict | None:
+    """Grade {"mon": "09:00-18:00", ...} gravada pela Janela de horário (CamadaPipeline.tsx).
+
+    Devolve None quando o valor não tem esse formato (ex.: texto livre digitado em
+    Apresentação → "Disponibilidade de horários").
+    """
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict) or not data:
+        return None
+    schedule = {}
+    for key, value in data.items():
+        day = str(key).lower()
+        if day not in _WEEKDAY_LABELS_PT or not isinstance(value, str):
+            return None
+        schedule[day] = value.strip()
+    return schedule
+
+
+def _format_weekday_schedule_pt(schedule: dict) -> str:
+    """Grade por dia da semana em texto legível, agrupando dias seguidos com o mesmo
+    horário — ex.: "Seg a Sex: 09:00–18:00"."""
+    groups: list[list] = []  # [primeiro_dia, último_dia, horário]
+    for day in _WEEKDAY_LABELS_PT:
+        hours = schedule.get(day) or ""
+        if not hours:
+            groups.append([None, None, ""])  # dia sem horário quebra a sequência
+            continue
+        if groups and groups[-1][2] == hours:
+            groups[-1][1] = day
+        else:
+            groups.append([day, day, hours])
+    lines = []
+    for first, last, hours in groups:
+        if not hours:
+            continue
+        label = _WEEKDAY_LABELS_PT[first]
+        if last != first:
+            label = f"{label} a {_WEEKDAY_LABELS_PT[last]}"
+        lines.append(f"{label}: {hours.replace('-', '–')}")
+    return "\n".join(lines)
+
+
+def ensure_professional_availability_backfill() -> None:
+    # availability_schedule guardava duas coisas: a grade da janela de resposta do
+    # agente (JSON, lida por backend-crm/services/humanization.py) e os horários de
+    # atendimento do profissional (texto livre, lido pela filha de agendamento).
+    # Separa a segunda para professional_availability — idempotente: só toca perfis
+    # com professional_availability ainda NULL.
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            table_row = conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name='ai_profiles'")
+            ).fetchone()
+            if not table_row:
+                return
+        else:
+            exists = conn.execute(
+                text(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_name = 'ai_profiles'
+                    )
+                    """
+                )
+            ).scalar()
+            if not exists:
+                return
+
+        rows = conn.execute(
+            text(
+                "SELECT id, availability_schedule FROM ai_profiles "
+                "WHERE professional_availability IS NULL AND availability_schedule IS NOT NULL"
+            )
+        ).fetchall()
+        for profile_id, raw_schedule in rows:
+            raw = str(raw_schedule or "").strip()
+            if not raw:
+                continue
+            schedule = _parse_weekday_schedule(raw)
+            if schedule is not None:
+                # A grade continua a ser a janela de resposta; a IA de agendamento passa
+                # a receber a mesma disponibilidade que já via, em texto legível.
+                conn.execute(
+                    text("UPDATE ai_profiles SET professional_availability = :value WHERE id = :id"),
+                    {"value": _format_weekday_schedule_pt(schedule), "id": profile_id},
+                )
+            else:
+                # Texto livre nunca funcionou como janela de resposta (humanization.py não
+                # o consegue ler e não bloqueia nada) — "custom" sem grade vira "24h", que
+                # é o comportamento efetivo.
+                conn.execute(
+                    text(
+                        "UPDATE ai_profiles SET professional_availability = :value, "
+                        "availability_schedule = NULL, "
+                        "availability_mode = CASE WHEN availability_mode = 'custom' THEN '24h' "
+                        "ELSE availability_mode END "
+                        "WHERE id = :id"
+                    ),
+                    {"value": raw, "id": profile_id},
+                )
 
 
 def ensure_auth_otps_table() -> None:

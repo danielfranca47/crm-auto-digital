@@ -4316,7 +4316,12 @@ def _build_child_prompt_agendamento(
         "name": _resolve_lead_name(lead),
         "category": lead.get("category"),
     }
-    availability_schedule = str(ai_profile.get("availability_schedule") or "").strip()
+    # Horários de atendimento do profissional. Perfil sem a chave = backend-core ainda
+    # sem a coluna (deploy em curso): cai no campo antigo, que guardava os dois sentidos.
+    _availability_key = (
+        "professional_availability" if "professional_availability" in ai_profile else "availability_schedule"
+    )
+    professional_availability = str(ai_profile.get(_availability_key) or "").strip()
     ai_summary = {
         "name": ai_profile.get("name"),
         "brand_name": ai_profile.get("brand_name"),
@@ -4324,7 +4329,7 @@ def _build_child_prompt_agendamento(
         "niche": ai_profile.get("niche"),
         "agent_mode": ai_profile.get("agent_mode"),
         "timezone": ai_profile.get("timezone"),
-        "availability_schedule": availability_schedule or None,
+        "professional_availability": professional_availability or None,
         "custom_instructions": ai_profile.get("custom_instructions"),
     }
     playbook_summary = {
@@ -4349,7 +4354,7 @@ def _build_child_prompt_agendamento(
     scheduling_offer_style = str(ai_profile.get("scheduling_offer_style") or "offer_alternatives").strip().lower()
 
     _avail_block = ""
-    if availability_schedule:
+    if professional_availability:
         if scheduling_offer_style == "confirm_exact":
             _offer_instruction = (
                 "REGRA CRÍTICA — CONFIRMAÇÃO DIRETA (obrigatória, máxima prioridade nesta fase):\n"
@@ -4373,7 +4378,7 @@ def _build_child_prompt_agendamento(
                 "no que o lead solicitou. Use linguagem natural e fluida.\n\n"
             )
         _avail_block = (
-            f"DISPONIBILIDADE DO PROFISSIONAL:\n{availability_schedule}\n\n"
+            f"DISPONIBILIDADE DO PROFISSIONAL:\n{professional_availability}\n\n"
             + _offer_instruction
         )
     else:

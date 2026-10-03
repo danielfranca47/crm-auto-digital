@@ -77,6 +77,7 @@ class AIProfile(Base):
     meeting_management_enabled = Column(Boolean, nullable=True, default=True)
     availability_schedule = Column(String, nullable=True)
     availability_mode = Column(String, nullable=True, server_default="24h")
+    professional_availability = Column(String, nullable=True)
     first_reply_delay_min_seconds = Column(Integer, nullable=True, server_default="0")
     first_reply_delay_max_seconds = Column(Integer, nullable=True, server_default="0")
     reply_delay_min_seconds = Column(Integer, nullable=True, server_default="0")

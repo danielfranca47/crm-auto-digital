@@ -1,13 +1,15 @@
 from app.services.decision_engine import _build_child_prompt_agendamento
 from app.services.orchestrator_models import MotherDecision
 
+RESPONSE_WINDOW_GRID = '{"mon":"09:00-18:00","tue":"09:00-18:00"}'
+
 
 def _base_context(scheduling_offer_style: str | None = None):
     ai_profile = {
         "agent_mode": "agenda",
         "template_key": "hybrid_scheduler",
         "timezone": "America/Sao_Paulo",
-        "availability_schedule": '{"mon":"09:00-18:00","tue":"09:00-18:00"}',
+        "professional_availability": "Seg a Ter: 09:00–18:00",
     }
     if scheduling_offer_style is not None:
         ai_profile["scheduling_offer_style"] = scheduling_offer_style
@@ -48,3 +50,25 @@ def test_confirm_exact_with_empty_calendar_states_agenda_is_free():
     prompt = _build_child_prompt_agendamento(context, "Pode ser às 9h então", _mother())
     assert "nenhum compromisso encontrado" in prompt
     assert "a agenda está livre no período consultado" in prompt
+
+
+def test_professional_availability_is_what_the_prompt_shows():
+    prompt = _build_child_prompt_agendamento(_base_context(), "Pode ser às 9h então", _mother())
+    assert "DISPONIBILIDADE DO PROFISSIONAL:\nSeg a Ter: 09:00–18:00" in prompt
+
+
+def test_response_window_grid_is_not_professional_availability():
+    context = _base_context()
+    context["ai_profile"]["professional_availability"] = None
+    context["ai_profile"]["availability_schedule"] = RESPONSE_WINDOW_GRID
+    prompt = _build_child_prompt_agendamento(context, "Pode ser às 9h então", _mother())
+    assert "DISPONIBILIDADE: não configurada." in prompt
+    assert RESPONSE_WINDOW_GRID not in prompt
+
+
+def test_profile_without_new_field_falls_back_to_legacy_field():
+    context = _base_context()
+    del context["ai_profile"]["professional_availability"]
+    context["ai_profile"]["availability_schedule"] = "Ter e Qui: 14h, 16h"
+    prompt = _build_child_prompt_agendamento(context, "Pode ser às 9h então", _mother())
+    assert "DISPONIBILIDADE DO PROFISSIONAL:\nTer e Qui: 14h, 16h" in prompt

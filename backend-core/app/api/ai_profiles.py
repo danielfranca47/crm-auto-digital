@@ -229,6 +229,7 @@ class AIProfileBase(BaseModel):
     default_session_duration_minutes: Optional[int] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = "24h"
+    professional_availability: Optional[str] = None
     meeting_management_enabled: bool = True
     response_style: Optional[ResponseStyle] = ResponseStyle.active
     qualification_price_disclosure: Optional[QualificationPriceDisclosure] = (
@@ -312,6 +313,7 @@ class AIProfileUpdate(BaseModel):
     default_session_duration_minutes: Optional[int] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = None
+    professional_availability: Optional[str] = None
     meeting_management_enabled: Optional[bool] = None
     response_style: Optional[ResponseStyle] = None
     qualification_price_disclosure: Optional[QualificationPriceDisclosure] = None
