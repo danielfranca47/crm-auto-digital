@@ -290,7 +290,7 @@ implementação).
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `<hash>` | Fail-open real na consulta do plano, sessão expirada apagada, polling fora das rotas públicas, catálogo só com planos vendidos |
+| 1 | `9a965be` | Fail-open real na consulta do plano, sessão expirada apagada, polling fora das rotas públicas, catálogo só com planos vendidos |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
