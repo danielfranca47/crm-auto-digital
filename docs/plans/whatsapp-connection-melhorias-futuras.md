@@ -140,3 +140,69 @@ conexões com status normalizado `active`. Uma conexão marcada como
 "desligada" no banco até outro evento. Até hoje não causou problema real.
 Se causar, basta alargar a query do job, com atenção ao custo de chamadas à
 UazAPI e ao email de reconexão que isso dispararia.
+
+---
+
+## M6 — Validações ao vivo puladas na limpeza de instâncias da UazAPI
+
+**Prioridade: BAIXA** — retomar só se surgir necessidade
+
+**Contexto:** dois cenários de `fix-limpeza-instancias-uazapi-fantasmas.md`
+foram pulados na graduação (03/10/2026) por decisão do utilizador. A
+funcionalidade está descrita em
+[`docs/architecture/whatsapp-connection.md`](../architecture/whatsapp-connection.md#capacidade-de-instâncias-na-uazapi).
+
+- **Conexão viva sobrevive à limpeza:** nenhum WhatsApp estava conectado em
+  produção nas limpezas já corridas, por isso não há prova ao vivo. Coberto
+  por `backend-core/tests/test_uazapi_capacity.py` e pelo critério do código
+  (só o status exato `disconnected` é apagável). Para validar: conectar um
+  WhatsApp numa conta de teste, deixá-lo ligado durante a limpeza das 03:00
+  UTC e conferir no log do `backend-core` que `event=uazapi_capacity` não o
+  inclui em `deleted_orphans` e que o job das 06:00 UTC reporta `checked: 1,
+  marked_dead: 0`.
+- **Aviso na tela com o teto cheio:** o toast "Não foi possível gerar o QR
+  code" de `ConexaoNumero.tsx` não foi visto ao vivo com a mensagem de limite
+  atingido. O 503 do backend está coberto por teste. Para validar: encher o
+  teto só com instâncias não apagáveis (conectadas / a ler QR) e provocar um
+  init a partir do CRM.
+
+---
+
+## M7 — Alerta ativo ao admin quando a UazAPI estiver perto do teto de instâncias
+
+**Prioridade: MÉDIA**
+
+**Contexto:** surgiu como "Ajuste possível" na graduação de
+`fix-limpeza-instancias-uazapi-fantasmas.md`. A ocupação só aparece no log
+diário `event=uazapi_capacity` (`total_before`/`total_after`) do
+`backend-core`, que ninguém lê por rotina. O reclaim por demanda evita o
+bloqueio enquanto houver órfãs ou mortas para apagar; com o teto cheio só de
+instâncias vivas, o cliente recebe 503 e a única saída é um plano UazAPI
+maior. Um alerta (email ou painel admin) quando o total se aproximar do teto
+daria essa informação com antecedência.
+
+---
+
+## M8 — Painel admin listar também as instâncias órfãs da UazAPI
+
+**Prioridade: BAIXA**
+
+**Contexto:** surgiu como "Ajuste possível" na graduação de
+`fix-limpeza-instancias-uazapi-fantasmas.md`.
+`frontend-admin/src/pages/AdminInstances.tsx` só mostra o que está no banco
+do `backend-core`. Poderia cruzar com `uazapi_admin.list_instances()`
+(`GET /instance/all`) para mostrar também as órfãs. A limpeza diária já as
+apaga sozinha, por isso é só visibilidade.
+
+---
+
+## M9 — "Apagar" do painel admin remove a linha local mesmo quando a UazAPI falha
+
+**Prioridade: BAIXA**
+
+**Contexto:** surgiu como "Ajuste possível" na graduação de
+`fix-limpeza-instancias-uazapi-fantasmas.md`. `DELETE /admin/instances/{id}`
+(`backend-core`) apaga o registo local mesmo se o delete na UazAPI falhar, o
+que deixa uma órfã do lado da UazAPI. A limpeza diária apanha-a em menos de
+24h. Corrigir na origem seria só apagar a linha local depois de a UazAPI
+confirmar (ou devolver 404).
