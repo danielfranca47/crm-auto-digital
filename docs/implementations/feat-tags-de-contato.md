@@ -1,20 +1,30 @@
-# Tags de contato: como o agente sabe o que cada cliente já recebeu?
+# Tags de contato
 
-**Status:** Pronta para decisão
-**Origem:** `levantamentos/2026-10-03-acompanhamento-pos-agendamento.md` — cenário 3
+**Branch:** (a criar)
+**Status:** Aguardando Plan Mode
+**Origem:** docs/discovery (investigação `tags-de-contato`, graduada em 2026-10-03) — levantamento em `docs/discovery/levantamentos/2026-10-03-acompanhamento-pos-agendamento.md`, cenário 3
 **Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (quem adota o agente já tem uma carteira de clientes); secundária M2
-**Área do sistema:** backend-crm (leads, importação, dispatch de ações) / backend-executors (motor do Fluxo de Venda) / frontend-crm (card do lead, Kanban, construtor do Fluxo de Venda)
 
 ---
 
-## Pergunta a responder
+## Motivação
 
 Quando o dono de um negócio liga o agente numa carteira de clientes que já existe,
-como evitar que o agente trate clientes antigos como novos — e como o dono pode
-"carimbar" um contato para registar o que ele já recebeu (morada, campanha, primeira
-sessão)?
+o agente trata clientes antigos como novos (manda morada, boas-vindas) — e o dono
+não tem como "carimbar" um contato para registar o que ele já recebeu (morada,
+campanha, primeira sessão).
 
-## O que já se sabe
+**Solução aprovada (ver "Opção B" abaixo):** tags visíveis no contato, que
+complementam — não substituem — o "disparar uma vez por lead": o dono vê, edita e
+carimba em massa; os fluxos ganham a condição "tem / não tem a tag" e a ação
+"adicionar tag".
+
+## Área do sistema
+
+backend-crm (leads, importação, dispatch de ações) / backend-executors (motor do
+Fluxo de Venda) / frontend-crm (card do lead, Kanban, construtor do Fluxo de Venda)
+
+## Estado atual
 
 - **Não existe nenhuma funcionalidade de tag em leads.** Nenhuma coluna, rota ou
   componente (busca por `tags` no backend e no frontend só encontra etiquetas de
@@ -71,7 +81,7 @@ agente na sua base existente.
 Padrão comum: a etiqueta é **do contato** (não do fluxo), **visível**, e os
 fluxos podem **ler** ("tem / não tem") e **escrever** ("adicionar") etiquetas.
 
-## Opções de solução
+## Opções avaliadas — aprovada a Opção B
 
 ### Opção A — Não fazer nada / adiar
 - **Prós:** zero esforço.
@@ -104,7 +114,7 @@ fluxos podem **ler** ("tem / não tem") e **escrever** ("adicionar") etiquetas.
   3. Carimbar em massa (seleção + importação por planilha) e contexto para a IA.
 
   O gatilho "tag adicionada / removida" não entra aqui — é a fase 4 de
-  [`jornada-pos-agendamento.md`](jornada-pos-agendamento.md), porque depende do
+  [`feat-workflows-por-gatilho.md`](feat-workflows-por-gatilho.md), porque depende do
   motor dos workflows por gatilho e das travas de envio em massa.
 
 ### Opção C — Substituir o "disparar uma vez" por tags
@@ -118,9 +128,9 @@ fluxos podem **ler** ("tem / não tem") e **escrever** ("adicionar") etiquetas.
   pequeno.
 - **Esforço:** ~5 fases
 
-## Recomendação
+## Porquê a Opção B
 
-**Opção B.** As duas coisas respondem a perguntas diferentes: "este bloco já
+As duas coisas respondem a perguntas diferentes: "este bloco já
 disparou para este contato?" (o sistema sabe sozinho) e "o que eu, dono, quero
 registar sobre este contato?" (só o dono sabe — especialmente o que aconteceu
 antes de o sistema existir). Juntar as duas (Opção C) tiraria a simplicidade da
@@ -134,27 +144,10 @@ recebem uma vez.
 **Tags e variáveis do contato são coisas diferentes e complementares** (como no
 ManyChat): a tag responde sim/não ("já recebeu a morada?"); a variável guarda um
 valor ("terapeuta = Ana"). As variáveis do contato entram pela fase 1 dos
-workflows por gatilho ([`jornada-pos-agendamento.md`](jornada-pos-agendamento.md));
+workflows por gatilho ([`feat-workflows-por-gatilho.md`](feat-workflows-por-gatilho.md));
 no card do contato as duas devem aparecer juntas, na mesma secção.
 
-## Pontuação RICE
-
-| R | I | C | E | Score |
-|---|---|---|---|---|
-| 2 | 2 | 0.8 | 3 | **1.07** |
-
-- **R = 2:** afeta as contas que entram com carteira de clientes própria — a maioria dos negócios estabelecidos, mas não quem começa do zero.
-- **I = 2:** evita o erro mais visível na adoção (M1) e dá à IA contexto para não tratar cliente como desconhecido (M2); sozinha não fecha venda.
-- **C = 0.8:** comportamento confirmado no código e padrão claro no mercado; ainda sem caso real em produção.
-- **E = 3:** três fases.
-
-## Veredito proposto
-
-**Implementations** — entra logo a seguir à fase 1 dos workflows por gatilho
-([`jornada-pos-agendamento.md`](jornada-pos-agendamento.md)), porque a condição
-"primeira vez" desses workflows depende dela para ser fiável.
-
-## Perguntas ao utilizador
+## Pontos por decidir (perguntar ao utilizador no Plan Mode)
 
 1. **Quem cria as etiquetas:** lista livre (escreve e cria na hora, como
    hashtag) ou uma lista fechada que você define primeiro em Configurações?
@@ -171,6 +164,14 @@ no card do contato as duas devem aparecer juntas, na mesma secção.
 - Onde guardar (lista no próprio lead vs. tabela própria) e como filtrar no
   Kanban — decisão técnica do Plan Mode.
 - Ação "remover tag" — não pedida; deixar para depois de ver o uso real.
+
+## Próximo passo
+
+Diagnóstico (Plan Mode) ainda não feito — seguir o Passo 0 de
+`_guia-documentar-implementacao.md` antes de qualquer código. Entra logo a seguir
+à fase 1 de [`feat-workflows-por-gatilho.md`](feat-workflows-por-gatilho.md) (a
+condição "primeira vez" desses workflows depende das tags para ser fiável) — ordem
+completa nesse arquivo, secção "Próximo passo".
 
 ## Fontes
 

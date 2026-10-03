@@ -1,20 +1,31 @@
-# Os workflows devem ser editados numa tela de nós ligados livremente?
+# Canvas de nós para os workflows
 
-**Status:** Pronta para decisão
-**Origem:** pedido do utilizador em conversa (03/10/2026), na sequência de `levantamentos/2026-10-03-acompanhamento-pos-agendamento.md` — "alterar a visualização desses workflows para algo de ligar nós, mais livre, tanto na horizontal como na vertical"
+**Branch:** (a criar)
+**Status:** Aguardando Plan Mode
+**Origem:** docs/discovery (investigação `workflows-canvas-de-nos`, graduada em 2026-10-03) — pedido do utilizador registado em `docs/discovery/levantamentos/2026-10-03-acompanhamento-pos-agendamento.md`, "Complemento do utilizador"
 **Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (clareza da configuração e impacto em demonstração); ligação indireta
-**Área do sistema:** frontend-crm (Configurar Agente → Fluxo de Venda e novos workflows) / backend-core (onde o desenho é guardado)
 
 ---
 
-## Pergunta a responder
+## Motivação
 
-Vale a pena trocar a tela atual do Fluxo de Venda (lista vertical de blocos por
-fase) por um canvas ao estilo ManyChat — blocos soltos que o utilizador arrasta,
-liga com linhas e organiza na horizontal ou na vertical — e usar essa mesma tela
-nos novos workflows por gatilho?
+O utilizador quer que os workflows (o Fluxo de Venda e os novos workflows por
+gatilho) sejam editados numa tela ao estilo ManyChat — blocos soltos que se
+arrastam, ligam com linhas e organizam na horizontal ou na vertical — em vez da
+lista vertical fixa de hoje.
 
-## O que já se sabe
+**Solução aprovada (ver "Opção B" abaixo):** um único canvas (React Flow) para
+os dois tipos de workflow. Nos workflows por gatilho é canvas de verdade; no
+Fluxo de Venda é uma nova vista do desenho atual, com as fases como molduras e
+sem mexer no motor. Abre da esquerda para a direita, tem comando "Alinhar" e
+mantém a lista como vista alternativa (telemóvel).
+
+## Área do sistema
+
+frontend-crm (Configurar Agente → Fluxo de Venda e novos workflows) /
+backend-core (onde o desenho é guardado)
+
+## Estado atual
 
 - A tela atual é uma **lista vertical fixa**: uma secção por fase, blocos
   empilhados, edição em janelas (`CamadaFluxoVenda.tsx`, 1.922 linhas —
@@ -53,7 +64,7 @@ de "seguir a ordem" seria reescrever a peça mais sensível do agente.
    com o rato altera, por baixo, a ordem ou a dependência. O motor não muda.
 2. **Canvas como modelo** — as linhas passam a ser a verdade, e o motor executa
    seguindo-as. Natural para os **novos** workflows por gatilho (que ainda não
-   têm motor — ver [`jornada-pos-agendamento.md`](jornada-pos-agendamento.md),
+   têm motor — ver [`feat-workflows-por-gatilho.md`](feat-workflows-por-gatilho.md),
    "Evidência", ponto 6); arriscado para o Fluxo de Venda.
 
 **Telemóvel.** A tela atual do Fluxo de Venda não tem nenhuma adaptação a ecrã
@@ -68,7 +79,7 @@ pequeno. Um canvas livre é ainda mais difícil de usar num telemóvel do que um
 | **React Flow** (`@xyflow/react`) | Biblioteca aberta (licença MIT) para editores de nós em React: nós personalizados, ligações, zoom, minimapa; organização automática com `dagre`/`elkjs`, com direção configurável (de cima para baixo ou da esquerda para a direita); encaixe em grelha (`snapToGrid`); arrastar e ligar nós também em ecrã tátil. As "linhas-guia de alinhamento ao arrastar" só existem como exemplo pago — teríamos de as fazer nós | **Sim** — encaixa na nossa stack (React 18); orientação, arrumação automática e encaixe em grelha vêm praticamente prontos |
 | **GoHighLevel** | Construtor de fluxos em árvore vertical: gatilhos no topo, passos e ramos Se/Senão para baixo — menos livre, mais guiado | **Parcial** — mostra a alternativa "guiada": menos liberdade, menos formas de o utilizador se perder |
 
-## Opções de solução
+## Opções avaliadas — aprovada a Opção B
 
 ### Opção A — Não fazer nada / manter a lista
 - **Prós:** zero esforço; a lista é fácil num telemóvel.
@@ -107,7 +118,7 @@ pequeno. Um canvas livre é ainda mais difícil de usar num telemóvel do que um
 - **Esforço:** ~3 fases
   1. Canvas dos workflows por gatilho (criar/ligar nós, horizontal/vertical,
      "Alinhar", guardar posições, lista no telemóvel) — é o editor da fase 2 de
-     `jornada-pos-agendamento.md`, feito já neste formato em vez de em lista.
+     `feat-workflows-por-gatilho.md`, feito já neste formato em vez de em lista.
   2. Fluxo de Venda visto no canvas (molduras por fase, nós, linhas derivadas;
      clicar num nó abre a mesma janela de edição de hoje).
   3. Fluxo de Venda editável pelo canvas (criar, ligar, reordenar) + alternância
@@ -123,9 +134,9 @@ pequeno. Um canvas livre é ainda mais difícil de usar num telemóvel do que um
   que se executam em fila. Risco alto de regressão no que hoje funciona.
 - **Esforço:** ~6 fases ou mais
 
-## Recomendação
+## Porquê a Opção B
 
-**Opção B.** Dá o canvas livre onde ele é natural (workflows por gatilho, que
+Dá o canvas livre onde ele é natural (workflows por gatilho, que
 são fluxogramas de verdade) e o mesmo visual no Fluxo de Venda sem tocar no
 motor. A limitação honesta: no Fluxo de Venda as fases continuam a ser molduras,
 porque quem conduz a conversa de fase em fase é a IA — as linhas livres ficam
@@ -136,26 +147,9 @@ que desbloqueia ligar a Lara são as mensagens (fase 1 dos workflows). Por isso 
 ordem sugerida é: fase 1 dos workflows com formulários simples → canvas já como
 editor dos workflows (fase 1 daqui) → Fluxo de Venda no canvas.
 
-## Pontuação RICE
+## Decisões do utilizador
 
-| R | I | C | E | Score |
-|---|---|---|---|---|
-| 3 | 1 | 0.5 | 3 | **0.50** |
-
-- **R = 3:** todos os utilizadores configuram workflows.
-- **I = 1:** melhora a clareza e a apresentação do produto, mas não muda diretamente o que o agente faz (M1 indireto).
-- **C = 0.5:** hipótese — não há medição de que o canvas seja mais fácil do que a lista para um dono de negócio sem perfil técnico.
-- **E = 3:** três fases; a primeira coincide com o editor que os workflows por gatilho precisam de qualquer forma.
-
-## Veredito proposto
-
-**Implementations, em sequência** — a fase 1 entra junto com o editor dos
-workflows por gatilho; as fases 2–3 (Fluxo de Venda no canvas) depois de os
-workflows estarem a funcionar com clientes reais.
-
-## Perguntas ao utilizador
-
-Nenhuma pendente. Decisões do utilizador (03/10/2026), já refletidas na Opção B:
+Nenhuma pergunta pendente. Decisões (03/10/2026), já refletidas na Opção B:
 
 | Tema | Decisão |
 |---|---|
@@ -170,6 +164,15 @@ Nenhuma pendente. Decisões do utilizador (03/10/2026), já refletidas na Opçã
   canvas não piora a compreensão do Fluxo de Venda.
 - Linhas-guia de alinhamento enquanto se arrasta um nó (além do comando
   "Alinhar") — não pedidas; avaliar o custo no Plan Mode.
+
+## Próximo passo
+
+Diagnóstico (Plan Mode) ainda não feito — seguir o Passo 0 de
+`_guia-documentar-implementacao.md` antes de qualquer código. A fase 1 entra
+junto com o editor dos workflows por gatilho (fase 2 de
+[`feat-workflows-por-gatilho.md`](feat-workflows-por-gatilho.md)); as fases 2–3
+(Fluxo de Venda no canvas) depois de os workflows estarem a funcionar com
+clientes reais. Ordem completa nesse arquivo, secção "Próximo passo".
 
 ## Fontes
 

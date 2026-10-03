@@ -2,7 +2,7 @@
 
 **Branch:** (a criar)
 **Status:** Aguardando Plan Mode
-**Origem:** `docs/discovery/jornada-pos-agendamento.md` — "Evidência no código", ponto 7 (análise comparativa de janelas de horário pedida pelo utilizador em 03/10/2026)
+**Origem:** `docs/implementations/feat-workflows-por-gatilho.md` — "Evidência no código", ponto 7 (análise comparativa de janelas de horário pedida pelo utilizador em 03/10/2026)
 
 ---
 

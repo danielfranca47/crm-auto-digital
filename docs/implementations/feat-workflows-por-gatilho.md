@@ -1,20 +1,36 @@
-# O que o cliente recebe entre o agendamento e o pós-sessão?
+# Workflows por gatilho — acompanhamento do cliente depois do agendamento
 
-**Status:** Pronta para decisão
-**Origem:** `levantamentos/2026-10-03-acompanhamento-pos-agendamento.md` — cenários 1, 2, 4a, 4b e 4c
+**Branch:** (a criar)
+**Status:** Aguardando Plan Mode
+**Origem:** docs/discovery (investigação `jornada-pos-agendamento`, graduada em 2026-10-03) — levantamento em `docs/discovery/levantamentos/2026-10-03-acompanhamento-pos-agendamento.md`
 **Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (nicho inicial: massoterapia com o agente agendador); secundária M2
-**Área do sistema:** backend-crm (appointments, jobs, variáveis) / backend-executors (runner de lembrete, prompt pós-agendamento) / backend-core (AI Profile) / frontend-crm (Configurar Agente, Agenda, card do lead)
 
 ---
 
-## Pergunta a responder
+## Motivação
 
-Depois que a Lara marca uma sessão, o cliente final recebe tudo o que um bom
-atendimento humano enviaria — confirmação no formato do negócio, morada, lembrete,
-instruções de chegada, mensagem pós-sessão — e o dono da conta consegue ver e
-configurar isso com clareza?
+O dono do produto, falando como cliente-tipo do nicho de massoterapia (Agente 3),
+não confia em ligar a Lara no próprio WhatsApp: depois que ela marca uma sessão, o
+cliente final não recebe o que um bom atendimento humano enviaria — confirmação no
+formato do negócio, morada, lembrete com o texto do dono, instruções de chegada,
+mensagem pós-sessão — e o dono não vê nem configura isso com clareza.
 
-## O que já se sabe
+**Solução aprovada (ver "Opção D" abaixo):** workflows por gatilho, no modelo do
+ManyChat. O Fluxo de Venda continua a ser o workflow principal; os novos
+workflows disparam por evento ou relógio (agendamento criado, X antes/depois do
+horário, estado do agendamento, entrada em coluna, tag) e usam os mesmos blocos.
+Vêm com modelos prontos. O profissional da sessão é uma variável do contato.
+
+**Começar pela fase 1** (lista de fases na Opção D) — depois de
+`fix-disponibilidade-campo-duplo-sentido.md`, do qual a janela de envios depende.
+
+## Área do sistema
+
+backend-crm (appointments, jobs, variáveis, dispatch de ações) / backend-executors
+(runner de lembrete, prompt pós-agendamento, Fluxo de Venda) / backend-core (AI
+Profile) / frontend-crm (Configurar Agente, Agenda, card do lead)
+
+## Estado atual por cenário
 
 Resposta curta: **existe uma parte, mas escondida, pouco configurável e escrita pela
 IA em vez de pelo dono do negócio.** Cenário a cenário:
@@ -186,7 +202,7 @@ Variáveis mais frequentes no mercado → o que proporíamos:
 | `{{negocio.local}}` | Rua …, 101 | Sim |
 | `{{negocio.nome}}` | Espaço X | Sim |
 
-## Opções de solução
+## Opções avaliadas — aprovada a Opção D
 
 ### Opção A — Não fazer nada / adiar
 - **Prós:** zero esforço; lembretes de 24h/2h continuam a sair.
@@ -297,13 +313,13 @@ Variáveis mais frequentes no mercado → o que proporíamos:
   3. Gatilhos "agendamento mudou de estado" e "entrou numa coluna"; condição
      "primeira vez"; ação "mover de coluna"; aviso ao dono de sessões por marcar.
   4. Ligação com tags (gatilho, condição, ação) — depende de
-     [`tags-de-contato.md`](tags-de-contato.md).
+     [`feat-tags-de-contato.md`](feat-tags-de-contato.md).
   5. Espera e Condição dentro dos workflows por evento + travas (ritmo, ciclos,
      confirmação de envio em massa).
   6. Perto do horário: a Lara volta a responder dúvidas práticas com sessão
      marcada; marcação "cliente chegou" e condição "chegada não confirmada".
 
-## Recomendação
+## Porquê a Opção D
 
 **Opção D, entregue por fatias, começando pela fase 1.** É o mesmo trabalho de
 motor que a linha do tempo fixa exigiria, mas fica a servir qualquer cenário
@@ -313,50 +329,32 @@ utilizador, morada na primeira vez e lembretes com o texto dele dentro do horár
 certo — o suficiente para ligar a Lara com confiança.
 
 Sobre a tela: a edição livre em nós ligados é tratada em
-[`workflows-canvas-de-nos.md`](workflows-canvas-de-nos.md). Para não construir
+[`feat-workflows-canvas-de-nos.md`](feat-workflows-canvas-de-nos.md). Para não construir
 duas telas, a fase 1 usa só formulários simples nos modelos prontos; o editor
 completo (fase 2) já nasce no formato que for decidido lá.
 
-## Pontuação RICE
-
-| R | I | C | E | Score |
-|---|---|---|---|---|
-| 3 | 3 | 0.8 | 6 | **1.20** |
-
-- **R = 3:** afeta todos os clientes dos agentes com agendamento (1 e 3), que são o nicho de entrada; os gatilhos de coluna/tag servem também o Agente 2.
-- **I = 3:** bloqueia a adoção pelo cliente-tipo (M1) e é onde o agente hoje responde pior — 1 frase vazia perto da sessão (M2).
-- **C = 0.8:** lacunas confirmadas no código e padrão claro no mercado; mas a dor vem de um utilizador (o dono) e a produção quase não tem compromissos reais para medir.
-- **E = 6:** seis fases, cada uma entregável sozinha; as fases 1–3 concentram o valor pedido.
-
-## Veredito proposto
-
-**Implementations** — começar pela fase 1 (base + modelos prontos de confirmação e
-lembretes).
-
-## Perguntas ao utilizador
+## Decisões do utilizador e pontos por decidir
 
 Já decidido (03/10/2026): envios em massa com confirmação e intervalo; o
 profissional da sessão é uma variável do contato criada no workflow (a plataforma
 é multinicho — não fixar "terapeuta"); lembrete antecipado de fábrica como
 sugerido, editável pelo utilizador; **agenda separada por profissional** quando a
-conta declara que trabalha com mais de um (com um só, tudo fica como hoje) — é uma
-entrega própria, descrita em `docs/plans/agentes-agenda-melhorias-futuras.md`, M1,
-e não faz parte das fases desta investigação.
+conta declara que trabalha com mais de um (com um só, tudo fica como hoje), em
+todos os planos — é uma entrega própria, descrita em
+`docs/plans/agentes-agenda-melhorias-futuras.md`, M1, e não faz parte das fases
+deste arquivo.
 
 Por decidir — nenhuma trava a fase 1, cada uma pode esperar pela fase respetiva:
 
-1. **Agenda por profissional e planos:** a decisão anterior era reservar vários
-   profissionais para os planos Scale/Enterprise. Mantém-se essa regra, ou passa
-   a estar disponível em todos os planos?
-2. **Dúvidas depois de agendar:** a Lara pode responder dúvidas práticas (morada,
+1. **Dúvidas depois de agendar:** a Lara pode responder dúvidas práticas (morada,
    como chegar, o que levar) **sempre** que o cliente já tem sessão marcada, ou só
    numa janela perto do horário? Sugestão: sempre — nunca deixa o cliente sem
    resposta; as janelas ficam só para as mensagens que a Lara envia por iniciativa
    própria.
-3. **"Cliente chegou":** hoje, como o massagista lhe avisa que o cliente chegou?
+2. **"Cliente chegou":** hoje, como o profissional avisa que o cliente chegou?
    (Isso decide onde pôr o botão: no telemóvel, no CRM, ou responder a uma
    mensagem no WhatsApp.)
-4. **Sessão realizada:** se ninguém marcar a sessão como realizada, prefere que a
+3. **Sessão realizada:** se ninguém marcar a sessão como realizada, prefere que a
    mensagem pós-sessão **não saia** (como faz a Fresha) ou que saia sozinha X horas
    depois, a menos que alguém marque "não compareceu"?
 
@@ -381,6 +379,18 @@ Por decidir — nenhuma trava a fase 1, cada uma pode esperar pela fase respetiv
   resolvedor atual só remove o marcador; decidir se a linha inteira deve sumir.
 - Unificar a janela de envios por iniciativa própria (follow-up + workflows)
   depende da correção do campo de disponibilidade com duplo sentido.
+
+## Próximo passo
+
+Diagnóstico (Plan Mode) ainda não feito — seguir o Passo 0 de
+`_guia-documentar-implementacao.md` para a **fase 1** antes de qualquer código.
+Ordem de execução acordada com o utilizador (03/10/2026):
+
+1. `fix-disponibilidade-campo-duplo-sentido.md`
+2. Este arquivo, fase 1 (motor + modelos prontos + variáveis do contato)
+3. `feat-tags-de-contato.md`
+4. Agenda por profissional (`docs/plans/agentes-agenda-melhorias-futuras.md`, M1)
+5. `feat-workflows-canvas-de-nos.md` e as fases 2–6 deste arquivo
 
 ## Fontes
 

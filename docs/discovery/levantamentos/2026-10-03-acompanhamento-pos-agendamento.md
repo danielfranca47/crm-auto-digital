@@ -102,6 +102,10 @@ e customizável.
 
 | Gap | Destino |
 |---|---|
-| Cenários 1, 2, 4a, 4b, 4c — o que o cliente recebe entre o agendamento e o pós-sessão (solução: workflows por gatilho) | [`jornada-pos-agendamento.md`](../jornada-pos-agendamento.md) |
-| Cenário 3 — tags de contato e relação com "disparar uma vez por lead" | [`tags-de-contato.md`](../tags-de-contato.md) |
-| Complemento — tela de nós ligados livremente (canvas) | [`workflows-canvas-de-nos.md`](../workflows-canvas-de-nos.md) |
+Investigações graduadas para implementações em 03/10/2026:
+
+| Cenários 1, 2, 4a, 4b, 4c — o que o cliente recebe entre o agendamento e o pós-sessão (solução: workflows por gatilho) | [`feat-workflows-por-gatilho.md`](../../implementations/feat-workflows-por-gatilho.md) |
+| Cenário 3 — tags de contato e relação com "disparar uma vez por lead" | [`feat-tags-de-contato.md`](../../implementations/feat-tags-de-contato.md) |
+| Complemento — tela de nós ligados livremente (canvas) | [`feat-workflows-canvas-de-nos.md`](../../implementations/feat-workflows-canvas-de-nos.md) |
+| Defeito encontrado na análise de janelas de horário | [`fix-disponibilidade-campo-duplo-sentido.md`](../../implementations/fix-disponibilidade-campo-duplo-sentido.md) |
+| Agenda separada por profissional | [`agentes-agenda-melhorias-futuras.md`](../../plans/agentes-agenda-melhorias-futuras.md), M1 |

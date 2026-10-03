@@ -10,9 +10,9 @@
 
 ## M1 — Suporte a múltiplos profissionais/agendas por conta
 
-**Prioridade: MÉDIA** (pedido confirmado pelo utilizador em 03/10/2026, na discovery
-[`jornada-pos-agendamento.md`](../discovery/jornada-pos-agendamento.md) — entra depois
-da fase 1 dos workflows por gatilho; falta decidir se fica restrito a Scale/Enterprise)
+**Prioridade: MÉDIA** (pedido confirmado pelo utilizador em 03/10/2026, ver
+[`feat-workflows-por-gatilho.md`](../implementations/feat-workflows-por-gatilho.md) — entra depois
+da fase 1 dos workflows por gatilho e das tags; vale para todos os planos)
 
 **Estado actual:** o sistema assume **um único profissional/agenda por conta**, para todos os planos (Start e Growth). Isto está hardcoded implicitamente em dois mecanismos:
 
@@ -34,12 +34,10 @@ negócios com um ou vários profissionais. Quando a conta declara que trabalha c
 de um profissional, cada um tem **agenda separada** (a IA só oferece um profissional
 quando ele está livre); com um só profissional, o comportamento atual mantém-se. O
 profissional da sessão fica disponível nas mensagens como variável do contato (ver
-discovery acima).
+implementação acima).
 
-**Por confirmar:** a decisão anterior (19/06/2026) reservava vários profissionais para
-os planos Scale/Enterprise ("por enquanto nos planos start e growth será apenas 1
-profissional por conta"). Falta o utilizador dizer se essa restrição por plano se
-mantém.
+**Disponível em todos os planos** (decisão do utilizador, 03/10/2026) — substitui a
+decisão de 19/06/2026 que reservava vários profissionais para Scale/Enterprise.
 
 **Dependência:** `docs/implementations/fix-disponibilidade-campo-duplo-sentido.md` —
 o campo de disponibilidade do profissional está hoje misturado com a janela de
