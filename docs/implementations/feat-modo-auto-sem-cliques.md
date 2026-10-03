@@ -134,13 +134,21 @@ tuas definições pessoais e escolher "Auto" no VS Code.
 - [ ] Confirmar: zero pedidos de permissão
 
 ### Cenário A5 — Barreiras duras funcionam
-- [ ] `git push --force --dry-run` é recusado pela regra `deny`
-- [ ] `railway variables` gera pedido de confirmação (cancelar)
-- **Observação (04/10/2026):** tentado na sessão que fez a implementação — o push
-  forçado em modo simulação **não** foi recusado (nada foi enviado, era
-  simulação). A sessão tinha sido aberta na pasta principal e lê as regras de
-  lá, onde ainda não existem. Validar numa sessão nova: aberta nesta worktree
-  antes do merge, ou em qualquer pasta depois do merge em `main`.
+- [x] `git push --force --dry-run` é recusado pela regra `deny`
+- [x] `railway variables` gera pedido de confirmação (cancelar)
+- **Validado em:** 04/10/2026 — sessão sem ecrã (`claude -p`) lançada dentro
+  desta worktree, com um comando de controlo para cada regra:
+  - `git push --dry-run` correu; `git push --force --dry-run` foi recusado
+    (`Permission to use Bash with command git push --force --dry-run has been denied.`)
+  - `railway --version` correu; `railway variables --help` ficou retido à espera
+    de autorização (`Claude requested permissions to use Bash, but you haven't granted it yet.`).
+    Usou-se `--help` para nenhuma variável de produção aparecer caso a regra
+    falhasse — casa com o mesmo padrão `railway variable*`.
+- **Nota:** numa sessão sem ecrã o pedido de confirmação não tem quem o responda
+  e conta como recusa; numa sessão interativa aparece como pergunta. As regras só
+  valem para sessões abertas numa pasta que já as tenha — esta worktree antes do
+  merge, qualquer pasta depois do merge em `main` (uma sessão aberta na pasta
+  principal antes do merge não recusa o push forçado).
 
 ---
 
@@ -155,6 +163,11 @@ tuas definições pessoais e escolher "Auto" no VS Code.
 - 12 dessas regras pessoais têm o que parece ser uma senha ou token embutido no
   próprio texto da regra (ex.: comandos `curl` de login). Não estão no
   repositório, mas valeria removê-las.
+- Sessões sem ecrã (`claude -p`) abertas numa worktree ignoram as regras `allow`
+  do projeto com o aviso "this workspace has not been trusted" — as `deny` e
+  `ask` continuam a valer e o revisor automático decide o resto. Relevante para
+  o agente que vai executar a fila sozinho: ou a pasta é marcada como de
+  confiança, ou ele depende só do revisor automático.
 - As regras `deny`/`ask` não cobrem formas alternativas de escrever o mesmo
   comando (ex.: opções antes do subcomando). Se isso se revelar um problema, o
   caminho é um hook `PreToolUse` que inspeciona o comando inteiro.
