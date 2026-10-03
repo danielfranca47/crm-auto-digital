@@ -131,6 +131,12 @@ Para o pedido concreto: com `#cliente` aplicada à carteira antiga, o bloco
 e, ao disparar, adiciona `#cliente` — clientes antigos nunca a recebem, novos
 recebem uma vez.
 
+**Tags e variáveis do contato são coisas diferentes e complementares** (como no
+ManyChat): a tag responde sim/não ("já recebeu a morada?"); a variável guarda um
+valor ("terapeuta = Ana"). As variáveis do contato entram pela fase 1 dos
+workflows por gatilho ([`jornada-pos-agendamento.md`](jornada-pos-agendamento.md));
+no card do contato as duas devem aparecer juntas, na mesma secção.
+
 ## Pontuação RICE
 
 | R | I | C | E | Score |

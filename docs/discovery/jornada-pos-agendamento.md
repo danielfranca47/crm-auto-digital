@@ -110,7 +110,52 @@ O vocabulário de blocos (mensagem, mídia, orientação, espera, condição, we
 as variáveis e os formulários de edição são reaproveitáveis; o **motor** dos
 workflows por evento é novo, apoiado na fila de jobs.
 
-**7. Uso real (produção, 03/10/2026, só leitura, agregado).** 1 compromisso real
+**7. Janelas de horário que já existem — e uma colisão.** Hoje há três conceitos
+de horário no AI Profile, guardados em só dois campos:
+
+| O que controla | Onde se configura | Campo | Quem lê |
+|---|---|---|---|
+| Quando a Lara **responde** a quem escreve (fora do horário, a resposta fica agendada para a próxima abertura) | Pipeline → "Janela de horário" (24h / comercial / personalizado) | `availability_mode` + `availability_schedule` (JSON por dia da semana) | `humanization.py:84-158` |
+| Em que horários o **profissional atende** (para a Lara propor horários de sessão) | Apresentação → "Disponibilidade de horários" (texto livre) | **o mesmo** `availability_schedule` | `decision_engine.py:4319, 4376` ("DISPONIBILIDADE DO PROFISSIONAL") |
+| Quando a Lara pode enviar **follow-ups** por iniciativa própria | Follow-up → "Follow-up avançado" | `followup_allowed_hours` (padrão 08:00–20:00) | `followup_reconciler.py` |
+
+As duas primeiras linhas escrevem no **mesmo campo com formatos diferentes**
+(`CamadaPipeline.tsx:334-346` grava JSON; `CamadaApresentacao.tsx:254-259` grava
+texto livre). Uma tela desfaz a outra: quem define a janela de resposta
+personalizada passa a mostrar JSON cru à IA como "disponibilidade do profissional";
+quem escreve os horários de atendimento em texto inutiliza a janela de resposta
+personalizada. O valor de fábrica do campo já é um JSON "seg–sex 09:00–18:00"
+(`types/agente.ts:462`), que chega ao prompt de agendamento como se o profissional
+tivesse declarado essa disponibilidade. É um defeito confirmado, independente desta
+investigação — registado em
+`docs/implementations/fix-disponibilidade-campo-duplo-sentido.md`.
+
+Os lembretes de sessão não respeitam nenhuma das três janelas (ponto 3). Criar uma
+quarta janela só para lembretes aumentaria a confusão; o natural é que tudo o que a
+Lara envia **por iniciativa própria** (follow-ups e workflows) partilhe uma janela
+geral da conta, com possibilidade de cada workflow definir a sua.
+
+**8. Profissionais e dados por contato.**
+- **Não existe cadastro de profissionais com disponibilidade individual.** O que
+  há na Base de Conhecimento é: "Bio do Profissional" (um texto único,
+  `types/agente.ts:809`), e a "Tabela de Serviços e Preços", que admite várias
+  tabelas com título próprio — pensada para "Ana — Hipnoterapia", "Fernanda —
+  Estética" (`docs/architecture/knowledge-base.md`, "Categorias com múltiplos
+  itens"). A disponibilidade é uma só por conta (linha 2 da tabela acima) e a
+  agenda trata a conta como um único profissional
+  (`docs/plans/agentes-agenda-melhorias-futuras.md`, M1).
+- **Variáveis personalizadas atuais são da conta, não do contato:**
+  `ai_profile.custom_variables` guarda um valor igual para todos os clientes
+  (`variable_resolver.py:100-103`).
+- **Já existe onde guardar um valor por contato:** os campos de qualificação.
+  O dono define campos próprios em `qualification_fields` (obrigatórios ou
+  opcionais), a IA extrai o valor da conversa e grava-o por lead em
+  `lead_qualification_state` (`qualification_state.py:123-144, 189`). Esses
+  valores **não estão disponíveis como variável** `{{…}}` nas mensagens, e não
+  há bloco no Fluxo de Venda para gravar um valor de forma fixa ("neste caminho,
+  terapeuta = Ana").
+
+**9. Uso real (produção, 03/10/2026, só leitura, agregado).** 1 compromisso real
 criado em todo o sistema (agosto/2026), 2 lembretes enviados, 0 resultados de sessão
 registados. O fluxo pós-agendamento praticamente nunca rodou com clientes reais —
 coerente com o receio do utilizador de ligar a Lara no próprio WhatsApp, e significa
@@ -137,7 +182,7 @@ Variáveis mais frequentes no mercado → o que proporíamos:
 | `{{agendamento.data}}` | 06/10 | Não (hoje só junto com a hora) |
 | `{{agendamento.dia_semana}}` | terça | Não |
 | `{{agendamento.hora}}` | 14:30 | Não |
-| `{{agendamento.profissional}}` | Ana | Não — falta guardar o profissional |
+| Variável do contato, com o nome que o dono escolher (ex.: `{{contato.terapeuta_atendimento}}`) | Ana | Não — hoje só há variáveis da conta, iguais para todos os contatos |
 | `{{negocio.local}}` | Rua …, 101 | Sim |
 | `{{negocio.nome}}` | Espaço X | Sim |
 
@@ -192,9 +237,25 @@ Variáveis mais frequentes no mercado → o que proporíamos:
   antecedência, chegada não confirmada), Ações (adicionar tag, mover de coluna,
   ligar/desligar o bot, webhook).
 
-  **Regras de envio de cada workflow:** janela de horário permitida (ex.: 08h–18h),
-  uma vez por contato ou a cada ocorrência, e cancelamento automático quando o
-  agendamento é cancelado ou remarcado.
+  **Regras de envio de cada workflow:** uma vez por contato ou a cada ocorrência;
+  cancelamento automático quando o agendamento é cancelado ou remarcado; e
+  **janela de envio** — por omissão "usar a janela geral de envios da conta" (a
+  mesma dos follow-ups), ou uma janela própria do workflow. Fica assim separado,
+  com nomes distintos na tela: *quando a Lara responde* (janela de resposta),
+  *quando a Lara envia por iniciativa própria* (janela de envios) e *quando o
+  profissional atende* (horários de sessão).
+
+  **Variáveis do contato** (direção do utilizador, 03/10/2026): além das variáveis
+  da conta e do agendamento, cada contato passa a ter variáveis próprias, com o
+  nome que o dono quiser (ex.: `terapeuta_atendimento`; noutro nicho, `consultor`,
+  `unidade`, `plano_escolhido`). São preenchidas de três formas — um passo
+  **"Definir variável"** no workflow (valor fixo, no momento em que o cliente
+  escolhe um caminho), a **IA** ao captar o valor na conversa (mecanismo dos
+  campos de qualificação, que já existe), ou **à mão** no card do contato — e
+  ficam disponíveis no seletor `/` para qualquer mensagem posterior. O
+  profissional da sessão deixa de ser um campo fixo do sistema: é a variável que
+  o dono escolher. A lista de profissionais do estabelecimento vive na Base de
+  Conhecimento, para a IA saber quem são e oferecê-los.
 
   **Modelos prontos** ("Confirmação de agendamento", "Lembrete antecipado", "Como
   chegar", "Pós-sessão + avaliação") já vêm na conta, por nicho — quem não quiser
@@ -225,9 +286,12 @@ Variáveis mais frequentes no mercado → o que proporíamos:
 - **Esforço:** ~6 fases
   1. Base: workflows por evento (modelo de dados + motor na fila de jobs), gatilhos
      "agendamento criado" e "X antes/depois do horário", passos Mensagem e Mídia,
-     variáveis `{{agendamento.*}}`, serviço/profissional guardados no compromisso.
-     Entregue como **modelos prontos com formulário simples** (ligar/desligar,
-     texto, antecedência, janela) — substitui o recibo e os lembretes atuais.
+     variáveis `{{agendamento.*}}` (serviço guardado no compromisso) e variáveis
+     do contato (passo "Definir variável" + valores captados pela IA disponíveis
+     no seletor). Entregue como **modelos prontos com formulário simples**
+     (ligar/desligar, texto, antecedência, janela) — substitui o recibo e os
+     lembretes atuais. Lembrete antecipado de fábrica: só se agendou com mais de
+     48h, enviado ~12h antes, entre 08h e 18h — tudo editável.
   2. Lista de workflows em Configurar Agente + criar workflow próprio escolhendo
      gatilho e passos.
   3. Gatilhos "agendamento mudou de estado" e "entrou numa coluna"; condição
@@ -271,9 +335,18 @@ lembretes).
 
 ## Perguntas ao utilizador
 
-1. **Terapeuta:** no seu negócio quem atende é sempre a mesma pessoa, ou varia
-   por sessão? Se varia, como a Lara deveria saber quem vai atender — você define
-   depois, ou o cliente escolhe? (Hoje o sistema assume 1 profissional por conta.)
+Já decidido (03/10/2026): envios em massa com confirmação e intervalo; o
+profissional da sessão é uma variável do contato criada no workflow (a plataforma
+é multinicho — não fixar "terapeuta"); lembrete antecipado de fábrica como
+sugerido, editável pelo utilizador.
+
+Por decidir — nenhuma trava a fase 1, cada uma pode esperar pela fase respetiva:
+
+1. **Lista de profissionais:** para a Lara saber quem atende e em que horários,
+   chega um cadastro simples na Base de Conhecimento (nome, especialidades,
+   horários em texto), ou precisa de **agenda separada por profissional** (a Lara
+   só oferece a Ana quando a Ana está livre)? O primeiro é pequeno; o segundo é o
+   multi-agenda previsto para os planos maiores.
 2. **Dúvidas depois de agendar:** a Lara pode responder dúvidas práticas (morada,
    como chegar, o que levar) **sempre** que o cliente já tem sessão marcada, ou só
    numa janela perto do horário? Sugestão: sempre — nunca deixa o cliente sem
@@ -285,11 +358,6 @@ lembretes).
 4. **Sessão realizada:** se ninguém marcar a sessão como realizada, prefere que a
    mensagem pós-sessão **não saia** (como faz a Fresha) ou que saia sozinha X horas
    depois, a menos que alguém marque "não compareceu"?
-5. **Lembrete antecipado:** confirma a regra "só se agendou com mais de 48h de
-   antecedência, enviado ~12h antes, entre 08h e 18h" como padrão de fábrica?
-
-As perguntas 1 e 5 são as únicas necessárias para começar a fase 1; as restantes
-podem ser respondidas quando a fase respetiva chegar.
 
 ## Em aberto
 
@@ -301,9 +369,16 @@ podem ser respondidas quando a fase respetiva chegar.
 - O follow-up por inatividade e o check-in de clientes (`docs/architecture/followup.md`)
   são, na prática, workflows com gatilho de tempo. Migrá-los para este modelo não
   está no escopo — avaliar depois de o motor novo estar validado.
-- Agentes com vários profissionais por conta continuam fora (ver
+- Agenda e conflito de horário por profissional continuam fora (ver
   `docs/plans/agentes-agenda-melhorias-futuras.md`, M1); a resposta à pergunta 1
   diz se isso sobe de prioridade.
+- Variável do contato vs. agendamento: se o profissional mudar de uma sessão para
+  a outra, a variável do contato guarda só o último valor. Avaliar no Plan Mode
+  se o compromisso deve guardar uma cópia dos valores no momento da marcação.
+- Linha de mensagem com variável vazia (ex.: "Terapeuta: " sem nome) — o
+  resolvedor atual só remove o marcador; decidir se a linha inteira deve sumir.
+- Unificar a janela de envios por iniciativa própria (follow-up + workflows)
+  depende da correção do campo de disponibilidade com duplo sentido.
 
 ## Fontes
 
