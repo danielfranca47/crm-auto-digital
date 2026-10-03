@@ -36,6 +36,16 @@ const PLAN_CHECKOUT_URLS: Record<string, string> = {
   crm_growth: env?.VITE_CHECKOUT_URL_CRM_GROWTH || (CRM_BASE ? `${CRM_BASE}/checkout/efi/growth` : ""),
 };
 
+// Planos à venda, na ordem em que aparecem no catálogo. `GET /plans` devolve também os
+// legados e o interno (o painel admin precisa deles) — esses não se oferecem ao cliente.
+const SELLABLE_PLAN_CODES = Object.keys(PLAN_CHECKOUT_URLS);
+
+const BILLING_PERIOD_LABELS: Record<string, string> = {
+  monthly: "Mensal",
+  yearly: "Anual",
+  annual: "Anual",
+};
+
 function buildCheckoutUrl(planCode: string) {
   return PLAN_CHECKOUT_URLS[planCode] || env?.VITE_UPGRADE_CHECKOUT_URL?.trim() || null;
 }
@@ -70,7 +80,10 @@ function buildWhatsAppUrl(planCode: string, planName?: string, email?: string | 
 
 function formatBillingPeriod(billingPeriod?: string | null) {
   if (!billingPeriod) return "—";
-  return billingPeriod.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  return (
+    BILLING_PERIOD_LABELS[billingPeriod.toLowerCase()]
+    ?? billingPeriod.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+  );
 }
 
 export default function Assinatura() {
@@ -106,6 +119,14 @@ export default function Assinatura() {
     if (!code) return null;
     return plans.find((plan) => plan.code === code)?.name ?? code;
   }, [crmProduct, plans]);
+
+  const sellablePlans = useMemo(
+    () =>
+      SELLABLE_PLAN_CODES
+        .map((code) => plans.find((plan) => plan.code === code))
+        .filter((plan): plan is CorePlan => !!plan),
+    [plans]
+  );
 
   // Botões activos se existe pelo menos um URL de checkout ou número WhatsApp configurado
   const contactAvailable = Boolean(
@@ -294,8 +315,8 @@ export default function Assinatura() {
               </div>
             ) : (
               <>
-                <div className="text-2xl font-semibold capitalize">
-                  {crmProduct?.plan_code || "Sem plano"}
+                <div className="text-2xl font-semibold">
+                  {currentPlanName || "Sem plano"}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Badge variant={isActive ? "default" : "secondary"}>
@@ -389,8 +410,8 @@ export default function Assinatura() {
         </div>
 
         {isLoadingList && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {[1, 2, 3].map((key) => (
+          <div className="grid max-w-3xl grid-cols-1 gap-4 md:grid-cols-2">
+            {SELLABLE_PLAN_CODES.map((key) => (
               <Card key={key} className="space-y-4 p-4">
                 <Skeleton className="h-6 w-32" />
                 <Skeleton className="h-4 w-24" />
@@ -401,8 +422,8 @@ export default function Assinatura() {
         )}
 
         {!isLoadingList && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {plans.map((plan) => {
+          <div className="grid max-w-3xl grid-cols-1 gap-4 md:grid-cols-2">
+            {sellablePlans.map((plan) => {
               const isCurrent = isActive && plan.code === crmProduct?.plan_code;
               const billing = formatBillingPeriod(plan.billing_period);
               const disabled = isCurrent || !contactAvailable;
@@ -424,15 +445,11 @@ export default function Assinatura() {
                         </Badge>
                       )}
                     </div>
-                    <CardDescription className="flex items-center gap-2 text-sm">
-                      <span className="capitalize">{plan.code}</span>
-                      <span className="text-muted-foreground">•</span>
-                      <span>Faturamento: {billing}</span>
-                    </CardDescription>
+                    <CardDescription className="text-sm">Faturamento: {billing}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="text-sm text-muted-foreground">
-                      Preço: — (definir no checkout)
+                      Valor apresentado no checkout
                     </div>
                     <Button
                       className="w-full"

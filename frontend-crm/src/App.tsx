@@ -44,6 +44,8 @@ import ResetPassword from "./pages/ResetPassword";
 import Register from "./pages/Register";
 import { useEffect, useState } from "react";
 import { api } from "./services/api";
+import { ApiError } from "./lib/api-client";
+import { clearAuthToken } from "./lib/auth-token";
 import { useApiErrorHandler } from "./hooks/useApiErrorHandler";
 import { useSubscriptionStatus } from "./hooks/useSubscriptionStatus";
 import UsageAlertBanner from "./components/UsageAlertBanner";
@@ -81,6 +83,9 @@ function Protected({ children }: { children: React.ReactNode }) {
         await api.auth.me();
         if (alive) setOk(true);
       } catch (err) {
+        // Sessão recusada pelo core: o token guardado já não serve — apagá-lo evita que
+        // o resto da app continue a pedir dados com ele depois do redirect para /login.
+        if (err instanceof ApiError && err.status === 401) clearAuthToken();
         handleError(err, { fallbackMessage: "Sessão expirada" });
         if (alive) setOk(false);
       }

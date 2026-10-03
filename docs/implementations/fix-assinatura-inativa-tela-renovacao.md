@@ -185,7 +185,7 @@ definido só no processo (o `.env` local do core não tem a variável; sem ela
 
 ### Cenário C8 — Core indisponível na verificação (edge)
 - [x] Bloquear `GET /me/entitlements` (DevTools → Network → block request URL) e recarregar com conta ativa — 03/10/2026 (bloqueio feito por script injectado na página, que faz o pedido falhar como falha de rede)
-- [ ] Confirmar: a app deixa entrar normalmente — ❌ **FALHOU em 03/10/2026**, ver "Problemas encontrados na validação"
+- [x] Confirmar: a app deixa entrar normalmente — falhou em 03/10/2026 com o código da Fase 1 (ver "Problemas encontrados na validação"); corrigido na Fase 2 e validado no reteste em 03/10/2026
 
 ---
 
@@ -235,3 +235,126 @@ definido só no processo (o `.env` local do core não tem a variável; sem ela
 - **Mensagem do botão "Falar com suporte".** Reutiliza o modelo de mensagem de
   upgrade (`VITE_WHATSAPP_UPGRADE_MESSAGE_TEMPLATE`), que fala em "upgrade" e não em
   renovação.
+
+---
+
+## Fase 2 — Diagnóstico + Correção (03/10/2026)
+
+### Problema identificado
+
+A validação da Fase 1 revelou três problemas (secção "Problemas encontrados na
+validação", itens 1 a 3):
+
+1. **C8 — app presa em "Carregando…" com rajada de pedidos quando `/me/entitlements`
+   falha.** Causa raiz: `SubscriptionGate` esconde a app enquanto o hook diz
+   `isLoading`, e o hook devolvia o `isLoading` do React Query. Numa consulta em erro
+   sem dados, a montagem de outro componente que usa o mesmo hook (`AppShell`) refaz o
+   pedido e a consulta volta a "pending" → `isLoading` volta a `true` → o gate desmonta
+   a app → o pedido falha → o gate monta a app → ciclo. A cada volta `LeadsContext`
+   reagia à troca de `subscriptionLoading` e pedia leads + estado do bot.
+2. **Token inválido ficava guardado e o polling corria em rotas públicas.**
+   `LeadsProvider` envolve todas as rotas e só verificava "existe token"; ninguém
+   apagava o token depois de "Sessão expirada". Com a aba aberta, uma sessão expirada a
+   meio do uso também ficava a pedir leads de 30 em 30s para sempre, porque o 401 do
+   polling era ignorado.
+3. **Catálogo de `/assinatura` mostrava planos que não são vendidos** (legados e
+   interno) e textos crus ("Crm_free", "Monthly", "Preço: — (definir no checkout)").
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `frontend-crm/src/hooks/useSubscriptionStatus.ts` | `isLoading` = "ainda não houve nenhuma resposta" (`enabled && !query.isFetched`); `retryOnMount: false`; repete só em falha de rede/5xx; não consulta em rota pública |
+| `frontend-crm/src/lib/public-routes.ts` (novo) | `isPublicPath(pathname)`: `/login`, `/register`, `/forgot-password`, `/reset-password`, `/saas-admin/*` |
+| `frontend-crm/src/contexts/LeadsContext.tsx` | polling só em rota privada (a rota entra nas dependências do effect); 401 no polling confirma com o core (`api.auth.me()`) e só então apaga o token e chama o handler |
+| `frontend-crm/src/App.tsx` | `Protected` apaga o token quando `/users/me` responde 401 |
+| `frontend-crm/src/pages/Assinatura.tsx` | catálogo só com `SELLABLE_PLAN_CODES` (`crm_start`, `crm_growth`); "Plano atual" mostra o nome do plano; "Faturamento: Mensal"; "Valor apresentado no checkout"; grelha de 2 cartões |
+| `docs/architecture/plans-limits.md`, `auth-email.md`, `_mapa-sistema.md` | comportamento do hook em erro, catálogo de planos, guardas do `LeadsContext` e onde o token é apagado |
+
+Decisões:
+- **O handler global não apaga o token em qualquer 401.** O backend-crm devolve 401
+  também quando não consegue falar com o core (`backend-crm/core_client.py`); apagar o
+  token aí deslogaria clientes numa falha passageira. Só apaga quem confirmou com o
+  core que a sessão acabou (`Protected` e a confirmação do polling).
+- **Filtro de planos no frontend, não no core.** `GET /plans` continua a devolver todos
+  os planos activos porque o painel admin usa o mesmo endpoint
+  (`frontend-admin/src/services/api.ts`, `listCrmPlans`).
+- **Preços não entram nos cartões.** Os valores vivem nos planos da Efí e o Fundador
+  tem preço próprio; escrevê-los no frontend é decisão de negócio (ver "Ajustes" abaixo).
+
+Validação automática: `npm run build` passa; `tsc`/`eslint` sem erros novos nos
+arquivos tocados (os que aparecem em `LeadsContext.tsx` são de linhas anteriores a esta
+implementação).
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `<hash>` | Fail-open real na consulta do plano, sessão expirada apagada, polling fora das rotas públicas, catálogo só com planos vendidos |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** se a consulta do plano falhasse por instabilidade do servidor, um cliente
+com o plano em dia ficava preso em "Carregando…" enquanto a app disparava pedidos sem
+parar. Depois de "Sessão expirada", a sessão inválida continuava guardada e a página de
+login (ou uma aba esquecida aberta) continuava a pedir leads a cada 30 segundos. A
+página de Assinatura oferecia planos que não são vendidos.
+
+**Agora:** se a consulta do plano falhar, a app abre normalmente e volta a consultar
+mais tarde. Quando a sessão expira — ao abrir a app ou com a aba já aberta — o aviso
+aparece, a sessão é apagada e os pedidos param. As páginas de login, registo e
+recuperação de senha não pedem dados nenhuns. Uma falha passageira do servidor não
+desloga ninguém. A Assinatura mostra só Start e Growth, com textos em português.
+
+**Para validar:** Cenários C8 (reteste), C9 a C13 e R1, abaixo.
+
+### Checks de Validação — Fase 2
+
+Validados em 03/10/2026 via browser (MCP chrome-devtools), no mesmo ambiente da Fase 1
+(cópias dos bancos locais na worktree).
+
+#### Cenário C8 (reteste) — Core indisponível na verificação
+- [x] Bloquear `GET /me/entitlements` e recarregar com conta ativa — 03/10/2026
+- [x] Confirmar: a app deixa entrar normalmente — 03/10/2026 (Kanban e menu carregados aos 6s)
+- [x] Confirmar: sem repetição em ciclo; leads no ritmo normal — 03/10/2026 (2 tentativas de `/me/entitlements` em 38s; leads e estado do bot 2 vezes, todas 200)
+
+#### Cenário C9 — Sessão expirada é apagada
+- [x] Abrir a app com `crm_token` inválido guardado — 03/10/2026
+- [x] Confirmar: "Sessão expirada", vai para o login e `crm_token` deixa de existir (localStorage e sessionStorage) — 03/10/2026
+- [x] Confirmar: 40s no login sem nenhum pedido repetido — 03/10/2026 (só os 2 pedidos iniciais ao core, 401; zero ao backend-crm)
+
+#### Cenário C10 — Páginas públicas com sessão válida
+- [x] Com sessão válida, abrir `/login` directamente no endereço — 03/10/2026 (37s: zero pedidos)
+- [x] Idem em `/forgot-password` — 03/10/2026 (34s: zero pedidos)
+
+#### Cenário C11 — Sessão expira com a aba aberta
+- [x] No Kanban, corromper `crm_token` sem recarregar — 03/10/2026
+- [x] Confirmar: no ciclo seguinte aparece "Sessão expirada" e vai para o login; token apagado — 03/10/2026 (aos 32s)
+- [x] Confirmar: os pedidos param — 03/10/2026 (37s seguintes sem nenhum pedido)
+
+#### Cenário C12 — 401 do backend-crm com sessão válida (edge)
+- [x] Simular `GET /api/leads` a responder 401 "Falha ao contatar backend-core", com o core a funcionar — 03/10/2026 (resposta simulada por script na página)
+- [x] Confirmar: uma consulta de confirmação a `/users/me`; o utilizador continua dentro, com token e sem aviso — 03/10/2026
+
+#### Cenário C13 — Catálogo de planos
+- [x] Conta ativa (plano Interno): catálogo só com Start e Growth; "Plano atual" mostra "Interno" — 03/10/2026
+- [x] Conta sem plano: catálogo só com Start e Growth; "Plano atual" mostra "Sem plano" — 03/10/2026
+- [x] Confirmar: sem "Crm_…" nem "Monthly" na página — 03/10/2026
+
+#### Cenário R1 — Regressão da Fase 1
+- [x] C1/C3: conta sem plano abre `/dashboard` → `/assinatura`, sem sidebar, só "Sair"; 36s sem pedidos ao backend-crm — 03/10/2026
+- [x] C4: conta ativa, Kanban carrega e leads/estado do bot repetem aos 30s, todos 200 — 03/10/2026
+- [x] C5: "Já paguei — atualizar" após ativar → "Plano ativo!", sidebar volta sem novo login — 03/10/2026
+- [x] C6: token inválido ao abrir a app → "Sessão expirada" + login (coberto pelo C9) — 03/10/2026
+
+### Ajustes possíveis — Fase 2
+
+- **O item "Limpar o token em 401" da lista acima fica resolvido** por esta fase.
+- **Preços nos cartões de plano.** Hoje "Valor apresentado no checkout". Mostrar R$97 /
+  R$297 exige decidir o que vê o Fundador e onde o valor fica guardado.
+- **401 do backend-crm por falha do core ainda mostra "Sessão expirada".** O handler
+  global continua a redireccionar para o login em qualquer 401 (sem apagar o token —
+  recarregar a página devolve a sessão). Corrigir na origem seria o backend-crm
+  responder 503 quando não consegue falar com o core.
+- **Aviso "Sessão expirada" só aparece uma vez por carregamento da página**
+  (`sessionToastDisplayed` em `useApiErrorHandler.ts` nunca é reposto). Já era assim.

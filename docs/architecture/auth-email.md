@@ -318,18 +318,25 @@ Rotas fora do wrapper `Protected` (sem verificação de auth):
 
 ## Guarda no LeadsContext
 
-`frontend-crm/src/contexts/LeadsContext.tsx` carrega leads e o estado de pausa do bot no
-mount (`reloadAllLeads` + `loadBotPauseStatus`), e via polling a cada 30s. `LeadsProvider`
-envolve toda a árvore de rotas, incluindo as públicas (`/login`, `/forgot-password`,
-`/reset-password`) — não só as protegidas. Para evitar redirect para `/login` a partir
-dessas rotas públicas quando o navegador tem um token salvo mas inválido/expirado (ex.:
-sessão antiga):
+`frontend-crm/src/contexts/LeadsContext.tsx` carrega leads e o estado de pausa do bot
+(`reloadAllLeads` + `loadBotPauseStatus`) e repete a cada 30s. `LeadsProvider` envolve toda
+a árvore de rotas, incluindo as públicas — por isso o carregamento tem guardas próprias:
 
-1. `useEffect` inicial só dispara as chamadas se `readAuthToken()` retornar valor (não
-   distingue token válido de expirado — só "existe algo salvo")
-2. **Ambas** `reloadAllLeads` e `loadBotPauseStatus` tratam 401/403 silenciosamente (early
-   `return` no `catch`, sem chamar `handleError`) — esses erros são tratados pelo
-   componente `Protected` nas rotas que realmente exigem login
+1. **Só em rotas privadas.** O `useEffect` não arranca quando `isPublicPath(pathname)`
+   (`frontend-crm/src/lib/public-routes.ts`: `/login`, `/register`, `/forgot-password`,
+   `/reset-password` e tudo sob `/saas-admin`). A rota entra nas dependências do effect, por
+   isso o intervalo pára ao navegar para uma rota pública, mesmo com sessão válida guardada.
+2. **Só com token** (`readAuthToken()`) e **só com acesso** (`useSubscriptionStatus`, ver
+   [`plans-limits.md`](plans-limits.md)).
+3. **401 no polling não desloga sozinho.** O backend-crm devolve 401 também quando não
+   consegue falar com o core (`core_client.py`). `reloadAllLeads` confirma com o core
+   (`api.auth.me()`); só se o core responder 401 apaga o token (`clearAuthToken()`) e chama
+   `handleError` (aviso "Sessão expirada" + `/login`). Qualquer outro resultado é ignorado.
+   `loadBotPauseStatus` ignora 401/403 — o pedido de leads, feito em conjunto, trata.
+
+**Onde o token é apagado:** no logout (`api.auth.logout`), em `Protected` (`App.tsx`) quando
+`/users/me` responde 401, e na confirmação do polling acima. O handler global
+(`useApiErrorHandler`) redireciona em 401 mas não apaga o token, pelo motivo do ponto 3.
 
 ---
 

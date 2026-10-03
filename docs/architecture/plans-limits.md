@@ -202,13 +202,26 @@ login OK → Protected (valida sessão em /users/me)
   `expired`, `cancelled` (qualquer outro status não-activo), `none` (nunca teve assinatura do CRM).
 - `frontend-crm/src/hooks/useSubscriptionStatus.ts` — React Query, chave `["entitlements"]`
   (`ENTITLEMENTS_QUERY_KEY`), partilhada por gate, shell, `LeadsContext` e página de Assinatura.
+  Só consulta com token guardado e fora das rotas públicas (`isPublicPath`, em
+  `src/lib/public-routes.ts`).
 - `frontend-crm/src/components/SubscriptionGate.tsx` e `LockedShell.tsx`.
+
+**Quando a consulta falha (fail-open):** o `isLoading` do hook significa "ainda não houve nenhuma
+resposta" (`enabled && !query.isFetched`), não o `isLoading` do React Query — este volta a `true` a
+cada nova tentativa de uma consulta em erro sem dados, e o gate, que esconde a app enquanto
+carrega, entraria em ciclo de montar/desmontar. Pelo mesmo motivo a consulta usa
+`retryOnMount: false`: em erro, não é refeita só porque outro componente que usa o hook montou.
+Repete uma vez em falha de rede/5xx (nunca em 401/403) e recupera sozinha quando a janela volta
+a ter foco ou quando um 403 invalida a chave. Enquanto estiver em erro o estado é `unknown` e a
+app funciona normalmente.
 
 **401 vs 403 no handler global** (`useApiErrorHandler`): só `401` significa sessão expirada (toast +
 `/login`). `403` nunca redireciona para o login: invalida `["entitlements"]` — se o plano caducou a
 meio do uso, o gate leva a `/assinatura` — e mostra o toast "Sem acesso" com a mensagem do backend
 (`detail` em texto, ou `detail.message` quando o gate devolve objecto). O polling de leads do
 `LeadsContext` passa os seus 403 pelo handler em modo silencioso, só para disparar essa revalidação.
+O handler não apaga o token: quem o apaga é quem confirmou no core que a sessão acabou — ver
+"Guarda no LeadsContext" em [`auth-email.md`](auth-email.md).
 
 ### Badge de quota no Playground
 
@@ -228,10 +241,18 @@ endpoint de checkout sob demanda da Efí (`{VITE_CRM_BASE_URL}/checkout/efi/{sta
 `VITE_UPGRADE_CHECKOUT_URL` como fallback) — detalhes completos do fluxo em
 [`billing-efi.md`](billing-efi.md).
 
-**Assinatura exibida:** vem de `useSubscriptionStatus()` (ver "Conta sem plano activo" abaixo), não
+**Catálogo "Planos disponíveis":** só os planos à venda — `SELLABLE_PLAN_CODES`, que são as chaves
+de `PLAN_CHECKOUT_URLS` (`crm_start`, `crm_growth`), nessa ordem. `GET /plans?product_code=crm`
+devolve todos os planos com `is_active` (incluindo os legados `crm_free`/`crm_basic`/`crm_pro` e o
+`crm_internal`), porque o painel admin precisa deles; o filtro é feito na página. Um plano novo só
+aparece ao cliente depois de ter entrada em `PLAN_CHECKOUT_URLS`. Os cartões mostram nome,
+faturamento ("Mensal") e "Valor apresentado no checkout" — o preço não está no frontend.
+
+**Assinatura exibida:** vem de `useSubscriptionStatus()` (ver "Conta sem plano activo" acima), não
 da primeira linha de `entitlements.products` — o core devolve uma linha por assinatura que o
-utilizador já teve. O plano só é marcado "Plano atual" (e o botão desabilitado) quando o estado é
-`active`; um plano expirado/cancelado continua seleccionável.
+utilizador já teve. O cartão "Plano atual" mostra o nome do plano (mesmo que não esteja à venda,
+ex.: "Interno"). O plano só é marcado "Plano atual" no catálogo (e o botão desabilitado) quando o
+estado é `active`; um plano expirado/cancelado continua seleccionável.
 
 **Data de fim de período:** `current_period_end` da assinatura escolhida. No card do plano actual:
 "Activo até DD/MM/AAAA" (activa), "Expirou em" (expirada) ou "Período terminou em" (cancelada).
