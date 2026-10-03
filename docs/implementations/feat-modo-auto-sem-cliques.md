@@ -130,8 +130,20 @@ tuas definições pessoais e escolher "Auto" no VS Code.
 - **Validado em:** 04/10/2026 — captura de ecrã do utilizador: as 6 conversas abertas, incluindo uma acabada de abrir, mostram "Auto" ao lado do modelo
 
 ### Cenário A4 — Trabalho normal sem cliques
-- [ ] Numa sessão em modo auto: correr `pytest` de um backend, um `curl` a localhost e um clique via chrome-devtools
+- [x] Numa sessão em modo auto: correr `pytest` de um backend, um `curl` a localhost e um clique via chrome-devtools
 - [ ] Confirmar: zero pedidos de permissão
+- **Executado em:** 04/10/2026, conversa do VS Code em modo Auto — `pytest` do
+  backend-executors (265 passaram, 73 falharam), arranque do backend-executors
+  na porta 8002, `curl http://localhost:8002/health` (HTTP 200) e abrir
+  `/docs` + clique em "GET /health" via chrome-devtools. Nenhuma ação foi
+  recusada nem ficou à espera do lado do Claude; falta o utilizador confirmar
+  que não viu nenhum pedido no ecrã.
+- **Nota sobre as 73 falhas:** não têm relação com esta implementação (a branch
+  não toca em código de backend). 16 são falta de `.env` na worktree
+  (`CRM_SERVICE_TOKEN não configurado`); as restantes são testes desalinhados
+  do código atual (ex.: `DecisionOutput` sem `pre_send_media`,
+  `decision_trace`, `suggested_category`). Fica por confirmar se também falham
+  em `main` com `.env` presente.
 
 ### Cenário A5 — Barreiras duras funcionam
 - [x] `git push --force --dry-run` é recusado pela regra `deny`
