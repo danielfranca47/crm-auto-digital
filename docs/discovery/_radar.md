@@ -10,6 +10,8 @@
 
 | Investigação | Meta | Score RICE | Veredito proposto | Perguntas pendentes |
 |---|---|---|---|---|
+| [jornada-pos-agendamento](jornada-pos-agendamento.md) | M1 (M2) | 1.44 | Implementations — "Jornada do Agendamento" por momentos, começando por confirmação + lembretes com texto do utilizador (fases 1–2 de 5) | Terapeuta fixo ou variável; dúvidas pós-agendamento sempre ou só perto do horário; como o massagista avisa a chegada; pós-sessão sem marcação; regra padrão do lembrete antecipado |
+| [tags-de-contato](tags-de-contato.md) | M1 (M2) | 1.07 | Implementations — tags visíveis que complementam o "disparar uma vez" (condição "tem/não tem" + ação "adicionar"); logo após as fases 1–2 da jornada | Lista livre ou fechada; a IA deve ver as tags; tag vs. coluna "Lista de Clientes" |
 | [agente-ligacoes-prospeccao-voz](agente-ligacoes-prospeccao-voz.md) | M1 (M5 se virar produto) | 0.40 | Implementations — protótipo próprio (Twilio + OpenAI Realtime) + integração CRM; número celular BR em pessoa física | Modelo de comissão do representante (simulador publicado) |
 
 ## Em investigação / Levantadas
