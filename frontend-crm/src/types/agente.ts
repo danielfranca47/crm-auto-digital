@@ -349,7 +349,8 @@ export interface AgentConfig {
   operator_whatsapp: string;
   calendar_integration: string;
   availability_mode: 'business_hours' | '24h' | 'custom';
-  availability_schedule: string;
+  availability_schedule: string;       // grade da Janela de horário (quando o agente responde)
+  professional_availability: string;   // horários de atendimento do profissional (texto livre)
   scheduling_offer_style: 'offer_alternatives' | 'confirm_exact';
   default_session_duration_minutes: number;
   meeting_management_enabled: boolean;
@@ -460,6 +461,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   calendar_integration: 'none',
   availability_mode: '24h',
   availability_schedule: '{"mon":"09:00-18:00","tue":"09:00-18:00","wed":"09:00-18:00","thu":"09:00-18:00","fri":"09:00-18:00","sat":"","sun":""}',
+  professional_availability: '',
   scheduling_offer_style: 'offer_alternatives',
   default_session_duration_minutes: 30,
   meeting_management_enabled: true,

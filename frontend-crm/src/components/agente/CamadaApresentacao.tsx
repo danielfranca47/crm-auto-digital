@@ -238,16 +238,21 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
         )}
       </div>
 
-      {/* Seção: Disponibilidade de horários */}
+      {/* Seção: Horários de atendimento do profissional */}
       <div className="o-section-hdr">
         <span className="font-mono-orion" style={{ fontSize: 9, letterSpacing: '2.5px', textTransform: 'uppercase', color: 'var(--o-sub)' }}>
-          Disponibilidade de horários
+          Horários de atendimento do profissional
         </span>
       </div>
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: 'var(--o-sub)', fontWeight: 300, marginBottom: 10 }}>
-          Informe os dias e horários disponíveis para atendimento. O bot usará estas informações para propor horários ao lead na fase de Agendamento.
+          Informe os dias e horários em que o profissional atende. O bot usará estas informações para propor horários ao lead na fase de Agendamento. Não é o horário em que o agente responde mensagens — esse fica em Pipeline → Janela de horário.
         </div>
+        {!config.professional_availability?.trim() && (
+          <div style={{ marginBottom: 8 }}>
+            <span className="o-badge o-badge-warn">Não configurado — o bot pergunta ao lead que horário prefere</span>
+          </div>
+        )}
         <div className="o-field-hint" style={{ marginBottom: 8, fontSize: 11 }}>
           Exemplo: Seg-Sex: 14h, 16h, 18h · Sáb: 10h, 12h
         </div>
@@ -255,8 +260,8 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           className="o-input"
           style={{ width: '100%', minHeight: 80, resize: 'vertical', fontFamily: 'inherit', fontSize: 13 }}
           placeholder={'Seg-Sex: 14h, 16h, 18h\nSábado: 10h, 12h'}
-          value={config.availability_schedule || ''}
-          onChange={e => onUpdate({ availability_schedule: e.target.value })}
+          value={config.professional_availability || ''}
+          onChange={e => onUpdate({ professional_availability: e.target.value })}
         />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>

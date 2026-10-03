@@ -1,7 +1,7 @@
 # Separar "janela de resposta do agente" de "horários de atendimento do profissional"
 
 **Branch:** `worktree-fix+disponibilidade-campo-duplo-sentido` (worktree `.claude/worktrees/fix+disponibilidade-campo-duplo-sentido` — a ferramenta de worktree troca `fix/<slug>` por este formato)
-**Status:** Em andamento — Fase 1 implementada; Fase 2 (telas e documentação) por fazer
+**Status:** Em andamento — Fases 1 e 2 implementadas; Cenários P1–P4 e C1 por validar
 **Origem:** `docs/implementations/feat-workflows-por-gatilho.md` — "Evidência no código", ponto 7 (análise comparativa de janelas de horário pedida pelo utilizador em 03/10/2026)
 
 ---
@@ -129,6 +129,23 @@ todos a passar; a suíte completa do backend-executors, 324 testes, continua ver
 | `frontend-crm/src/components/agente/CamadaApresentacao.tsx` | Caixa de texto ligada ao campo novo; título "Horários de atendimento do profissional"; aviso de "não configurado" |
 | `frontend-crm/src/components/agente/CamadaPipeline.tsx` | Texto de ajuda da Janela de horário ("quando o agente responde") |
 | `docs/architecture/humanization.md`, `agents.md`, `agenda.md`, `admin-agents-contract.md` | Refletir os dois campos |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(a registar)_ | Telas ligadas a campos distintos + docs de arquitetura |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a caixa "Disponibilidade de horários" (Apresentação) e a "Janela de
+horário" (Pipeline) gravavam no mesmo sítio — configurar uma apagava ou
+estragava a outra, e a caixa podia mostrar código.
+**Agora:** a Apresentação tem "Horários de atendimento do profissional" (quando
+o profissional atende) e o Pipeline tem "Janela de horário" (quando a Lara
+responde); cada uma guarda o seu valor, com um aviso em cada tela a dizer que
+não é a outra. Com os horários de atendimento vazios aparece "Não configurado".
+**Para validar:** Cenários P1, P2, P3, P4 e C1, abaixo.
 
 ---
 

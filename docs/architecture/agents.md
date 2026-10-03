@@ -187,7 +187,9 @@ aberta.
 | `first_reply_delay_max_seconds` | integer\|null | Delay máximo (s) antes da primeira resposta; o valor real é sorteado entre min e max (padrão: `0`) |
 | `reply_delay_min_seconds` | integer\|null | Delay mínimo (s) antes de respostas a mensagens subsequentes (padrão: `0`) |
 | `reply_delay_max_seconds` | integer\|null | Delay máximo (s) para mensagens subsequentes (padrão: `0`) |
-| `availability_mode` | string (enum) | Janela de horário de trabalho do agente (padrão: `"24h"`) |
+| `availability_mode` | string (enum) | Janela de horário em que o agente responde (padrão: `"24h"`) |
+| `availability_schedule` | string (JSON)\|null | Grade por dia da semana da janela de resposta, usada quando `availability_mode="custom"`. Ver [`humanization.md`](humanization.md#janela-de-horário-disponibilidade) |
+| `professional_availability` | string\|null | Horários em que o profissional atende, em texto livre (ex.: `"Seg a Sex: 14h, 16h, 18h"`). Injectado na filha de agendamento como "DISPONIBILIDADE DO PROFISSIONAL"; vazio → a IA pergunta ao lead que horário prefere. Editável em Camada 5 · Apresentação. Ver [`agenda.md`](agenda.md#horários-de-atendimento-do-profissional-professional_availability) |
 | `scheduling_offer_style` | string (enum) | Como a filha de agendamento trata um horário específico pedido pelo lead (padrão: `"offer_alternatives"`) |
 | `default_session_duration_minutes` | integer\|null | Duração (em minutos) usada ao criar um appointment via IA quando não há duração mais específica disponível (padrão: `30`). Ver [`agenda.md`](agenda.md#duração-da-sessão-fixa-vs-por-serviço) |
 | `meeting_management_enabled` | boolean | Se `True` (padrão), o bot reabre e gere cancelamento/reagendamento sozinho quando o lead pede mudança após confirmar uma reunião. Se `False`, o bot fica desactivado nessa janela, exigindo reactivação manual do operador. Ver secção "Toggle de Bot por Lead" |

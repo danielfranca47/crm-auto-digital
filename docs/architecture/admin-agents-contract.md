@@ -20,6 +20,7 @@ Origem: tabela `ai_profiles` em `backend-core` (via `GET /admin/agents/users/{us
 | `sales_flow` | object\|null | Configuração do Fluxo de Venda por fase (`{phases: [{id, blocks[]}]}`) | Não exibido no painel admin atualmente |
 | `qualification_extraction_tolerance` | string | Tolerância do extractor de campos de qualificação (`flexivel`\|`equilibrado`\|`rigoroso`), default `equilibrado` | Aparece no painel de diff (`diff`) quando o usuário muda do default — sem exibição própria no card/drawer |
 | `qualification_price_disclosure` | string | Preço perguntado na qualificação (`after_qualification`\|`on_request`), default `after_qualification` | Aparece no painel de diff (`diff`) quando o usuário muda do default — sem exibição própria no card/drawer |
+| `professional_availability` | string\|null | Horários de atendimento do profissional, em texto livre — injectado na filha de agendamento como "DISPONIBILIDADE DO PROFISSIONAL" (ver [`agenda.md`](agenda.md)) | Não exibido no painel admin atualmente |
 | `llm_provider` | string | Provedor de LLM usado nas chamadas de IA (`openai`\|`openrouter`), default `openai` — ver [`llm-architecture.md`](llm-architecture.md) | Badge "OpenRouter" ao lado do seletor de usuário quando `≠ openai`; entra no cálculo de `has_custom_config`/`diff` |
 | `llm_provider_model` | string\|null | Modelo curado do OpenRouter (só relevante quando `llm_provider=openrouter`) | Incluído no texto do badge OpenRouter |
 

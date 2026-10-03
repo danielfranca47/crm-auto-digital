@@ -96,15 +96,20 @@ for i, part in enumerate(parts):
 
 ## Janela de Horário (Disponibilidade)
 
-### Campo do AI Profile
+### Campos do AI Profile
 
-| Campo | Enum | Default |
+| Campo | Valores | Default |
 |---|---|---|
 | `availability_mode` | `"24h"` \| `"business_hours"` \| `"custom"` | `"24h"` |
+| `availability_schedule` | JSON por dia da semana — `{"mon":"09:00-18:00", …, "sat":"", "sun":""}` (dia vazio = fechado) | `null` |
 
 - **`24h`**: sem restrição de horário
 - **`business_hours`**: Seg–Sex, 09h00–18h00 no timezone do AI Profile (`timezone`)
-- **`custom`**: grade de dias e horários configurada manualmente na UI
+- **`custom`**: grade de dias e horários de `availability_schedule`, configurada em Pipeline → "Janela de horário" (`DrawerHorarioTrabalho`, `CamadaPipeline.tsx`). `custom` sem grade legível não bloqueia nada.
+
+`availability_schedule` é **só** a grade desta janela (quando o agente responde). Os
+horários em que o profissional atende — usados para propor horários de sessão — vivem
+noutro campo, `professional_availability` (ver [`agenda.md`](agenda.md)).
 
 ### Comportamento
 
