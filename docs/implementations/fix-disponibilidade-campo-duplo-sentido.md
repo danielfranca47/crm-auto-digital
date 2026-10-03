@@ -134,7 +134,13 @@ todos a passar; a suíte completa do backend-executors, 324 testes, continua ver
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | Telas ligadas a campos distintos + docs de arquitetura |
+| 1 | `4060db5` | Telas ligadas a campos distintos + docs de arquitetura |
+
+**Detalhes do commit `4060db5`:**
+- `frontend-crm/src/types/agente.ts`, `src/services/api.ts` — campo `professional_availability` no `AgentConfig`, lido e gravado no AI Profile
+- `frontend-crm/src/components/agente/CamadaApresentacao.tsx` — caixa de texto passa a gravar em `professional_availability`; aviso "Não configurado"
+- `frontend-crm/src/components/agente/CamadaPipeline.tsx` — texto de ajuda da Janela de horário
+- `docs/architecture/humanization.md`, `agents.md`, `agenda.md`, `admin-agents-contract.md` — os dois campos documentados
 
 ### Relatório da Fase 2 — o que mudou na prática
 
