@@ -210,7 +210,7 @@ existente; foi ensinado a também criar o `User` nesse caminho (antes só em `ac
 | `EFI_CLIENT_ID` / `EFI_CLIENT_SECRET` | backend-crm | Credenciais OAuth2 (sandbox ou produção) |
 | `EFI_SANDBOX` | backend-crm | `true`/`false` — selecciona a base URL |
 | `EFI_PLAN_ID_START` / `EFI_PLAN_ID_GROWTH` / `EFI_PLAN_ID_GROWTH_FUNDADOR` | backend-crm | IDs de plano criados na Efí (`create_plan`); diferem entre sandbox e produção |
-| `CRM_PUBLIC_BASE_URL` | backend-crm, backend-core | URL pública do backend-crm — usada para montar `notification_url` (checkout) e os links de checkout nos emails (`subscription_jobs.py`); precisa ser acessível pela internet para a Efí conseguir notificar pagamentos |
+| `CRM_PUBLIC_BASE_URL` | backend-crm, backend-core | URL pública do backend-crm — usada para montar `notification_url` (checkout), os links de checkout nos emails (`subscription_jobs.py`) e o `renewal_checkout_url` de `/me/entitlements` (sem ela no backend-core, "Renovar agora" cai no link normal do plano e o Fundador perde a condição travada); precisa ser acessível pela internet para a Efí conseguir notificar pagamentos |
 
 ---
 

@@ -35,6 +35,7 @@ implementação.
 | `motor-llm-otimizacoes.md` | Achados da graduação de `prompt-engineering-principles`: temperature não configurada, Structured Outputs (json_schema+strict) da OpenAI, isolamento da mensagem do lead contra prompt injection, reordenação do prompt para prompt caching automático, validação semântica de `signals_structured` (checkout_sent+URL) |
 | `monitoramento-colaborador-melhorias-futuras.md` | Item deixado de fora da graduação da paginação do monitoramento de colaborador: contagem total ("Página N de M") nos pagers |
 | `website-acessibilidade-melhorias-futuras.md` | Item deixado de fora da graduação do fix de contraste WCAG do website: verificação automática de contraste no build/CI |
+| `assinatura-inativa-melhorias-futuras.md` | Itens deixados de fora da graduação do ecrã de renovação para conta sem plano activo: período de tolerância após o vencimento, preços nos cartões de plano, 401 do backend-crm por falha do core, faixa de expiração dentro da app, modo só-leitura, texto do botão de suporte, aviso de sessão expirada único |
 | `knowledge-base-melhorias-futuras.md` | Base de Conhecimento: dedup narrativo por uso/conteúdo/reengajamento (M1–M3), fontes duplicadas lidas em simultâneo (M4) e conversão assistida dos itens "Para mover" em blocos do Fluxo de Venda (M5) |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
