@@ -2,6 +2,7 @@
 
 **Branch:** (a criar)
 **Status:** Aguardando Plan Mode
+**Autonomia:** manual
 
 ---
 

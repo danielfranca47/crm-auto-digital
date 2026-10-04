@@ -9,6 +9,11 @@ do comando em vez de comparar o início do texto, e responde uma de três coisas
              forma que não dá para ler com certeza e aparenta uma dessas ações
   nada       segue o fluxo normal (regras de permissão + revisor automático)
 
+Numa sessão da cloud (variável CLAUDE_CODE_REMOTE=true, a rotina da fila
+automática) recusa também qualquer `git push` que não seja para uma branch
+`claude/…` e os comandos `gh` que alteram o repositório no GitHub. Em sessões
+locais essas duas regras não existem.
+
 Nunca responde "permitir". Um erro interno termina com código 2, que bloqueia
 o comando em vez de o deixar passar em silêncio.
 
@@ -52,6 +57,19 @@ MOTIVO_INCERTO = (
 MOTIVO_EMBUTIDO = (
     "O script ou código que este comando executa aparenta conter um push forçado ou uma "
     "ação sensível no Railway: precisa de confirmação do utilizador. " + _DOC
+)
+
+_DOC_FILA = 'Ver docs/ops/fila-automatica.md, secção "Turno da noite".'
+MOTIVO_CLOUD_PUSH = (
+    "Sessão na cloud (fila automática): só é executado `git push` para uma branch "
+    "`claude/…` escrita por extenso no comando (ex.: git push -u origin claude/<slug>). "
+    "Push para `main` ou outra branch, push sem destino, apagar branches e push de todas "
+    "as branches nunca são executados. " + _DOC_FILA
+)
+MOTIVO_CLOUD_GH = (
+    "Sessão na cloud (fila automática): comandos `gh` que alteram o repositório no GitHub "
+    "(juntar um pull request, `gh api` de escrita, definições, segredos, workflows, "
+    "releases) nunca são executados. " + _DOC_FILA
 )
 
 _NIVEL_MAX = 6
@@ -104,6 +122,22 @@ _RAILWAY_ALIAS = {
 }
 _RAILWAY_APAGAR = {"delete", "rm", "remove"}
 
+_PREFIXO_CLOUD = "claude/"
+_PUSH_OPCOES_COM_VALOR = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
+_PUSH_VARIAS = ("--all", "--branches", "--mirror", "--delete", "--prune")
+_GH_OPCOES_COM_VALOR = {"-R", "--repo", "--hostname"}
+_GH_ESCRITA = {
+    "pr": {"merge"},
+    "repo": {"delete", "edit", "rename", "archive", "unarchive", "sync", "deploy-key"},
+    "release": {"create", "delete", "edit", "upload", "delete-asset"},
+    "workflow": {"run", "enable", "disable"},
+    "run": {"rerun", "cancel", "delete"},
+    "secret": {"set", "delete", "remove"},
+    "variable": {"set", "delete", "remove"},
+    "cache": {"delete"},
+}
+_GH_API_CAMPOS = ("-f", "-F", "--field", "--raw-field", "--input")
+
 _PS_OPCOES_COM_VALOR = (
     "executionpolicy", "windowstyle", "inputformat", "outputformat", "workingdirectory",
     "configurationname", "settingsfile", "version", "psconsolefile", "custompipename",
@@ -121,6 +155,7 @@ _RE_PUSH = re.compile(r"\bpush\b", re.I)
 _RE_FORCA = re.compile(r"--for|--mir|(?<![\w-])-[A-Za-z]*f[A-Za-z]*(?![\w-])|(?<![\w+])\+[\w/]")
 _RE_GIT = re.compile(r"\bgit\b", re.I)
 _RE_RAILWAY = re.compile(r"\brailway\b", re.I)
+_RE_GH_ESCRITA = re.compile(r"\bgh\b[^\n;|&]*\b(merge|api)\b", re.I)
 _RE_RAILWAY_PALAVRAS = re.compile(
     r"\b(down|delete|rm|remove|detach|variables?|vars?|run|local|shell|connect|ssh|up|upload)\b", re.I
 )
@@ -265,6 +300,151 @@ def _railway(args: list, incerto: bool = False):
         return (ASK, MOTIVO_INCERTO) if resto_incerto else None
     if p0 in ("variable", "run", "shell", "connect", "ssh", "up"):
         return ASK, MOTIVO_RAILWAY_SENSIVEL
+    return None
+
+
+def _ramo_atual(base: str):
+    """Branch atual, lida de `.git/HEAD` a subir desde `base`; None se não der para saber."""
+    pasta = os.path.abspath(base)
+    while True:
+        marca = os.path.join(pasta, ".git")
+        try:
+            if os.path.isfile(marca):  # worktree: o ficheiro aponta para a pasta verdadeira
+                with open(marca, encoding="utf-8") as f:
+                    linha = f.read().strip()
+                if not linha.startswith("gitdir:"):
+                    return None
+                marca = os.path.join(pasta, linha[len("gitdir:"):].strip())
+            if os.path.isdir(marca):
+                with open(os.path.join(marca, "HEAD"), encoding="utf-8") as f:
+                    cabeca = f.read().strip()
+                prefixo = "ref: refs/heads/"
+                return cabeca[len(prefixo):] if cabeca.startswith(prefixo) else None
+        except OSError:
+            return None
+        acima = os.path.dirname(pasta)
+        if acima == pasta:
+            return None
+        pasta = acima
+
+
+def _git_cloud(args: list, base: str, incerto: bool = False):
+    """Na cloud, `git push` só para `claude/…`: (DENY|_INCERTO, motivo) ou None."""
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in _GIT_OPCOES_COM_VALOR:
+            if a == "-C" and i + 1 < len(args):
+                base = os.path.join(base, _caminho(args[i + 1]))
+            i += 2
+            continue
+        if not a.startswith("-"):
+            break
+        i += 1
+    if i >= len(args):
+        return None
+    if _din(args[i]):
+        return _INCERTO, "sub"
+    if args[i].lower() != "push":
+        return None
+    resto = args[i + 1:]
+    if incerto or any(_din(a) for a in resto):
+        return DENY, MOTIVO_CLOUD_PUSH
+    pos = []
+    j = 0
+    while j < len(resto):
+        a = resto[j]
+        if a == "--":
+            pos += resto[j + 1:]
+            break
+        if a.startswith("--"):
+            nome = a.split("=", 1)[0].lower()
+            if len(nome) > 2 and any(v.startswith(nome) for v in _PUSH_VARIAS):
+                return DENY, MOTIVO_CLOUD_PUSH
+        elif a.startswith("-") and len(a) > 1:
+            if "d" in a[1:].split("o", 1)[0]:  # -d apaga; depois de -o já é o valor
+                return DENY, MOTIVO_CLOUD_PUSH
+        else:
+            pos.append(a)
+            j += 1
+            continue
+        j += 2 if a in _PUSH_OPCOES_COM_VALOR else 1
+    destinos = pos[1:]  # pos[0] é o remoto
+    if not destinos:  # sem destino, quem decide é a configuração do git
+        return DENY, MOTIVO_CLOUD_PUSH
+    for ref in destinos:
+        origem, separador, destino = ref.lstrip("+").partition(":")
+        if separador and not origem:  # `:branch` apaga a branch no remoto
+            return DENY, MOTIVO_CLOUD_PUSH
+        ramo = destino if separador else origem
+        if ramo.startswith("refs/heads/"):
+            ramo = ramo[len("refs/heads/"):]
+        if ramo in ("HEAD", "@"):
+            ramo = _ramo_atual(base) or ""
+        if not ramo.startswith(_PREFIXO_CLOUD) or len(ramo) == len(_PREFIXO_CLOUD):
+            return DENY, MOTIVO_CLOUD_PUSH
+    return None
+
+
+def _gh_api_escreve(args: list) -> bool:
+    metodo = None
+    campos = False
+    for i, a in enumerate(args):
+        minus = a.lower()
+        if a in ("-X", "--method"):
+            metodo = args[i + 1].upper() if i + 1 < len(args) else "?"
+        elif minus.startswith("--method="):
+            metodo = a.split("=", 1)[1].upper()
+        elif a.startswith("-X") and len(a) > 2:
+            metodo = a[2:].upper()
+        elif a in _GH_API_CAMPOS or minus.startswith(("--field=", "--raw-field=", "--input=")):
+            campos = True
+        elif len(a) > 2 and a[:2] in ("-f", "-F"):
+            campos = True
+    if metodo is not None:
+        return metodo not in ("GET", "HEAD")
+    return campos  # com campos e sem método, o `gh api` envia um POST
+
+
+def _gh_cloud(args: list, incerto: bool = False):
+    """Na cloud, `gh` não altera o repositório: (DENY, motivo) ou None."""
+    pos = []
+    i = 0
+    while i < len(args) and len(pos) < 2:
+        a = args[i]
+        if a in _GH_OPCOES_COM_VALOR:
+            i += 2
+            continue
+        if not a.startswith("-"):
+            pos.append(a)
+        i += 1
+    if not pos:
+        return None
+    if incerto or any(_din(p) for p in pos):
+        return DENY, MOTIVO_CLOUD_GH
+    grupo = pos[0].lower()
+    if grupo == "api":
+        return (DENY, MOTIVO_CLOUD_GH) if _gh_api_escreve(args) else None
+    if len(pos) > 1 and pos[1].lower() in _GH_ESCRITA.get(grupo, ()):
+        return DENY, MOTIVO_CLOUD_GH
+    return None
+
+
+def _procura_solta_cloud(texto: str, base: str):
+    """O mesmo que `_procura_solta`, para as duas regras das sessões da cloud."""
+    for linha in texto.splitlines():
+        palavras = _RE_PONTUACAO.sub(" ", linha).split()
+        for i, palavra in enumerate(palavras):
+            nome = _nome_base(palavra, minusculas=False)
+            resto = palavras[i + 1:i + 1 + _JANELA]
+            if nome == "git":
+                r = _git_cloud(resto, base)
+            elif nome == "gh":
+                r = _gh_cloud(resto)
+            else:
+                continue
+            if r and r[0] == DENY:
+                return r
     return None
 
 
@@ -521,9 +701,10 @@ class _Leitor:
 # --------------------------------------------------------------------------
 
 class _Analise:
-    def __init__(self, raiz: str, cwd: str | None):
+    def __init__(self, raiz: str, cwd: str | None, cloud: bool = False):
         self.textos = [raiz]  # a raiz, mais scripts lidos e comandos descodificados
         self.bases = [cwd or os.getcwd()]
+        self.cloud = cloud  # sessão da cloud: valem também `_git_cloud` e `_gh_cloud`
         self.vistos: set = set()
         self.decisoes: list = []
 
@@ -541,21 +722,30 @@ class _Analise:
         if decisao == _INCERTO:
             # git com partes que só se conhecem ao executar (variável, xargs)
             sinal = _RE_PUSH if motivo == "sub" else _RE_FORCA
-            if not any(sinal.search(texto) for texto in self.textos):
+            if self.cloud and any(_RE_PUSH.search(texto) for texto in self.textos):
+                decisao, motivo = DENY, MOTIVO_CLOUD_PUSH
+            elif not any(sinal.search(texto) for texto in self.textos):
                 return
-            decisao, motivo = ASK, MOTIVO_INCERTO
+            else:
+                decisao, motivo = ASK, MOTIVO_INCERTO
         self.decisoes.append((decisao, motivo))
 
     def _opaco(self, texto: str = "") -> None:
         """Forma que não dá para ler: pergunta se o texto aparenta uma ação vigiada."""
-        for alvo in self.textos + [texto]:
-            if alvo and (_procura_solta(alvo) or _marcas(alvo)):
-                self.decisoes.append((ASK, MOTIVO_INCERTO))
-                return
+        alvos = [alvo for alvo in self.textos + [texto] if alvo]
+        if any(_procura_solta(alvo) or _marcas(alvo) for alvo in alvos):
+            self.decisoes.append((ASK, MOTIVO_INCERTO))
+        if self.cloud:
+            if any(_RE_GIT.search(alvo) and _RE_PUSH.search(alvo) for alvo in alvos):
+                self.decisoes.append((DENY, MOTIVO_CLOUD_PUSH))
+            if any(_RE_GH_ESCRITA.search(alvo) for alvo in alvos):
+                self.decisoes.append((DENY, MOTIVO_CLOUD_GH))
 
     def _texto_solto(self, texto: str) -> None:
         if _procura_solta(texto):
             self.decisoes.append((ASK, MOTIVO_EMBUTIDO))
+        if self.cloud:
+            self._regista(_procura_solta_cloud(texto, self.bases[-1]))
 
     def comando(self, texto: str, ps: bool, nivel: int = 0) -> None:
         if nivel > _NIVEL_MAX:
@@ -632,12 +822,16 @@ class _Analise:
 
             if nome == "git":
                 self._regista(_git(tokens[1:], incerto))
+                if self.cloud:
+                    self._regista(_git_cloud(tokens[1:], self.bases[-1], incerto))
                 if "foreach" in tokens:  # git submodule foreach <comando>
                     resto = _sem_opcoes(tokens[tokens.index("foreach") + 1:])
                     if resto:
                         self._reanalisa(resto, False, nivel)
             elif nome == "railway":
                 self._regista(_railway(tokens[1:], incerto))
+            elif nome == "gh" and self.cloud:
+                self._regista(_gh_cloud(tokens[1:], incerto))
             elif nome in _SHELLS_POSIX:
                 self._shell_posix(tokens[1:], nivel)
             elif nome in _SHELLS_PS:
@@ -841,9 +1035,9 @@ def _caminho(caminho: str) -> str:
     return caminho
 
 
-def avaliar(comando: str, ferramenta: str = "Bash", cwd: str | None = None):
+def avaliar(comando: str, ferramenta: str = "Bash", cwd: str | None = None, cloud: bool = False):
     """Devolve (DENY|ASK, motivo), ou None quando não há nada a dizer."""
-    analise = _Analise(comando, cwd)
+    analise = _Analise(comando, cwd, cloud)
     analise.comando(comando, ps=(ferramenta == "PowerShell"))
     return analise.resultado()
 
@@ -858,7 +1052,8 @@ def main() -> int:
         comando = dados["tool_input"]["command"]
         if not isinstance(comando, str):
             raise TypeError("tool_input.command não é texto")
-        resultado = avaliar(comando, ferramenta, dados.get("cwd"))
+        cloud = os.environ.get("CLAUDE_CODE_REMOTE", "").strip().lower() == "true"
+        resultado = avaliar(comando, ferramenta, dados.get("cwd"), cloud)
     except Exception as erro:  # falha fechada: na dúvida, bloqueia
         sys.stderr.write(
             "verificar_comando: erro interno, comando bloqueado por segurança "

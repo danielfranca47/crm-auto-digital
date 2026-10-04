@@ -51,14 +51,18 @@ ficheiro.
 
 **Prioridade: ALTA**
 
-Por confirmar. No modo sombra, cada veredito do avaliador acrescenta uma linha
-ao placar de `docs/ops/fila-automatica.md` e faz push para `main`; as
-graduações também. Se o Railway reiniciar os três backends a cada push, mesmo
-quando só mudou documentação, são vários reinícios por dia em horário de
-trabalho. No repositório não há nenhuma configuração que o evite (não existe
-`railway.json` nem "watch paths" versionados) — a definição, a existir, está no
-painel do Railway.
+Sim, pelo que o GitHub regista: em 04/10/2026 o push `db1e175`, que só tinha
+`CLAUDE.md`, `docs/` e `scripts/`, criou um deploy no ambiente de produção do
+Railway (`gh api repos/danielfranca47/crm-auto-digital/deployments`), tal como
+os pushes com código. No repositório não há nenhuma configuração que o evite
+(não existe `railway.json` nem "watch paths" versionados).
 
-**A fazer:** verificação só de leitura no Railway (precisa da CLI autenticada
-no PC — não é trabalho para o turno da noite). Se reiniciar: configurar em cada
-serviço os caminhos que disparam o deploy, com o "sim" do utilizador.
+Porque importa: no modo sombra, cada veredito do avaliador acrescenta uma linha
+ao placar de `docs/ops/fila-automatica.md` e faz push para `main`; as
+graduações também. São vários reinícios por dia em horário de trabalho.
+
+**A fazer** (precisa do Railway — não é trabalho para o turno da noite):
+confirmar no Railway quais dos serviços reiniciam de facto num push desses, e
+configurar em cada serviço os caminhos que disparam o deploy (cada backend só
+com a sua pasta), com o "sim" do utilizador. Convém estar feito antes de ligar
+o turno do dia (`docs/implementations/feat-fila-turno-do-dia-avaliador.md`).

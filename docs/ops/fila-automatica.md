@@ -122,11 +122,23 @@ apaga ou enfraquece um teste para o fazer passar; faz push forçado.
 
 ## Turno da noite
 
-Corre na cloud, num clone limpo. Um item por noite.
+Corre na cloud, num clone limpo, lançado por uma rotina sem conectores. Um
+item por noite.
+
+**A noite nunca escreve em `main`.** A cloud não o impede por si — por isso o
+verificador de comandos (`scripts/claude_hooks/verificar_comando.py`) recusa,
+em sessões da cloud, qualquer `git push` que não seja para uma branch
+`claude/…` escrita por extenso no comando, e os comandos `gh` que alteram o
+repositório (juntar um pull request, `gh api` de escrita). O push faz-se
+sempre assim: `git push -u origin claude/<slug>`.
 
 1. **Escolher** o item (secção "Que itens a fila pode pegar"). Sem item
    elegível: terminar e dizê-lo.
-2. **Branch** `claude/<slug>` a partir de `origin/main`.
+2. **Branch** `claude/<slug>` a partir de `origin/main`. Antes de qualquer
+   outro trabalho: `**Status:** Interrompido de noite — continuar` no `.md` do
+   item, commit e push. O limite de uso pode cortar a sessão sem aviso; assim
+   o que ficar a meio é sempre reconhecido na noite seguinte. **Push a cada
+   commit**, não só no fim.
 3. **Diagnóstico** — Passo 0 de
    [`_guia-documentar-implementacao.md`](../implementations/_guia-documentar-implementacao.md),
    escrito no próprio ficheiro (já existe? o que construir? riscos? fases?).
@@ -142,16 +154,17 @@ Corre na cloud, num clone limpo. Um item por noite.
 5. **Implementar** fase a fase, como manda o guia. Os Checks de Validação têm
    de poder ser executados de dia por quem não viu esta sessão: setup, ação,
    o que confirmar.
-6. **Testes automáticos** dos serviços tocados (`python -m pytest` no backend,
-   `npx tsc --noEmit` no frontend). Registar no ficheiro, na secção
+6. **Testes automáticos** dos serviços tocados (`python -m pytest tests/ -q`
+   no backend, `npx tsc --noEmit` no frontend). O clone não traz dependências:
+   instalar primeiro as do serviço tocado (`pip install -r requirements.txt`,
+   `npm ci`). Registar no ficheiro, na secção
    `## Testes automáticos (turno da noite)`: o que correu e o resultado. Um
    teste que falha e não é resolvido fica dito com todas as letras.
-7. **Push** só para `claude/<slug>` e
-   `**Status:** Implementado de noite — por validar`.
+7. **Fechar:** `**Status:** Implementado de noite — por validar`, commit e
+   push para `claude/<slug>`.
 
-Se o limite de uso acabar a meio: commit do que estiver coerente, push, e
-`**Status:** Interrompido de noite — continuar`. A noite seguinte retoma essa
-branch antes de pegar outra.
+Uma branch `claude/*` que ainda diga `Interrompido de noite — continuar` é
+retomada pela noite seguinte antes de pegar outro item.
 
 ---
 

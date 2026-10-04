@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -374,9 +375,12 @@ def test_nunca_responde_permitir():
         assert decisao(comando) in (None, vc.DENY, vc.ASK)
 
 
-def correr(entrada: str):
+def correr(entrada: str, cloud: bool = False):
+    ambiente = {k: v for k, v in os.environ.items() if k != "CLAUDE_CODE_REMOTE"}
+    if cloud:
+        ambiente["CLAUDE_CODE_REMOTE"] = "true"
     return subprocess.run(
-        [sys.executable, str(SCRIPT)], input=entrada.encode("utf-8"), capture_output=True, timeout=30
+        [sys.executable, str(SCRIPT)], input=entrada.encode("utf-8"), capture_output=True, timeout=30, env=ambiente
     )
 
 
@@ -418,3 +422,141 @@ def test_hook_falha_fechada_com_entrada_invalida(invalida):
     r = correr(invalida)
     assert r.returncode == 2
     assert b"bloqueado" in r.stderr
+
+
+# --------------------------------------------------------------------------
+# Sessões da cloud (fila automática): push só para claude/…, gh sem escrita
+# --------------------------------------------------------------------------
+
+def decisao_cloud(comando, ferramenta="Bash", cwd=None):
+    resultado = vc.avaliar(comando, ferramenta, cwd, cloud=True)
+    return resultado[0] if resultado else None
+
+
+CLOUD_RECUSA = [
+    # push para main ou para outra branch
+    "git push origin main",
+    "git push -u origin HEAD:main",
+    "git push origin HEAD:refs/heads/main",
+    "git push origin claude/item:main",
+    "git push origin claude/item main",
+    "git push origin feat/outra",
+    "git push origin claude/",
+    "git push origin refs/tags/v1",
+    "git push --dry-run origin HEAD:main",
+    "git -C . push origin main",
+    "cd backend-crm && git push origin main",
+    "bash -c 'git push origin main'",
+    # sem destino: quem decide é a configuração do git
+    "git push",
+    "git push origin",
+    "git push -u origin",
+    # várias branches de uma vez, apagar
+    "git push --all origin",
+    "git push --branches origin",
+    "git push origin --delete claude/item",
+    "git push -d origin claude/item",
+    "git push origin :claude/item",
+    "git push --prune origin claude/item",
+    # destino só conhecido ao executar
+    'git push origin "$RAMO"',
+    "echo claude/item | xargs git push origin",
+    'python -c "import subprocess; subprocess.run([\'git\', \'push\', \'origin\', \'main\'])"',
+    # gh que altera o repositório
+    "gh pr merge 12 --squash",
+    "gh pr merge",
+    "gh -R danielfranca47/crm-auto-digital pr merge 3",
+    "gh api -X POST repos/o/r/merges -f base=main -f head=claude/item",
+    "gh api repos/o/r/merges -f base=main",
+    "gh api --method PUT repos/o/r/pulls/3/merge",
+    "gh api --method=PATCH repos/o/r",
+    "gh api -XDELETE repos/o/r/git/refs/heads/main",
+    "gh api repos/o/r/git/refs --input corpo.json",
+    "gh workflow run deploy.yml",
+    "gh secret set X",
+    "gh repo edit --default-branch outra",
+    "gh release create v1",
+]
+
+
+@pytest.mark.parametrize("comando", CLOUD_RECUSA)
+def test_na_cloud_e_recusado(comando):
+    assert decisao_cloud(comando) == vc.DENY
+
+
+CLOUD_LIVRES = [
+    "git push -u origin claude/fix-docs-campos",
+    "git push origin claude/fix-docs-campos",
+    "git push origin HEAD:refs/heads/claude/fix-docs-campos",
+    "git push origin claude/a:claude/a",
+    "git push --dry-run origin HEAD:refs/heads/claude/sonda",
+    "git push -u origin claude/item && git status",
+    "git fetch origin && git checkout -b claude/item origin/main",
+    "git commit -m 'docs: nunca fazer git push origin main'",
+    "git log --oneline -5",
+    "gh pr view 3",
+    "gh pr list",
+    "gh pr create --title x --body y",
+    "gh api repos/o/r/pulls",
+    "gh api -X GET repos/o/r/pulls -f state=open",
+    "gh auth status",
+    "python -m pytest tests/ -q",
+    "python3 -m pip install -r requirements.txt",
+    "npx tsc --noEmit",
+]
+
+
+@pytest.mark.parametrize("comando", CLOUD_LIVRES)
+def test_na_cloud_o_trabalho_normal_passa(comando):
+    assert decisao_cloud(comando) is None
+
+
+@pytest.mark.parametrize("comando", ["git push origin main", "git push", "gh pr merge 12", "gh api -X POST repos/o/r/merges"])
+def test_fora_da_cloud_essas_regras_nao_existem(comando):
+    assert decisao(comando) is None
+
+
+def test_na_cloud_push_de_head_depende_da_branch_atual(tmp_path):
+    (tmp_path / ".git").mkdir()
+    cabeca = tmp_path / ".git" / "HEAD"
+    cabeca.write_text("ref: refs/heads/claude/item\n", encoding="utf-8")
+    assert decisao_cloud("git push origin HEAD", cwd=str(tmp_path)) is None
+    cabeca.write_text("ref: refs/heads/main\n", encoding="utf-8")
+    assert decisao_cloud("git push origin HEAD", cwd=str(tmp_path)) == vc.DENY
+    cabeca.write_text("0123456789abcdef0123456789abcdef01234567\n", encoding="utf-8")  # sem branch
+    assert decisao_cloud("git push origin HEAD", cwd=str(tmp_path)) == vc.DENY
+
+
+def test_na_cloud_branch_atual_numa_subpasta_e_numa_worktree(tmp_path):
+    real = tmp_path / "repo" / ".git" / "worktrees" / "w"
+    real.mkdir(parents=True)
+    (real / "HEAD").write_text("ref: refs/heads/claude/item\n", encoding="utf-8")
+    pasta = tmp_path / "w" / "backend-crm"
+    pasta.mkdir(parents=True)
+    (tmp_path / "w" / ".git").write_text(f"gitdir: {real}\n", encoding="utf-8")
+    assert decisao_cloud("git push origin HEAD", cwd=str(pasta)) is None
+    assert decisao_cloud("git push origin HEAD", cwd=str(tmp_path)) == vc.DENY  # fora de um repositório
+
+
+def test_na_cloud_script_com_push_para_main_e_recusado(tmp_path):
+    (tmp_path / "publicar.sh").write_text("git push origin main\n", encoding="utf-8")
+    assert decisao_cloud("bash publicar.sh", cwd=str(tmp_path)) == vc.DENY
+    assert decisao("bash publicar.sh", cwd=str(tmp_path)) is None
+
+
+def test_na_cloud_as_barreiras_de_sempre_continuam():
+    assert decisao_cloud("git push --force origin claude/item") == vc.DENY
+    assert decisao_cloud("railway vars") == vc.ASK
+
+
+def test_hook_na_cloud_recusa_push_para_main():
+    r = correr(entrada("git push origin main"), cloud=True)
+    assert r.returncode == 0
+    saida = json.loads(r.stdout)["hookSpecificOutput"]
+    assert saida["permissionDecision"] == "deny"
+    assert "claude/" in saida["permissionDecisionReason"]
+
+
+def test_hook_fora_da_cloud_nao_decide_push_para_main():
+    r = correr(entrada("git push origin main"))
+    assert (r.returncode, r.stdout) == (0, b"")

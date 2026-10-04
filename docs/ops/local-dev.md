@@ -716,6 +716,25 @@ Formas que cobre e que as regras não apanham:
 Texto que é dado e não comando não conta: mensagem de `git commit -m`, heredoc
 lido por `cat`, argumento de `grep` ou `echo`.
 
+**Só em sessões da cloud** (variável `CLAUDE_CODE_REMOTE=true` — a rotina do
+turno da noite da [fila automática](fila-automatica.md)) recusa também:
+
+- qualquer `git push` que não seja para uma branch `claude/…` escrita por
+  extenso no comando: push para `main` ou outra branch, push sem destino
+  (`git push`, `git push origin` — aí quem decide é a configuração do git),
+  `--all`, `--delete`, `:branch`, e destino só conhecido ao executar;
+  `git push origin HEAD` só passa se a branch atual for `claude/…`
+- os comandos `gh` que alteram o repositório no GitHub: `gh pr merge`,
+  `gh api` de escrita (método que não seja GET, ou campos sem método),
+  `gh workflow run`, `gh secret` / `variable set`, `gh repo edit`,
+  `gh release create`
+- formas que não dá para ler com um `git … push` ou um `gh … merge|api` no
+  texto: nas sessões da cloud não há quem responda a uma pergunta, por isso a
+  dúvida é uma recusa
+
+Numa sessão local estas três regras não existem — o fluxo de graduação
+continua a fazer `git push origin main` como sempre.
+
 Limites — o que é preciso saber:
 
 - **Não é uma garantia absoluta.** Não apanha ofuscação deliberada (script que
