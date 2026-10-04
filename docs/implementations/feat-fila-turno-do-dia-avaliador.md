@@ -188,6 +188,25 @@ nos casos em que o avaliador poderia ter decidido sozinho.
 **Para validar:** Cenários D1, D2 e D3, abaixo. O D4 só é possível depois do
 merge e da primeira branch real da noite.
 
+### Fase 2b — Correção encontrada no D2 (04/10/2026)
+
+**Problema identificado:** a regra de "devolver com correções" mandava remover
+só a worktree local. A branch local `claude/<slug>` ficava, e o passo 2 do
+turno do dia seguinte (`git worktree add … -b claude/<slug> …`) falharia por a
+branch já existir.
+
+**Correção:** a regra passa a mandar remover a worktree **e** a branch local.
+Sem Plan Mode próprio: é uma frase do contrato, encontrada e confirmada ao
+executar a decisão do D2.
+
+| Arquivo | Mudança |
+|---|---|
+| `docs/ops/fila-automatica.md` | "Devolver com correções": remove também a branch local. Primeira linha do placar (caso do ensaio, "não conta") |
+
+**Relatório em linguagem simples:** ao devolver uma branch à noite, ficava um
+resto no PC que faria o teste do dia seguinte tropeçar. Agora a regra manda
+limpar esse resto. Validado pelo próprio Cenário D2.
+
 ### Fase 3 — Ligar a noite
 
 **Objetivo:** a rotina da noite passa a correr às 04:07 de Lisboa.
@@ -254,9 +273,19 @@ Prefixo `A` = avaliador, `D` = turno do dia, `L` = ligar a noite.
   `claude/fix-docs-campos-obrigatorios-qualificacao`; `main` não foi tocada.
 
 ### Cenário D2 — Decisão do utilizador e placar
-- [ ] Responder à decisão pedida no fim do D1
-- [ ] Confirmar: a ação correspondente foi executada
-- [ ] Confirmar: o placar ganhou a linha, marcada "não conta" (sobe sempre), e "Seguidas" não mudou
+- [x] Responder à decisão pedida no fim do D1
+- [x] Confirmar: a ação correspondente foi executada
+- [x] Confirmar: o placar ganhou a linha, marcada "não conta" (sobe sempre), e "Seguidas" não mudou
+- **Validado em:** 04/10/2026 — o utilizador pediu primeiro uma explicação das
+  quatro respostas em linguagem do dia a dia e uma sugestão; escolheu
+  "devolver com correções". O item na branch ganhou `## Correções pedidas`
+  (quatro pontos, os propostos pelo avaliador) e `Status: Interrompido de noite
+  — continuar`; push `d4aaa17..ada6319` para
+  `claude/fix-docs-campos-obrigatorios-qualificacao`; worktree e branch local
+  removidas, a remota ficou. Placar: linha de 04/10/2026, "não aprovado" /
+  "devolver com correções", "Conta? não", "Seguidas" continua 0. A linha foi
+  escrita nesta branch e não diretamente em `main`, porque o formato novo do
+  placar (coluna "Conta?") só chega a `main` com o merge deste item.
 
 ### Cenário D3 — Worktree em duplicado
 - [x] Com uma worktree do mesmo slug já aberta, voltar ao passo 1 do turno do dia

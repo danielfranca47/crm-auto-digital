@@ -274,7 +274,7 @@ com o utilizador presente; sem resposta dele, nada é juntado nem apagado.
 | Resposta | O que acontece |
 |---|---|
 | **Juntar** | Graduação na worktree `claude+<slug>` (triagem dos ajustes como numa sessão da fila: tudo para `docs/plans/` com `Prioridade: por definir`), merge em `main`, push, remoção da worktree e da branch local e remota. Um check que tenha ficado `[ ]` passa a `[⏭️]` com "decisão do utilizador em DD/MM/AAAA" |
-| **Devolver com correções** | No `.md` do item, na branch: secção `## Correções pedidas` com a data e o que o utilizador pediu, e `**Status:** Interrompido de noite — continuar`. Commit e push para `claude/<slug>`; a worktree local é removida. A noite seguinte retoma a branch por essa secção |
+| **Devolver com correções** | No `.md` do item, na branch: secção `## Correções pedidas` com a data e o que o utilizador pediu, e `**Status:** Interrompido de noite — continuar`. Commit e push para `claude/<slug>`; a worktree e a branch local são removidas (a branch remota fica — sem isto, o passo 2 do turno do dia seguinte falharia ao recriar a branch local). A noite seguinte retoma a branch por essa secção |
 | **Fechar** | Worktree removida e branch apagada, local e remota. Em `main`, para a noite não refazer o mesmo item igual: o ficheiro do item fica com `**Autonomia:** manual` e uma linha `**Fechado em DD/MM/AAAA:** <motivo>` — ou é apagado, se o utilizador disser que o item já não interessa. Se o item nasceu de `docs/plans/` (o ficheiro só existe na branch), é o item do plano que deixa de ser `Prioridade: ALTA`, com a mesma nota. Commit e push |
 | **Decidir depois** | Nada muda. A branch continua a contar para o limite de 3 |
 
@@ -363,7 +363,7 @@ Quem acrescenta a linha é a sessão que executa a decisão, com um commit em
 
 | Data | Item | Veredito do avaliador | Decisão do utilizador | Conta? | Seguidas |
 |---|---|---|---|---|---|
-| — | — | — | — | — | 0 |
+| 04/10/2026 | `fix-docs-campos-obrigatorios-qualificacao` | não aprovado | devolver com correções | não — sobe sempre (`CLAUDE.md`) e ficou um check por validar | 0 |
 
 ---
 
