@@ -166,6 +166,18 @@ passa sozinho; fica escrito como correr a suíte.
 | `tests/test_media_fallback_pause.py` | Remover os falsos; registar o módulo em `sys.modules` |
 | `docs/ops/local-dev.md` | Nova secção "Correr os testes do backend-crm": comando, resultado esperado e regras ao escrever testes |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `00fda4a` | Pacotes de faz-de-conta removidos dos 4 ficheiros restantes; secção nova em `docs/ops/local-dev.md` |
+
+**Detalhes do commit `00fda4a`:**
+- `tests/test_followup_channel_context.py` — sem `fastapi`/`httpx` falsos
+- `tests/test_outcome_persistence.py`, `tests/test_whatsapp_outbound_message_model.py` — sem `_install_fastapi_stub`
+- `tests/test_media_fallback_pause.py` — sem pacotes falsos; módulo registado em `sys.modules`
+- `docs/ops/local-dev.md` — secção "Correr os testes do backend-crm"
+
 ### Relatório da Fase 2 — o que mudou na prática
 
 **Antes:** um ficheiro de teste podia passar na suíte inteira e falhar
