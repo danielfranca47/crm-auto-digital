@@ -64,8 +64,12 @@ Já existe uma branch da noite para construir e testar este item:
 04/10/2026, `Implementado de noite — por validar`; toca no `CLAUDE.md`, por
 isso sobe sempre).
 
-**Dependências:** `feat-fila-turno-da-noite` (é quem produz as branches) — em
-`main` desde 04/10/2026. O
+Antes de ligar o horário, decidir a melhoria M4 de
+[`fila-automatica-melhorias-futuras.md`](../plans/fila-automatica-melhorias-futuras.md)
+(tranca do lado do GitHub contra escrita da cloud em `main`).
+
+**Dependências:** o turno da noite (é quem produz as branches) — em `main`
+desde 04/10/2026, regras em `docs/ops/fila-automatica.md`. O
 verificador de comandos já está em `main` desde 04/10/2026
 (`scripts/claude_hooks/verificar_comando.py`).
 

@@ -140,6 +140,9 @@ O texto dela é só o gatilho: "és uma sessão da fila automática; lê o
 `CLAUDE.md` e `docs/ops/fila-automatica.md` e executa a secção Turno da
 noite". Ao criar ou alterar uma rotina, a API e o formulário anexam **todos**
 os conectores da conta por omissão — confirmar sempre que fica com zero.
+A cloud só consegue fazer push porque a aplicação do Claude está instalada
+neste repositório no GitHub (desde 04/10/2026); sem ela, o push responde com
+erro 403 "Claude doesn't have GitHub access".
 
 **A noite nunca escreve em `main`.** A cloud não o impede por si — por isso o
 verificador de comandos (`scripts/claude_hooks/verificar_comando.py`) recusa,
