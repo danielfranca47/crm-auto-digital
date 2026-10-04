@@ -1,7 +1,7 @@
 # Limpar as regras antigas de "permitir sempre" do Claude Code
 
 **Branch:** `worktree-fix+limpeza-regras-permitir-sempre`
-**Status:** Em andamento
+**Status:** Todos os cenários validados
 **Origem:** este item surgiu como "Ajuste possível" na graduação de `feat-modo-auto-sem-cliques.md` (04/10/2026), marcado como urgente pelo utilizador
 
 ---
@@ -141,15 +141,14 @@ correr o script** (`python C:\Temp\limpar-regras-claude.py`).
 - [x] Utilizador corre `python C:\Temp\limpar-regras-claude.py`
 - [x] Confirmar na saída: 232 regras encontradas, 18 com credencial, 0 depois, "Resto das definicoes intacto: sim"
 - [x] Claude repete a verificação mascarada do diagnóstico sobre `~/.claude/settings.json` e sobre a cópia de segurança: total de regras com credencial = 0 nos dois
-- [ ] Cópia antiga `~/.claude/settings.json.bak-2026-10-04` apagada (ou limpa): ainda guarda 18 regras com credencial
-- **Verificado em:** 04/10/2026 — `settings.json` com 0 regras e 0 credenciais; cópia de segurança com 214 regras (232 − 18) e 0 credenciais; resto das definições igual entre os dois. A saída do script não foi vista pelo Claude: os números foram reconstituídos a partir dos dois ficheiros.
-- **Pendente:** existe uma terceira cópia, `settings.json.bak-2026-10-04` (03/10/2026 18:38, anterior a esta implementação), com 241 regras, 18 delas com credencial em texto simples. O script não a conhece. Enquanto existir, a decisão "credenciais: só remover" não está cumprida no disco. O utilizador autorizou apagá-la, mas o revisor automático recusou que o Claude o fizesse (motivo `[Irreversible Local Destruction]`): é o utilizador que a apaga.
+- [x] Cópia antiga `~/.claude/settings.json.bak-2026-10-04` apagada: guardava 18 regras com credencial
+- **Validado em:** 04/10/2026 — `settings.json` com 0 regras e 0 credenciais; cópia de segurança com 214 regras (232 − 18) e 0 credenciais; resto das definições igual entre os dois. A saída do script não foi vista pelo Claude: os números foram reconstituídos a partir dos dois ficheiros. A cópia antiga (03/10/2026, 241 regras, 18 com credencial, desconhecida do script) foi apagada pelo utilizador, porque o revisor automático recusou que o Claude o fizesse; a verificação repetida confirma que já não existe.
 
 ### Cenário A3 — Conversa nova trabalha sem cliques
 - [x] Abrir uma conversa nova depois de correr o script
 - [x] Pedir um fluxo normal: correr os testes de um backend, um `git status`, uma captura de ecrã no browser
-- [ ] Confirmar: nenhum pedido de clique, nenhum erro de permissão
-- **Executado em:** 04/10/2026 — testes do `backend-crm`, `git status` e captura de ecrã da página aberta no browser correram sem nenhuma recusa de permissão. A primeira tentativa de captura falhou por o browser de teste estar em uso por outra conversa (erro "browser is already running", não é erro de permissão); repetida com sucesso depois de essa conversa fechar. Falta só o utilizador confirmar que não lhe apareceu nenhum pedido de clique.
+- [x] Confirmar: nenhum pedido de clique, nenhum erro de permissão
+- **Validado em:** 04/10/2026 — testes do `backend-crm`, `git status` e captura de ecrã da página aberta no browser correram sem nenhuma recusa de permissão. A primeira tentativa de captura falhou por o browser de teste estar em uso por outra conversa (erro "browser is already running", não é erro de permissão); repetida com sucesso depois de essa conversa fechar. O utilizador confirmou que não lhe apareceu nenhum pedido de clique.
 - **Limite desta execução:** a conversa correu a partir da pasta principal, que ainda tem a lista antiga do projeto (83 regras); a lista de 56 só entra em `main` na graduação. O que ficou provado é que a lista pessoal vazia não gera cliques. As três operações do fluxo estão cobertas da mesma forma nas duas listas (regra de `pytest`, `git status` só de leitura, `take_screenshot`).
 - **Fora do âmbito:** a suíte do `backend-crm` deu 224 aprovados e 18 falhados, corrida sobre o código de `main` — esta implementação não toca em código de backend, por isso as falhas não vêm dela.
 
