@@ -235,11 +235,23 @@ Prefixo `A` = avaliador, `D` = turno do dia, `L` = ligar a noite.
   (437 com `scripts/claude_hooks/tests`).
 
 ### Cenário D1 — Turno do dia de ponta a ponta
-- [ ] Sem worktree `claude+…` aberta, seguir a secção "Turno do dia" desta branch
+- [x] Sem worktree `claude+…` aberta, seguir a secção "Turno do dia" desta branch
       para `claude/fix-docs-campos-obrigatorios-qualificacao`
-- [ ] Confirmar: worktree criada, `main` junto, testes e checks registados no item
-- [ ] Confirmar: o script do que sobe sempre responde "sobe" (`CLAUDE.md`)
-- [ ] Confirmar: veredito do avaliador no item, `Status: À espera da tua decisão`, relatório na conversa com link e push feito para `claude/<slug>`
+- [x] Confirmar: worktree criada, `main` junto, testes e checks registados no item
+- [x] Confirmar: o script do que sobe sempre responde "sobe" (`CLAUDE.md`)
+- [x] Confirmar: veredito do avaliador no item, `Status: À espera da tua decisão`, relatório na conversa com link e push feito para `claude/<slug>`
+- **Validado em:** 04/10/2026 — worktree `claude+fix-docs-campos-obrigatorios-qualificacao`
+  criada e `origin/main` junto sem conflitos. Branch só de documentação: sem
+  testes de código, dito na secção "Testes automáticos (turno do dia)". Check 1
+  do item validado; check 2 ficou `[ ]` com o que foi observado (não consegue
+  passar como está escrito). Script: saída 1, "Regras de segurança e de
+  processo do próprio agente — CLAUDE.md". Avaliador: saída 1, "não aprovado"
+  (critérios 2, 5 e 6), 22 turnos, 0,58 USD de referência — menos do que no A1
+  (38 turnos, 1,07 USD), já com a indicação dos comandos git simples no pedido;
+  a única ação recusada foi a tentativa de correr o script do que sobe sempre.
+  Estado "À espera da tua decisão" (primeira linha da tabela: sobe e tem check
+  por validar), relatório no topo do item, push `4424527..d4aaa17` para
+  `claude/fix-docs-campos-obrigatorios-qualificacao`; `main` não foi tocada.
 
 ### Cenário D2 — Decisão do utilizador e placar
 - [ ] Responder à decisão pedida no fim do D1
@@ -247,8 +259,12 @@ Prefixo `A` = avaliador, `D` = turno do dia, `L` = ligar a noite.
 - [ ] Confirmar: o placar ganhou a linha, marcada "não conta" (sobe sempre), e "Seguidas" não mudou
 
 ### Cenário D3 — Worktree em duplicado
-- [ ] Com uma worktree do mesmo slug já aberta, voltar ao passo 1 do turno do dia
-- [ ] Confirmar: não avança e reporta trabalho em duplicado
+- [x] Com uma worktree do mesmo slug já aberta, voltar ao passo 1 do turno do dia
+- [x] Confirmar: não avança e reporta trabalho em duplicado
+- **Validado em:** 04/10/2026 — com a worktree do D1 ainda no disco,
+  `git worktree list` mostra `claude+fix-docs-campos-obrigatorios-qualificacao`:
+  o passo 1 pára nessa branch. Além disso o item na origem já diz "À espera da
+  tua decisão", por isso deixou de ser uma branch "por validar".
 
 ### Cenário D4 — Comando verdadeiro e primeiro caso que conta para o placar
 - [ ] Depois do merge: `.claude/commands/fila-validar.md` existe na pasta principal e `/fila-validar` aparece na lista de comandos
