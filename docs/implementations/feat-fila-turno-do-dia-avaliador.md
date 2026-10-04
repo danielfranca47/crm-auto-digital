@@ -122,6 +122,30 @@ avaliador sobre uma branch `claude/<slug>`.
 | `scripts/fila/tests/test_lancar_avaliador.py` | Novo. Nomes de branch, comando montado, leitura da resposta, secção escrita, falha fechada. Nenhuma sessão real é lançada |
 | `docs/ops/fila-automatica.md` | Secção "Avaliador": como se lança e o que o script garante |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `67405fd` | Lançador do avaliador, testes e secção "Avaliador" do contrato |
+
+**Detalhes do commit `67405fd`:**
+- `scripts/fila/lancar_avaliador.py` — novo: valida a branch, monta o pedido fixo, lança a sessão na pasta principal, lê a resposta, escreve `## Avaliação`
+- `scripts/fila/tests/test_lancar_avaliador.py` — novo: 48 casos, sem lançar sessão real
+- `docs/ops/fila-automatica.md` — secção "Avaliador"
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** as regras diziam que um avaliador independente dava o veredito
+sobre cada branch da noite, mas não havia forma de o lançar.
+**Agora:** um comando lança o avaliador sobre uma branch. Ele corre numa sessão
+à parte, sem saber nada de quem implementou ou testou, sem conseguir alterar
+nenhum ficheiro, e lê os critérios da versão em produção das regras — não da
+branch que está a avaliar. O veredito e a explicação, em linguagem simples,
+ficam escritos no ficheiro do item. No ensaio com a branch que a noite já
+deixou, respondeu "não aprovado" com três motivos concretos, e custou 1,07 USD
+de referência.
+**Para validar:** Cenários A1 e A2, abaixo — já validados em 04/10/2026.
+
 ### Fase 2 — Turno do dia, decisão e placar
 
 **Objetivo:** `/fila-validar` leva uma branch da noite até ao relatório, o
