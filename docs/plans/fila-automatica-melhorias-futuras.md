@@ -66,3 +66,48 @@ confirmar no Railway quais dos serviços reiniciam de facto num push desses, e
 configurar em cada serviço os caminhos que disparam o deploy (cada backend só
 com a sua pasta), com o "sim" do utilizador. Convém estar feito antes de ligar
 o turno do dia (`docs/implementations/feat-fila-turno-do-dia-avaliador.md`).
+
+## M4 — Tranca do lado do GitHub contra escrita da cloud em `main`
+
+**Prioridade: ALTA**
+
+O que impede a rotina da noite de escrever em `main` (e portanto em produção)
+são duas camadas nossas: o verificador de comandos, que nas sessões da cloud
+só deixa passar `git push` para `claude/…`, e a regra `deny` de `mcp__github`
+em `.claude/settings.json`. O ensaio de 04/10/2026 provou que, sem elas, a
+cloud consegue mesmo escrever em `main`. Se o verificador não arrancar na
+cloud, ou se a cloud passar a trazer uma ferramenta nova com outro nome, nada
+mais trava esse envio.
+
+**A fazer:** ver como o GitHub regista um push feito pela cloud (a aplicação
+do Claude foi instalada no repositório em 04/10/2026) — se aparece como a
+aplicação e não como `danielfranca47`, criar um ruleset que só deixe o
+utilizador atualizar `main`. É uma alteração externa: só com o "sim" explícito
+dele. Se o GitHub não distinguir os dois, registar isso e fechar o item.
+
+**Por que é ALTA:** convém estar decidido antes de ligar o horário da noite
+(`docs/implementations/feat-fila-turno-do-dia-avaliador.md`, "Último passo").
+
+## M5 — A noite não abre pull requests
+
+**Prioridade: BAIXA**
+
+Nas sessões da cloud, `gh pr create` continua permitido: abre um pedido para
+juntar código, mas não o aprova (`gh pr merge` é recusado). Sem risco para
+produção; o efeito é ruído — pedidos abertos no GitHub que ninguém pediu.
+
+**A fazer:** acrescentar `create` às ações de `pr` recusadas em `_GH_ESCRITA`
+(`scripts/claude_hooks/verificar_comando.py`), com o caso na bateria de testes.
+
+## M6 — Recusa a mais em código com `git push` num comentário
+
+**Prioridade: BAIXA**
+
+Nas sessões da cloud, ao correr diretamente um ficheiro de código
+(`python ficheiro.py`, `node ficheiro.js`), o verificador procura as ações
+vigiadas no texto do ficheiro. Uma linha de comentário ou de documentação com
+`git push origin main` chega para recusar o comando. Não afeta
+`python -m pytest`.
+
+**A fazer:** em `_procura_solta_cloud`, ignorar linhas que sejam só
+comentário, ou exigir que o `git push` apareça numa chamada a um programa.

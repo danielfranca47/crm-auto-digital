@@ -502,16 +502,20 @@ class _Leitor:
         tem = din = False
         pendentes: list = []
         fundo = 0
+        descarta = False  # o próximo token é o destino de um `>`: não é argumento
 
         def fecha_token():
-            nonlocal buf, tem, din
+            nonlocal buf, tem, din, descarta
             if tem:
-                atual.append(_token("".join(buf), din))
+                if not descarta:
+                    atual.append(_token("".join(buf), din))
+                descarta = False
             buf, tem, din = [], False, False
 
         def fecha_segmento():
-            nonlocal atual
+            nonlocal atual, descarta
             fecha_token()
+            descarta = False
             if atual:
                 self.segmentos.append(atual)
             atual = []
@@ -599,7 +603,18 @@ class _Leitor:
                     pendentes.append(([str(x) for x in atual], m.group(2)))
                     i = m.end()
                     continue
-            if c in "<>":
+            if c == ">":
+                # Redirecionamento de saída (`>`, `>>`, `2>`, `>&1`): nem o número do
+                # descritor nem o destino são argumentos do comando.
+                if tem and not din and "".join(buf).isdigit():
+                    buf, tem = [], False
+                fecha_token()
+                i += 1
+                while i < n and t[i] in ">&":
+                    i += 1
+                descarta = True
+                continue
+            if c == "<":
                 fecha_token()
                 i += 1
                 continue
@@ -619,6 +634,10 @@ class _Leitor:
                 # expansão de chaves do bash ({a,b}): faz parte do token e gera texto
                 buf.append(c)
                 din = tem = True
+                i += 1
+                continue
+            if c == "&" and t[i + 1:i + 2] == ">":  # `&>`: redirecionamento, não separador
+                fecha_token()
                 i += 1
                 continue
             if c in "\n;|&{}":
