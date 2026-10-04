@@ -113,7 +113,11 @@ procedimento da noite. Nada corre sozinho ainda.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(hash a registar)* | barreira do push na cloud + procedimento da noite |
+| 1 | `032edf5` | barreira do push na cloud + procedimento da noite |
+
+**Detalhes do commit `032edf5`:**
+- `scripts/claude_hooks/verificar_comando.py` — `_git_cloud` (lê o destino de cada `git push`; só passa `claude/…` escrito no comando), `_ramo_atual` (branch atual lida de `.git/HEAD`, para `git push origin HEAD`), `_gh_cloud` e `_gh_api_escreve` (comandos `gh` que alteram o repositório), `_procura_solta_cloud` (as mesmas regras em código que não é shell); `_Analise` recebe `cloud` e `main` lê `CLAUDE_CODE_REMOTE`
+- `scripts/claude_hooks/tests/test_verificar_comando.py` — tabelas `CLOUD_RECUSA` e `CLOUD_LIVRES`, branch atual em pasta temporária (repositório normal e worktree), e o contrato do hook com e sem a variável da cloud
 
 ### Relatório da Fase 1 — o que mudou na prática
 
