@@ -1,7 +1,7 @@
 # Separar "janela de resposta do agente" de "horários de atendimento do profissional"
 
 **Branch:** `worktree-fix+disponibilidade-campo-duplo-sentido` (worktree `.claude/worktrees/fix+disponibilidade-campo-duplo-sentido` — a ferramenta de worktree troca `fix/<slug>` por este formato)
-**Status:** Em andamento — Fases 1 e 2 implementadas; Cenários P1–P4 validados (04/10/2026); C1 por validar — a simulação local mostrou que a janela de resposta é ignorada quando o buffer de mensagens está ligado (ver "Fase 3 — Diagnóstico")
+**Status:** Em andamento — Fases 1, 2 e 3 implementadas; Cenários P1–P5 validados (04/10/2026); falta o C1 (mensagem real de WhatsApp, só possível em produção depois do deploy)
 **Origem:** `docs/implementations/feat-workflows-por-gatilho.md` — "Evidência no código", ponto 7 (análise comparativa de janelas de horário pedida pelo utilizador em 03/10/2026)
 
 ---
@@ -188,7 +188,19 @@ não é a outra. Com os horários de atendimento vazios aparece "Não configurad
 - **Tentado em:** 04/10/2026 — **não validado.** O envio real não foi feito: a ligação WhatsApp da conta de teste local está desligada e as mensagens reais chegam ao servidor de produção, não ao ambiente local. Em substituição, a chegada da mensagem foi simulada no ambiente local (domingo 03:04, janela de domingo 09:00–18:00, ou seja, fechada):
   - **Buffer de mensagens em 8s (como a conta estava, e como nasce toda conta nova):** a resposta ficou agendada para 8 segundos depois — a janela foi ignorada. ❌
   - **Buffer desligado:** a resposta ficou agendada para segunda às 10:00 — a janela foi respeitada e leu a grade nova. ✅ (Mas saltou a abertura do próprio domingo às 09:00 — é o problema já anotado em "Ajustes Possíveis".)
-  - Ver "Fase 3 — Diagnóstico", abaixo. O C1 só deve ser repetido com WhatsApp real depois dessa correção.
+  - Ver "Fase 3", abaixo — os dois defeitos foram corrigidos e validados em simulação (Cenário P5). O C1 continua em aberto até haver uma mensagem real: só é possível em produção, depois do deploy, com a janela fechada e o buffer ligado.
+
+### Cenário P5 — Janela de resposta com buffer e abertura do próprio dia (simulação local)
+- [x] Buffer de mensagens em 8s, Janela "Personalizado" fechada agora mas com abertura ainda hoje
+- [x] Entregar uma mensagem ao webhook local (`POST /webhooks/whatsapp/inbound`), sem envio real
+- [x] Confirmar: a resposta fica agendada para a abertura de hoje (não para 8s depois, nem para amanhã)
+- [x] Confirmar: uma segunda mensagem do mesmo lead junta-se à primeira e continua agendada para a abertura
+- [x] Confirmar: com a janela de hoje já fechada, fica para a abertura do próximo dia; com a janela aberta ou "24 horas", sai ao fim do buffer
+- **Validado em:** 04/10/2026 (domingo, 16:53) —
+  janela domingo 17:00–23:59 + buffer 8s → agendada para domingo 17:00; segunda mensagem acumulou no mesmo job, ainda às 17:00;
+  mesma janela + buffer desligado → domingo 17:00;
+  janela domingo 09:00–12:00 (já fechada) + buffer 8s → segunda 10:00;
+  janela aberta ou "24 horas" + buffer 8s → 8s depois (sem mudança).
 
 ---
 
@@ -201,6 +213,15 @@ não é a outra. Com os horários de atendimento vazios aparece "Não configurad
   procura a próxima abertura a partir do dia seguinte (o ciclo começa em
   `delta_days = 1`). Afeta os modos "Horário comercial" e "Personalizado"; é
   independente do campo com duplo sentido. Proposta: Fase 3 deste arquivo.
+  **Corrigido na Fase 3.**
+- **Buffer desligado + janela fechada: uma resposta por mensagem na abertura.**
+  Sem buffer, cada mensagem recebida com a janela fechada cria o seu próprio
+  job, e na abertura a Lara responde a cada uma em separado. Com o buffer
+  ligado (valor de fábrica) acumulam-se numa só resposta. Comportamento
+  anterior a esta implementação; fica fora do escopo.
+- Em 04/10/2026 a suíte do `backend-crm` tinha 18 testes antigos a falhar
+  (mesma lista antes e depois da Fase 3) — tratados em
+  `fix-testes-backend-crm-a-falhar.md`.
 - Testes antigos a falhar sem relação com esta mudança: 8 em
   `backend-core/tests` (`test_ai_profile_agent_mode.py`,
   `test_ai_profile_timezone_persistence.py` — chamam `create_or_replace_ai_profile`
@@ -216,7 +237,7 @@ não é a outra. Com os horários de atendimento vazios aparece "Não configurad
 
 ---
 
-## Fase 3 — Diagnóstico (04/10/2026) — aguarda plano aprovado
+## Fase 3 — Diagnóstico + Correção (04/10/2026)
 
 ### Problema identificado
 
@@ -241,6 +262,37 @@ alterado — mas ambos impedem validar o C1.
 
 ### Correção
 
-Por definir em Plan Mode. O ponto a decidir é como combinar buffer e janela
-(ex.: aplicar a janela ao instante "agora + buffer", mantendo a acumulação de
-mensagens) e incluir o dia corrente na procura da próxima abertura.
+A janela passa a aplicar-se ao instante previsto de resposta em todos os
+caminhos de entrada: "agora + buffer" (primeira mensagem e cada mensagem
+acumulada) passa pela mesma verificação que já existia para o caminho sem
+buffer, e a procura da próxima abertura começa no dia corrente. O atraso de
+"primeira mensagem / dentro da conversa" continua a valer só com o buffer
+desligado, como a tela já diz. Sem mudança de banco, de telas ou de prompts.
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-crm/services/humanization.py` | `next_available_at` procura a abertura a partir de hoje (`range(0, 8)`, só aberturas ainda no futuro); nova `apply_availability_window(ai_profile, when_utc)`; `compute_scheduled_at` passa a usá-la |
+| `backend-crm/services/whatsapp_inbound/inbound_handler.py` | Nova `_buffered_scheduled_at()` — "agora + buffer" adiado para a abertura se cair fora da janela — usada nos dois pontos do buffer; erro no cálculo cai no comportamento anterior (nunca bloqueia o webhook) |
+| `backend-crm/tests/test_humanization_availability_window.py` | 4 testes novos: abertura do próprio dia, grade de um só dia depois do fecho, `apply_availability_window` dentro e fora da janela |
+| `backend-crm/tests/test_inbound_buffer_window.py` (novo) | 3 testes pelo caminho real (`handle_inbound`): buffer + janela fechada → abertura; mensagem acumulada continua na abertura; buffer + "24 horas" → só o buffer |
+| `docs/architecture/humanization.md`, `webhooks.md`, `_mapa-sistema.md` | A janela aplica-se com e sem buffer |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `(a registar)` | Janela de horário aplicada com buffer ligado + abertura do próprio dia, testes e docs |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** a "Janela de horário" só funcionava para quem desligava o buffer de
+mensagens — e o buffer vem ligado de fábrica. Na prática, a Lara respondia a
+qualquer hora. E quando funcionava, uma mensagem recebida de madrugada só era
+respondida no dia seguinte, mesmo que a janela abrisse nessa manhã.
+**Agora:** fora da janela, a resposta fica sempre guardada para a próxima
+abertura — a de hoje, se ainda não chegou. Várias mensagens recebidas com a
+janela fechada juntam-se numa só resposta na abertura. Contas em "24 horas"
+(o valor de fábrica) não notam diferença; contas que já tinham "Horário
+comercial" ou "Personalizado" passam a respeitar o horário que configuraram.
+**Para validar:** Cenário P5 (simulação local, já validado) e Cenário C1
+(mensagem real de WhatsApp, em produção depois do deploy).

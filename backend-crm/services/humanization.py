@@ -132,16 +132,26 @@ def next_available_at(ai_profile: Dict[str, Any], now_utc: datetime) -> Optional
         if start_today <= now_local < end_today:
             return None  # dentro da janela
 
-    # Fora da janela — encontrar próxima abertura (até 7 dias à frente)
-    for delta_days in range(1, 8):
+    # Fora da janela — encontrar próxima abertura, a começar pela de hoje se ainda
+    # não chegou (até 7 dias à frente: cobre grade de um só dia depois do fecho)
+    for delta_days in range(0, 8):
         candidate = now_local + timedelta(days=delta_days)
         wd_c = candidate.weekday()
         if wd_c in schedule:
             sh, sm = _parse_hm(schedule[wd_c][0])
             next_open = candidate.replace(hour=sh, minute=sm, second=0, microsecond=0)
-            return next_open.astimezone(timezone.utc).replace(tzinfo=None)
+            if next_open > now_local:
+                return next_open.astimezone(timezone.utc).replace(tzinfo=None)
 
     return None  # nenhum dia disponível encontrado → não bloquear
+
+
+def apply_availability_window(ai_profile: Dict[str, Any], when_utc: datetime) -> datetime:
+    """Devolve `when_utc` ou, se cair fora da janela de horário, a próxima abertura."""
+    window_start = next_available_at(ai_profile, when_utc)
+    if window_start and window_start > when_utc:
+        return window_start  # aguardar até a janela abrir
+    return when_utc
 
 
 def compute_scheduled_at(ai_profile: Dict[str, Any], is_first_message: bool) -> Optional[datetime]:
@@ -150,9 +160,7 @@ def compute_scheduled_at(ai_profile: Dict[str, Any], is_first_message: bool) -> 
     delay_secs = compute_reply_delay(ai_profile, is_first_message)
     base = datetime.utcnow() + timedelta(seconds=delay_secs) if delay_secs else datetime.utcnow()
 
-    window_start = next_available_at(ai_profile, base)
-    if window_start and window_start > base:
-        return window_start  # aguardar até a janela abrir
-    if delay_secs:
-        return base
+    scheduled = apply_availability_window(ai_profile, base)
+    if scheduled > base or delay_secs:
+        return scheduled
     return None

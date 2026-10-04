@@ -251,7 +251,7 @@ UazAPI → POST /webhooks/whatsapp/uazapi (backend-crm)
   → inbound_handler.py: bot_disabled? audio? media_fallback? buffer?
   → guardrail.py: deve processar?
   → orchestrator.py: monta ContextBundle
-  → jobs_service.py: cria job whatsapp.inbound.n8n (scheduled_at = now + buffer)
+  → jobs_service.py: cria job whatsapp.inbound.n8n (scheduled_at = now + buffer, ou abertura da janela)
                                 │
   ┌─────────────────────────────┘
   │
