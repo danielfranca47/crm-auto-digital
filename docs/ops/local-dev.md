@@ -43,6 +43,56 @@ worktree recém-criada, o passo acima provavelmente foi esquecido.
 
 ---
 
+## Correr os testes do backend-crm
+
+A partir da pasta `backend-crm`:
+
+```bash
+python -m pytest tests/ -q
+```
+
+**Resultado esperado:** tudo aprovado, zero falhados. Uma falha é sempre algo
+a investigar — não há falhas "conhecidas" que se possam ignorar. Nada corre
+estes testes fora da máquina local (os workflows do GitHub só fazem deploy
+dos frontends), por isso convém corrê-los antes de mergear uma implementação
+que toque no `backend-crm`.
+
+Cada ficheiro tem também de passar sozinho
+(`python -m pytest tests/test_<nome>.py -q`) — o resultado não pode depender
+de que outros testes correram antes.
+
+`pytest` não está em `requirements.txt`; tem de estar instalado no Python
+usado para correr a suíte.
+
+### Regras ao escrever ou alterar testes
+
+- **Usar o `fastapi`, `pydantic` e `httpx` verdadeiros.** Nunca instalar uma
+  versão de faz-de-conta em `sys.modules`: ela só entra quando o pacote
+  verdadeiro ainda não foi importado, o que faz o teste comportar-se de uma
+  forma sozinho e de outra na suíte inteira, e deixa de funcionar assim que o
+  código de produção importa mais um nome do pacote.
+- **Módulo carregado com `importlib.util.spec_from_file_location` é registado
+  em `sys.modules` com um nome único antes de `exec_module`**
+  (`sys.modules[spec.name] = modulo`). Sem isso, modelos `pydantic` definidos
+  num ficheiro com `from __future__ import annotations` falham com
+  "is not fully defined". O nome único mantém uma cópia privada, para que
+  funções substituídas num teste não afetem os outros.
+- **Rotas fecham a ligação ao banco que recebem.** Para verificar o resultado
+  depois de chamar uma rota, usar banco em ficheiro temporário e abrir uma
+  ligação separada — não reutilizar a ligação entregue à rota, nem `:memory:`.
+- **No Windows, um `.db` aberto não pode ser apagado.** Fechar as ligações que
+  o teste abre (`contextlib.closing(get_connection())` — o `with` do `sqlite3`
+  só faz commit, não fecha) e criar a pasta temporária com
+  `tempfile.TemporaryDirectory(ignore_cleanup_errors=True)`.
+- **Chamadas ao backend-core e criação de jobs são substituídas no teste**
+  (`unittest.mock.patch`), para o teste não depender de rede nem escrever no
+  banco real.
+- **Tabelas criadas à mão no teste têm de acompanhar o esquema real.** Quando
+  o código passa a ler ou gravar uma coluna nova, os testes que montam essa
+  tabela à mão precisam da mesma coluna.
+
+---
+
 ## Comandos slash locais (`.claude/commands/`) não são versionados
 
 `.claude/` inteiro está no `.gitignore` (linha 42), então os slash commands definidos em

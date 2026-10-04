@@ -1,7 +1,7 @@
 # Corrigir os 18 testes do backend-crm que falham
 
 **Branch:** `worktree-fix+testes-backend-crm-a-falhar` (worktree `.claude/worktrees/fix+testes-backend-crm-a-falhar`)
-**Status:** Em andamento
+**Status:** Todos os cenários validados (04/10/2026) — pendente: graduação
 **Origem:** este item surgiu como "Ajuste possível" na graduação de `fix-limpeza-regras-permitir-sempre.md` (04/10/2026), marcado como urgente pelo utilizador
 
 ---
@@ -119,6 +119,41 @@ isso passaria a afetar os outros testes.
 | `test_inbound_orchestrator_flag.py` | Idem (`inbound_handler_orchestrator_flag`); `ignore_cleanup_errors=True` |
 | `test_whatsapp_group_ignore.py` | Falsos removidos; módulos registados com nome único; `ignore_cleanup_errors=True`; `closing(get_connection())` |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `2f8d54e` | Os 18 testes passam; suíte inteira 242 aprovados |
+
+**Detalhes do commit `2f8d54e`:**
+- `tests/test_start_followup_transition.py` — `_current_user()` com `entitlements`; `qualification_total_score` nos esquemas; `setUp` substitui as chamadas ao core e a criação do job; perfil com `qualification_required_fields` no teste de qualificação incompleta
+- `tests/test_outbound_does_not_persist_outcome.py` — colunas `email` e `origin`; sem `fastapi` falso
+- `tests/test_lead_delete.py` — banco em ficheiro + ligação separada para verificar
+- `tests/test_meeting_management_gate.py`, `tests/test_inbound_orchestrator_flag.py` — sem pacotes falsos; módulo registado em `sys.modules`
+- `tests/test_whatsapp_group_ignore.py` — idem; ligações fechadas; limpeza tolerante no Windows
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** correr os testes do `backend-crm` dava sempre 18 falhados em 242,
+por isso uma falha nova passava despercebida no meio das antigas.
+**Agora:** os 242 passam. As 18 falhas eram todas defeitos dos próprios
+testes (preparação desatualizada ou frágil), não do sistema — nenhum código
+de produção foi alterado e nenhuma verificação foi enfraquecida.
+
+Duas coisas que só apareceram depois de desbloquear os testes:
+
+- Em 5 dos 18, atrás da falha original havia uma segunda do mesmo tipo
+  (tabela de teste sem colunas que o código hoje usa). Corrigidas da mesma
+  forma, depois de confirmar que as colunas existem no esquema real.
+- O teste "follow-up é bloqueado quando a qualificação está incompleta"
+  assumia campos obrigatórios fixos por tipo de agente. Desde 04/04/2026 os
+  campos obrigatórios vêm só do AI Profile da conta (sem configuração =
+  nenhum obrigatório). O teste passou a configurar esses campos no perfil; a
+  verificação em si (bloqueia com erro 400 `qualification_incomplete`)
+  ficou igual e passa.
+
+**Para validar:** Cenários A1 e A3, abaixo.
+
 ### Fase 2 — Tirar a causa de fundo e deixar escrito
 
 **Objetivo:** nenhum teste depende de pacotes de faz-de-conta; cada ficheiro
@@ -126,9 +161,21 @@ passa sozinho; fica escrito como correr a suíte.
 
 | Arquivo | O que muda |
 |---|---|
-| `tests/test_followup_channel_context.py` | Remover `fastapi`/`httpx` falsos (hoje falha sozinho: 4 falhados — o falso não tem `Depends`) |
-| `tests/test_outcome_persistence.py`, `tests/test_media_fallback_pause.py`, `tests/test_whatsapp_outbound_message_model.py` | Remover os falsos (hoje passam, mas são a mesma armadilha) |
-| `docs/ops/local-dev.md` | Secção: como correr a suíte do `backend-crm`, resultado esperado, e a regra de não usar pacotes de faz-de-conta |
+| `tests/test_followup_channel_context.py` | Remover `fastapi`/`httpx` falsos (falhava sozinho: 4 falhados — o falso não tinha `Depends`) |
+| `tests/test_outcome_persistence.py`, `tests/test_whatsapp_outbound_message_model.py` | Remover o `fastapi` falso (passavam, mas eram a mesma armadilha) |
+| `tests/test_media_fallback_pause.py` | Remover os falsos; registar o módulo em `sys.modules` |
+| `docs/ops/local-dev.md` | Nova secção "Correr os testes do backend-crm": comando, resultado esperado e regras ao escrever testes |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** um ficheiro de teste podia passar na suíte inteira e falhar
+sozinho (ou o contrário), conforme o que tinha corrido antes. Além dos 18
+conhecidos, havia um 19.º caso escondido: `test_followup_channel_context.py`
+passava na suíte e falhava sozinho.
+**Agora:** nenhum teste usa pacotes de faz-de-conta. Os 40 ficheiros passam
+um a um e em conjunto. `docs/ops/local-dev.md` explica como correr a suíte e
+as regras para os testes não voltarem a ficar frágeis.
+**Para validar:** Cenários A1, A2 e A4, abaixo.
 
 ---
 
@@ -140,21 +187,23 @@ worktree.
 ### Cenário A1 — Suíte inteira passa
 - [x] `python -m pytest tests/ -q`
 - [x] Confirmar: 0 falhados
-- **Validado em:** 04/10/2026 (após Fase 1) — `242 passed`
+- **Validado em:** 04/10/2026 — `242 passed` após a Fase 1 e de novo após a Fase 2
 
 ### Cenário A2 — Cada ficheiro passa sozinho
-- [ ] Correr os 40 ficheiros `tests/test_*.py` um a um
-- [ ] Confirmar: todos aprovados, nenhum erro de carregamento
-- Estado após Fase 1 (04/10/2026): 39 de 40. Falta
-  `test_followup_channel_context.py` (4 falhados sozinho) — coberto pela Fase 2.
+- [x] Correr os 40 ficheiros `tests/test_*.py` um a um
+- [x] Confirmar: todos aprovados, nenhum erro de carregamento
+- **Validado em:** 04/10/2026 (após Fase 2) — 40 de 40. Após a Fase 1 eram
+  39 de 40 (`test_followup_channel_context.py` dava 4 falhados sozinho).
 
 ### Cenário A3 — Os 6 ficheiros originais em ordem inversa
 - [x] Correr os 6 ficheiros que falhavam, na mesma chamada, em ordem inversa
 - [x] Confirmar: todos aprovados
-- **Validado em:** 04/10/2026 (após Fase 1) — `21 passed`
+- **Validado em:** 04/10/2026 — `21 passed` após a Fase 1 e de novo após a Fase 2
 
 ### Cenário A4 — Nada de produção mudou
-- [ ] `git diff main --stat` só mostra `backend-crm/tests/` e `docs/`
+- [x] `git diff main --stat` só mostra `backend-crm/tests/` e `docs/`
+- **Validado em:** 04/10/2026 — 10 ficheiros em `backend-crm/tests/`,
+  `docs/ops/local-dev.md` e este ficheiro; nenhum outro
 
 ---
 
