@@ -98,7 +98,7 @@ usado para correr a suíte.
 `.claude/` inteiro está no `.gitignore` (linha 42), então os slash commands definidos em
 `.claude/commands/*.md` (`/statusdev`, `/statusplans`, `/statusplans-verificar`,
 `/statusplans-avancar`, `/discovery-status`, `/discovery-levantar`,
-`/discovery-aprofundar`, `/discovery-decidir`) **não acompanham** o repositório quando ele é clonado ou puxado
+`/discovery-aprofundar`, `/discovery-decidir`, `/fila-validar`) **não acompanham** o repositório quando ele é clonado ou puxado
 noutro computador — existem só na máquina onde foram criados.
 
 **Sintoma a reconhecer:** num dispositivo novo, digitar `/statusplans` (ou qualquer um
@@ -609,6 +609,38 @@ Atualize o `_radar.md` e faça um **commit único** (`docs:`), sem push.
 **Resumo ao usuário:** tabela investigação → destino. Se algo foi para implementations,
 feche perguntando se quer iniciar o Plan Mode de algum agora — não entre em Plan Mode
 sem essa escolha.
+```
+
+### `/fila-validar` — turno do dia da fila automática
+
+**O que é:** testa cada branch `claude/*` que o turno da noite deixou "por validar", corre o script do que sobe sempre, lança o avaliador e entrega o relatório em linguagem simples, pedindo a decisão do utilizador.
+
+**Onde entra no processo:** secção "Turno do dia" de [`fila-automatica.md`](fila-automatica.md). O comando é só o gatilho — as regras moram nesse ficheiro. Lança-se a partir da pasta principal, nunca de dentro de uma worktree.
+
+**Arquivo:** `.claude/commands/fila-validar.md`
+
+```markdown
+---
+description: Turno do dia da fila automática — testa cada branch claude/* deixada pela noite, lança o avaliador e entrega o relatório para decisão
+---
+
+És uma sessão da fila automática (turno do dia), lançada pelo utilizador a partir da
+pasta principal do repositório.
+
+Lê o `CLAUDE.md` e `docs/ops/fila-automatica.md` e executa a secção "Turno do dia",
+passo a passo, para cada branch `origin/claude/*` com
+`Status: Implementado de noite — por validar`. As regras moram nesse ficheiro, não
+aqui: se este texto e o ficheiro disserem coisas diferentes, vale o ficheiro.
+
+Se o utilizador escreveu um slug a seguir ao comando, trata só essa branch:
+$ARGUMENTS
+
+Se a pasta atual não for a pasta principal (é uma worktree), não avances: diz ao
+utilizador para lançar o comando a partir da pasta principal.
+
+No fim, mostra o relatório de cada branch em linguagem simples, com o link do
+ficheiro no GitHub, e pede a decisão como manda a subsecção "Decisão do utilizador".
+Não juntes nada a `main`, não devolvas nem apagues nenhuma branch sem essa decisão.
 ```
 
 ### Manutenção desta seção

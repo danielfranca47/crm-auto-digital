@@ -155,7 +155,12 @@ utilizador decide, e a decisão é executada e registada no placar.
 |---|---|
 | `docs/ops/fila-automatica.md` | "Turno do dia" com os passos concretos (incluindo a exceção dos `.env` e o relatório); subsecção nova "Decisão do utilizador (modo sombra)"; regra do placar e coluna "Conta?"; linha em "Turno da noite" sobre `## Correções pedidas`; "Estado atual" |
 | `docs/ops/local-dev.md` | Subsecção `/fila-validar` em "Comandos slash locais" |
-| `.claude/commands/fila-validar.md` (pasta principal, não versionado) | Novo — só o gatilho |
+| `.claude/commands/fila-validar.md` (pasta principal, não versionado) | Novo — só o gatilho. **Criado na graduação**, depois de sair da worktree: a sessão da implementação não consegue escrever na pasta principal, e o comando só faz sentido com as regras novas já em `main` |
+
+Consequência para os testes: antes do merge, `/fila-validar` na pasta
+principal leria as regras antigas. Por isso os Cenários D1 a D3 são executados
+pela sessão da implementação, a seguir a secção "Turno do dia" **desta branch**
+passo a passo, como o comando fará. O comando verdadeiro é exercitado no D4.
 
 ### Fase 3 — Ligar a noite
 
@@ -203,8 +208,9 @@ Prefixo `A` = avaliador, `D` = turno do dia, `L` = ligar a noite.
   "Tratar como NÃO APROVADO"; 142 testes aprovados em `scripts/fila/tests`
   (437 com `scripts/claude_hooks/tests`).
 
-### Cenário D1 — `/fila-validar` de ponta a ponta
-- [ ] Na pasta principal, sem worktree `claude+…` aberta, correr `/fila-validar`
+### Cenário D1 — Turno do dia de ponta a ponta
+- [ ] Sem worktree `claude+…` aberta, seguir a secção "Turno do dia" desta branch
+      para `claude/fix-docs-campos-obrigatorios-qualificacao`
 - [ ] Confirmar: worktree criada, `main` junto, testes e checks registados no item
 - [ ] Confirmar: o script do que sobe sempre responde "sobe" (`CLAUDE.md`)
 - [ ] Confirmar: veredito do avaliador no item, `Status: À espera da tua decisão`, relatório na conversa com link e push feito para `claude/<slug>`
@@ -215,10 +221,11 @@ Prefixo `A` = avaliador, `D` = turno do dia, `L` = ligar a noite.
 - [ ] Confirmar: o placar ganhou a linha, marcada "não conta" (sobe sempre), e "Seguidas" não mudou
 
 ### Cenário D3 — Worktree em duplicado
-- [ ] Com uma worktree do mesmo slug já aberta, correr `/fila-validar`
+- [ ] Com uma worktree do mesmo slug já aberta, voltar ao passo 1 do turno do dia
 - [ ] Confirmar: não avança e reporta trabalho em duplicado
 
-### Cenário D4 — Primeiro caso que conta para o placar
+### Cenário D4 — Comando verdadeiro e primeiro caso que conta para o placar
+- [ ] Depois do merge: `.claude/commands/fila-validar.md` existe na pasta principal e `/fila-validar` aparece na lista de comandos
 - [ ] Com a primeira branch da noite que não toque em nada que sobe sempre: `/fila-validar` + decisão
 - [ ] Confirmar: a linha do placar fica marcada "conta" e "Seguidas" passa a 1 (ou 0, se houver discordância)
 
