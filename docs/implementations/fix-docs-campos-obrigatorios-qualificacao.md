@@ -67,12 +67,29 @@ perfil de IA; sem nada marcado, nada é obrigatório. Os documentos agora dizem 
 
 Alteração só de documentação (`.md`): não corri testes de código.
 
+## Testes automáticos (turno do dia)
+
+04/10/2026, já com `main` junto (sem conflitos): a branch só altera
+documentação (seis ficheiros `.md`), por isso não corri testes de código.
+
 ## Checks de Validação
 
-- [ ] Abrir `CLAUDE.md` (linha ~122), `docs/architecture/pipeline-phases.md`
+- [x] Abrir `CLAUDE.md` (linha ~122), `docs/architecture/pipeline-phases.md`
   (secção Qualification) e `docs/architecture/agents.md` (tabela `agent_mode`):
   confirmar que nenhum diz "6/4/3 campos" e que dizem "sem configuração = nenhum obrigatório".
+  - **Validado em:** 04/10/2026 (turno do dia) — os três já não falam em 6, 4
+    ou 3 campos. `CLAUDE.md` linha 122: "sem configuração, nenhum campo é
+    obrigatório. Não há mínimos fixos por modo". `pipeline-phases.md` linha 92:
+    "Sem configuração = lista vazia = nenhum campo obrigatório". `agents.md`
+    linhas 219 a 227: a tabela passou a "sugestão inicial", e "vazio significa
+    nenhum campo obrigatório".
 - [ ] `grep -rn "min_qualification" docs frontend-admin/src backend-crm` não devolve nada.
+  - **Não passou em:** 04/10/2026 (turno do dia) — o comando devolve quatro
+    linhas: uma em `docs/architecture/admin-agents-contract.md:28`, escrita
+    por esta branch ("Não há campos `min_qualification_*`"), e três neste
+    próprio ficheiro. Em `frontend-admin/src` e `backend-crm` não há nada. O
+    nome antigo já não aparece em código; a verificação, tal como está
+    escrita, não consegue passar.
 
 ## Ajustes Possíveis
 
