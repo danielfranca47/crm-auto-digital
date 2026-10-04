@@ -203,6 +203,8 @@ executar a decisão do D2.
 |---|---|
 | `docs/ops/fila-automatica.md` | "Devolver com correções": remove também a branch local. Primeira linha do placar (caso do ensaio, "não conta") |
 
+**Commit:** `eade684`
+
 **Relatório em linguagem simples:** ao devolver uma branch à noite, ficava um
 resto no PC que faria o teste do dia seguinte tropeçar. Agora a regra manda
 limpar esse resto. Validado pelo próprio Cenário D2.
