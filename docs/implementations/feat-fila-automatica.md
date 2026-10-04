@@ -1,7 +1,7 @@
 # Fila automática — contrato (regras, elegibilidade e o que sobe sempre)
 
 **Branch:** `worktree-feat+fila-automatica` (worktree `.claude/worktrees/feat+fila-automatica`)
-**Status:** Em andamento — Fase 1 implementada; Cenário D1 por validar
+**Status:** Todos os cenários validados (04/10/2026)
 **Autonomia:** manual
 
 ---
@@ -164,14 +164,17 @@ Prefixos: `T` = teste automático, `D` = decisão do utilizador.
   do próprio agente)
 
 ### Cenário D1 — Três pontos que foram além do plano aprovado
-- [ ] `CLAUDE.md` entra na categoria fixa "regras do próprio agente" (o plano
+- [x] `CLAUDE.md` entra na categoria fixa "regras do próprio agente" (o plano
       não o listava). Consequência: uma graduação que acrescente uma linha ao
       `CLAUDE.md` sobe para ti.
-- [ ] Quando não sobra nenhum item em `docs/implementations/`, a noite pega o
+- [x] Quando não sobra nenhum item em `docs/implementations/`, a noite pega o
       primeiro item `Prioridade: ALTA` de `docs/plans/` (MÉDIA, BAIXA e "por
       definir" nunca).
-- [ ] As Fases 2 a 5 do plano passaram a itens próprios na fila, em vez de
+- [x] As Fases 2 a 5 do plano passaram a itens próprios na fila, em vez de
       fases deste ficheiro, para as regras chegarem já a `main`.
+- **Validado em:** 04/10/2026 — o utilizador confirmou os três pontos (`CLAUDE.md`
+  sobe sempre; a noite só vai buscar itens ALTA a `docs/plans/`; as fases
+  seguintes ficam como itens próprios). Nada a alterar no que foi implementado.
 
 ---
 
