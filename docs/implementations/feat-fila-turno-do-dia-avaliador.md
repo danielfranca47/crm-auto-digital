@@ -1,7 +1,7 @@
 # Fila automática — turno do dia e avaliador em modo sombra
 
-**Branch:** (a criar)
-**Status:** Aguardando Plan Mode
+**Branch:** `worktree-feat+fila-turno-do-dia-avaliador`
+**Status:** Em andamento
 **Autonomia:** manual
 **Origem:** Fase 3 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
@@ -22,55 +22,204 @@ sempre e lança o avaliador. Nesta fase o avaliador está em **modo sombra**: d�
 o veredito e o relatório, mas quem decide o merge é o utilizador, e cada caso
 entra no placar.
 
-## Área do sistema
-
-- Comando local `/fila-validar` (conteúdo registado em `docs/ops/local-dev.md`,
-  secção "Comandos slash locais").
-- `docs/ops/fila-automatica.md`: secções "Turno do dia", "Avaliador", "Placar
-  do modo sombra" e tabela "Estado atual".
-- `docs/plans/modo-auto-melhorias-futuras.md`, item M1.
-
-## Próximo passo
-
-Este ficheiro ainda não passou pelo **Passo 0 (Diagnóstico em Plan Mode)**. A
-decidir nesse passo:
-
-- Como lançar o avaliador como sessão separada, só de leitura, sem o histórico
-  de quem testou.
-- Confirmar que uma sessão sem ecrã lançada **a partir da pasta principal** não
-  mostra o aviso "this workspace has not been trusted" — é a solução proposta
-  para o M1 de `modo-auto-melhorias-futuras.md`; se se confirmar, o M1 sai de
-  `docs/plans/`.
-- Onde o relatório fica para o utilizador o ler sem abrir a branch.
-
-## Último passo deste item: ligar o horário da noite
-
-Decisão do utilizador em 04/10/2026: a rotina do turno da noite fica
-**desligada** até este item estar pronto, para não se acumularem branches sem
-ninguém a testar nem a avaliar. Quando o turno do dia estiver validado:
-
-- ligar o horário da rotina "Fila automática — turno da noite"
-  (`trig_01H55ZGUhNCdAcHqzkri2djD`) para as **04:07 de Lisboa**, todos os dias
-  (o utilizador indicou a janela das 3h às 6h30) — com o "sim" dele no
-  momento, e confirmando que continua sem conectores;
-- confirmar no dia seguinte que a execução agendada aconteceu, e medir o
-  consumo de uma noite com o PC desligado (a medida de 04/10 incluía a
-  conversa que lançou o ensaio);
-- passar a linha "Turno da noite" da tabela "Estado atual" de
-  `docs/ops/fila-automatica.md` para "Ligado".
-
-Já existe uma branch da noite para construir e testar este item:
-`origin/claude/fix-docs-campos-obrigatorios-qualificacao` (ensaio de
-04/10/2026, `Implementado de noite — por validar`; toca no `CLAUDE.md`, por
-isso sobe sempre).
-
-Antes de ligar o horário, decidir a melhoria M4 de
-[`fila-automatica-melhorias-futuras.md`](../plans/fila-automatica-melhorias-futuras.md)
-(tranca do lado do GitHub contra escrita da cloud em `main`).
-
-**Dependências:** o turno da noite (é quem produz as branches) — em `main`
-desde 04/10/2026, regras em `docs/ops/fila-automatica.md`. O
-verificador de comandos já está em `main` desde 04/10/2026
-(`scripts/claude_hooks/verificar_comando.py`).
+O último passo do item é ligar o horário da rotina da noite, que ficou
+desligada (decisão do utilizador, 04/10/2026) para não se acumularem branches
+sem ninguém a testar nem a avaliar.
 
 `Autonomia: manual` porque mexe nas regras do próprio agente.
+
+---
+
+## Problemas Identificados (estado anterior)
+
+1. **As regras do dia existem, mas ninguém as executa.**
+   `docs/ops/fila-automatica.md` descreve "Turno do dia", "Avaliador" e "Placar
+   do modo sombra"; não existe o comando `/fila-validar` (`.claude/commands/`
+   só tem os comandos de status e discovery) nem forma de lançar o avaliador.
+2. **Aviso "this workspace has not been trusted" também na pasta principal.**
+   Medido em 04/10/2026: uma sessão sem ecrã (`claude -p`) lançada de
+   `C:\crm-auto-digital`, por Bash e por PowerShell, mostra o aviso. O Claude
+   Code procura a chave `C:/crm-auto-digital` em `~/.claude.json`, que tem
+   `hasTrustDialogAccepted: false`; a que está aceite é `C:\crm-auto-digital`.
+   A hipótese do M1 de `docs/plans/modo-auto-melhorias-futuras.md` ("lançar da
+   pasta principal evita o aviso") não se confirmou.
+3. **O contrato contradiz-se sobre `.env`.** Uma sessão da fila "nunca lê ou
+   escreve `.env`", mas o passo 4 do turno do dia manda preparar o ambiente
+   local, que exige copiar os `.env` para a worktree.
+4. **Não está definido o que acontece ao item quando o utilizador diz "não".**
+   Apagar só a branch faria a noite refazer o mesmo item, igual: a
+   elegibilidade só olha para "não existe `origin/claude/<slug>`".
+5. **Não está definido que casos contam para os 5 vereditos do placar.**
+6. **M4 (tranca do GitHub contra a cloud em `main`) não é possível.** O GitHub
+   regista o push da noite como `danielfranca47` (tipo User), igual a um push
+   do utilizador
+   (`gh api "repos/danielfranca47/crm-auto-digital/activity?ref=refs/heads/claude/fix-docs-campos-obrigatorios-qualificacao"`);
+   só os commits aparecem como "claude". Um ruleset não distingue os dois. A
+   reconfirmar na primeira execução agendada — o ensaio de 04/10 foi lançado à
+   mão.
+
+---
+
+## Abordagem
+
+```
+/fila-validar (pasta principal, sessão da fila)
+  → para cada origin/claude/* "Implementado de noite — por validar"
+      worktree claude+<slug> + main junto
+      testes automáticos · checks via browser
+      python scripts/fila/categorias_que_sobem.py     → sobe / não sobe
+      python scripts/fila/lancar_avaliador.py         → aprovado / não aprovado
+          └─ sessão separada, sem ecrã, na pasta principal, só de leitura
+             pedido fixo (só o nome da branch) · modelo Opus
+             o script escreve "## Avaliação" no .md do item
+      "## Relatório para decisão" + Status + push para claude/<slug>
+  → relatório na conversa, com link do ficheiro no GitHub
+  → o utilizador decide: juntar · devolver com correções · fechar · depois
+  → linha no placar (conta só se o avaliador pudesse decidir sozinho)
+```
+
+Decisões do utilizador (04/10/2026):
+
+- **Placar:** contam só os casos que o avaliador decidiria sozinho — branch
+  que não toca em nada que sobe sempre e com todos os checks validados. Os
+  outros ficam registados como "não conta". Descartado "contam todos": inclui
+  casos fáceis em que concordar não prova muito.
+- **Modelo do avaliador:** Opus. Descartado o Sonnet da noite: quem avaliava
+  era o mesmo modelo que implementou.
+
+Decisões de desenho:
+
+- **Avaliador como sessão sem ecrã, não como subagente.** Um subagente recebe
+  um pedido escrito por quem testou, que pode levar contexto a mais. O script
+  monta um pedido fixo e só aceita o nome da branch.
+- **`--permission-mode dontAsk` com lista fechada de ferramentas.** Medido em
+  04/10/2026: nesta combinação a shell corre `git log` e `git status` e recusa
+  `git add -n .` ("Permission to use Bash has been denied because Claude Code
+  is running in don't ask mode"). Não depende das regras `allow` do projeto,
+  por isso o aviso do ponto 2 não o afeta. Descartado acrescentar regras
+  `Bash(git diff *)`: uma regra dessas deixaria passar `git diff --output=…`,
+  que escreve um ficheiro.
+- **A sessão corre na pasta principal**, para que os critérios venham de
+  `main` e não de uma branch que os possa ter alterado.
+- **É o script que escreve a secção `## Avaliação`** — o avaliador não tem como
+  escrever, e quem testou não deve transcrever o veredito.
+- **Relatório:** fica no `.md` do item, na branch (é de onde o painel vai ler).
+  Para o utilizador o ler sem abrir a branch, o `/fila-validar` mostra-o na
+  conversa com o link do GitHub. Sem pasta nem ficheiro novo.
+
+---
+
+## Plano de Implementação
+
+### Fase 1 — Avaliador
+
+**Objetivo:** existir uma forma única, testada e só de leitura de lançar o
+avaliador sobre uma branch `claude/<slug>`.
+
+| Arquivo | O que muda |
+|---|---|
+| `scripts/fila/lancar_avaliador.py` | Novo. Valida o nome da branch, monta o pedido fixo, lança `claude -p` na pasta principal (Opus, `dontAsk`, `Read,Grep,Glob,Bash`, sem MCP), lê a resposta em JSON e escreve `## Avaliação` no item. Saída 0 / 1 / 2 |
+| `scripts/fila/tests/test_lancar_avaliador.py` | Novo. Nomes de branch, comando montado, leitura da resposta, secção escrita, falha fechada. Nenhuma sessão real é lançada |
+| `docs/ops/fila-automatica.md` | Secção "Avaliador": como se lança e o que o script garante |
+
+### Fase 2 — Turno do dia, decisão e placar
+
+**Objetivo:** `/fila-validar` leva uma branch da noite até ao relatório, o
+utilizador decide, e a decisão é executada e registada no placar.
+
+| Arquivo | O que muda |
+|---|---|
+| `docs/ops/fila-automatica.md` | "Turno do dia" com os passos concretos (incluindo a exceção dos `.env` e o relatório); subsecção nova "Decisão do utilizador (modo sombra)"; regra do placar e coluna "Conta?"; linha em "Turno da noite" sobre `## Correções pedidas`; "Estado atual" |
+| `docs/ops/local-dev.md` | Subsecção `/fila-validar` em "Comandos slash locais" |
+| `.claude/commands/fila-validar.md` (pasta principal, não versionado) | Novo — só o gatilho |
+
+### Fase 3 — Ligar a noite
+
+**Objetivo:** a rotina da noite passa a correr às 04:07 de Lisboa.
+
+| Arquivo | O que muda |
+|---|---|
+| `docs/ops/local-dev.md` | Parágrafo "Sessões sem ecrã" com o que foi medido |
+| `docs/plans/modo-auto-melhorias-futuras.md` | M1 sai, se L1 se confirmar |
+| `docs/plans/fila-automatica-melhorias-futuras.md` | M4 sai, com o achado registado no contrato |
+| `docs/ops/fila-automatica.md` | "Estado atual": turno da noite ligado; achado do M4 em "Turno da noite" |
+
+Fora do repositório, com o "sim" do utilizador no momento: aceitar o aviso de
+confiança (o utilizador corre `claude` uma vez num terminal na pasta
+principal) e ligar o horário da rotina `trig_01H55ZGUhNCdAcHqzkri2djD`,
+confirmando que continua sem conectores.
+
+---
+
+## Checks de Validação
+
+Prefixo `A` = avaliador, `D` = turno do dia, `L` = ligar a noite.
+
+### Cenário A1 — Avaliador contra a branch do ensaio
+- [x] Com a worktree `.claude/worktrees/claude+fix-docs-campos-obrigatorios-qualificacao`
+      criada, correr `python scripts/fila/lancar_avaliador.py --ramo claude/fix-docs-campos-obrigatorios-qualificacao`
+- [x] Confirmar: o item nessa worktree ganha `## Avaliação` em linguagem simples, com veredito e os 6 critérios
+- [x] Confirmar: a pasta principal fica sem alterações (`git status` limpo) e a sessão não escreveu nada
+- [x] Anotar o consumo
+- **Validado em:** 04/10/2026 — saída 1, veredito "não aprovado": critérios 1, 3
+  e 4 cumpridos; 2 (os dois checks do item por marcar, e o segundo não consegue
+  passar como está escrito), 5 (hash do commit por registar) e 6 (o mapa do
+  sistema ainda fala em campos mínimos por tipo de agente) por cumprir. Texto
+  sem nomes de função nem de ficheiro de código. Pasta principal limpa depois
+  da sessão. Consumo: 38 turnos, 1,07 USD de referência, modelo Opus. Duas
+  ações recusadas, ambas comandos de leitura escritos com `cd … &&` e com
+  `git -C` — o avaliador seguiu com `git diff main...` simples; o pedido passou
+  a dizer-lhe isso à partida. A worktree e a branch local do ensaio foram
+  removidas a seguir, para o D1 partir do zero.
+
+### Cenário A2 — Falha fechada
+- [x] `--ramo main` e `--ramo claude/item-que-nao-existe` saem com código 2, sem lançar sessão
+- [x] `python -m pytest scripts/fila/tests -q` — tudo aprovado
+- **Validado em:** 04/10/2026 — as duas chamadas saíram com 2 e a mensagem
+  "Tratar como NÃO APROVADO"; 142 testes aprovados em `scripts/fila/tests`
+  (437 com `scripts/claude_hooks/tests`).
+
+### Cenário D1 — `/fila-validar` de ponta a ponta
+- [ ] Na pasta principal, sem worktree `claude+…` aberta, correr `/fila-validar`
+- [ ] Confirmar: worktree criada, `main` junto, testes e checks registados no item
+- [ ] Confirmar: o script do que sobe sempre responde "sobe" (`CLAUDE.md`)
+- [ ] Confirmar: veredito do avaliador no item, `Status: À espera da tua decisão`, relatório na conversa com link e push feito para `claude/<slug>`
+
+### Cenário D2 — Decisão do utilizador e placar
+- [ ] Responder à decisão pedida no fim do D1
+- [ ] Confirmar: a ação correspondente foi executada
+- [ ] Confirmar: o placar ganhou a linha, marcada "não conta" (sobe sempre), e "Seguidas" não mudou
+
+### Cenário D3 — Worktree em duplicado
+- [ ] Com uma worktree do mesmo slug já aberta, correr `/fila-validar`
+- [ ] Confirmar: não avança e reporta trabalho em duplicado
+
+### Cenário D4 — Primeiro caso que conta para o placar
+- [ ] Com a primeira branch da noite que não toque em nada que sobe sempre: `/fila-validar` + decisão
+- [ ] Confirmar: a linha do placar fica marcada "conta" e "Seguidas" passa a 1 (ou 0, se houver discordância)
+
+### Cenário L1 — Pasta principal de confiança
+- [ ] O utilizador corre `claude` num terminal em `C:\crm-auto-digital` e aceita o aviso
+- [ ] `claude -p "Responde apenas: ok" --model haiku --no-session-persistence` na pasta principal já não mostra "has not been trusted"
+
+### Cenário L2 — Horário ligado
+- [ ] Rotina `trig_01H55ZGUhNCdAcHqzkri2djD` com horário 04:07 de Lisboa, todos os dias, e zero conectores
+
+### Cenário L3 — Primeira noite agendada
+- [ ] No dia seguinte: a execução aconteceu à hora prevista
+- [ ] Quem o GitHub regista como autor do push (confirma ou desmente o achado do M4)
+- [ ] Consumo de uma noite com o PC desligado
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+- **Reinício de produção num push só de documentos** — cada decisão que não
+  seja "juntar" envia para `main` um commit só com a linha do placar. É o M3
+  de `docs/plans/fila-automatica-melhorias-futuras.md`, que continua lá.
+- **O avaliador não corre os testes** — confia no registo do turno do dia. Se
+  um dia o turno do dia correr sem ninguém a ver, pode valer a pena o avaliador
+  repetir os testes numa cópia própria.
+- **Sem a pasta principal marcada como de confiança**, uma sessão sem ecrã
+  ignora as regras `allow` do projeto (testes, browser). Não afeta o avaliador;
+  afeta `feat-fila-arranque-de-dia-e-painel`.
