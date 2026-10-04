@@ -271,7 +271,7 @@ conectores.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(hash a registar)* | limite de 3 branches à espera + horário adiado para o turno do dia |
+| 1 | `4583061` | limite de 3 branches à espera + horário adiado para o turno do dia |
 
 #### Relatório da Fase 5 — o que mudou na prática
 
