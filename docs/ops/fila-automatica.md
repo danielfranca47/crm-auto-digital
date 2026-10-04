@@ -15,7 +15,7 @@ conversa normal com o utilizador vale o processo normal do `CLAUDE.md`.
 | Peça | Estado |
 |---|---|
 | Regras desta página, campo `Autonomia`, verificação do que sobe sempre | Em vigor |
-| Turno da noite (rotina na cloud) | Por ligar |
+| Turno da noite (rotina na cloud) | Pronto, **desligado** — a rotina existe sem horário; liga-se (04:07 de Lisboa) quando o turno do dia existir |
 | Turno do dia (`/fila-validar`) e avaliador | Por ligar |
 | **Poder de merge do avaliador** | **Desligado** — modo sombra: o avaliador dá o veredito, o utilizador decide |
 
@@ -62,6 +62,14 @@ Quando não sobra nenhum, a noite pega o primeiro item com
 ficheiro de implementação na branch e retira o item do plano na mesma branch.
 Itens MÉDIA, BAIXA ou "por definir" nunca são pegos — a prioridade é decisão
 do utilizador.
+
+**Limite de 3 à espera.** A noite não pega em item novo enquanto houver 3 ou
+mais branches `origin/claude/*` por resolver — estados
+`Implementado de noite — por validar`, `Só plano — precisa da tua decisão`,
+`À espera da tua decisão` ou `Avaliado: não passou`. Com 3, termina e di-lo.
+Uma branch `Interrompido de noite — continuar` não conta e é sempre retomada.
+A fila só volta a produzir quando uma dessas branches sair (mergeada ou
+fechada). O número é decisão do utilizador (04/10/2026).
 
 Para tirar um item da fila automática: `**Autonomia:** manual` no cabeçalho.
 Quem começa à mão um item que estava na fila faz essa alteração em `main`
@@ -125,6 +133,14 @@ apaga ou enfraquece um teste para o fazer passar; faz push forçado.
 Corre na cloud, num clone limpo, lançado por uma rotina sem conectores. Um
 item por noite.
 
+**A rotina:** "Fila automática — turno da noite", na conta Pro
+(https://claude.ai/code/routines/trig_01H55ZGUhNCdAcHqzkri2djD), repositório
+`danielfranca47/crm-auto-digital`, ambiente por omissão, modelo Sonnet 5.5.
+O texto dela é só o gatilho: "és uma sessão da fila automática; lê o
+`CLAUDE.md` e `docs/ops/fila-automatica.md` e executa a secção Turno da
+noite". Ao criar ou alterar uma rotina, a API e o formulário anexam **todos**
+os conectores da conta por omissão — confirmar sempre que fica com zero.
+
 **A noite nunca escreve em `main`.** A cloud não o impede por si — por isso o
 verificador de comandos (`scripts/claude_hooks/verificar_comando.py`) recusa,
 em sessões da cloud, qualquer `git push` que não seja para uma branch
@@ -134,8 +150,9 @@ GitHub que a cloud traz (`mcp__github__…`), que escrevem sem passar pela linha
 de comandos, estão recusadas por regra em `.claude/settings.json`. O push
 faz-se sempre assim: `git push -u origin claude/<slug>`.
 
-1. **Escolher** o item (secção "Que itens a fila pode pegar"). Sem item
-   elegível: terminar e dizê-lo.
+1. **Escolher** o item (secção "Que itens a fila pode pegar"). Primeiro
+   contar as branches `origin/claude/*` por resolver: com 3 ou mais, terminar
+   e dizê-lo. Sem item elegível: terminar e dizê-lo.
 2. **Branch** `claude/<slug>` a partir de `origin/main`. Antes de qualquer
    outro trabalho: `**Status:** Interrompido de noite — continuar` no `.md` do
    item, commit e push. O limite de uso pode cortar a sessão sem aviso; assim

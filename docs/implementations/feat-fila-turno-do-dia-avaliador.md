@@ -43,7 +43,29 @@ decidir nesse passo:
   `docs/plans/`.
 - Onde o relatório fica para o utilizador o ler sem abrir a branch.
 
-**Dependências:** `feat-fila-turno-da-noite` (é quem produz as branches). O
+## Último passo deste item: ligar o horário da noite
+
+Decisão do utilizador em 04/10/2026: a rotina do turno da noite fica
+**desligada** até este item estar pronto, para não se acumularem branches sem
+ninguém a testar nem a avaliar. Quando o turno do dia estiver validado:
+
+- ligar o horário da rotina "Fila automática — turno da noite"
+  (`trig_01H55ZGUhNCdAcHqzkri2djD`) para as **04:07 de Lisboa**, todos os dias
+  (o utilizador indicou a janela das 3h às 6h30) — com o "sim" dele no
+  momento, e confirmando que continua sem conectores;
+- confirmar no dia seguinte que a execução agendada aconteceu, e medir o
+  consumo de uma noite com o PC desligado (a medida de 04/10 incluía a
+  conversa que lançou o ensaio);
+- passar a linha "Turno da noite" da tabela "Estado atual" de
+  `docs/ops/fila-automatica.md` para "Ligado".
+
+Já existe uma branch da noite para construir e testar este item:
+`origin/claude/fix-docs-campos-obrigatorios-qualificacao` (ensaio de
+04/10/2026, `Implementado de noite — por validar`; toca no `CLAUDE.md`, por
+isso sobe sempre).
+
+**Dependências:** `feat-fila-turno-da-noite` (é quem produz as branches) — em
+`main` desde 04/10/2026. O
 verificador de comandos já está em `main` desde 04/10/2026
 (`scripts/claude_hooks/verificar_comando.py`).
 

@@ -1,7 +1,7 @@
 # Fila automática — turno da noite (rotina na cloud)
 
 **Branch:** `worktree-feat+fila-turno-da-noite` (worktree `.claude/worktrees/feat+fila-turno-da-noite`)
-**Status:** Em andamento — Fases 1 a 4 implementadas e validadas; falta a Fase 5 (ligar o horário: Cenário D1)
+**Status:** Todos os cenários validados (04/10/2026) — D1 pulado em parte: o horário liga-se no item do turno do dia
 **Autonomia:** manual
 **Origem:** Fase 2 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
@@ -244,11 +244,43 @@ acrescentos continua recusado. As barreiras de sempre (push forçado, Railway)
 não mudaram.
 **Para validar:** Cenário T1 (automático) e N2 (na cloud).
 
-### Fase 5 — Ligar o horário
+### Fase 5 — Limite de 3 à espera; horário adiado (04/10/2026)
 
-**Objetivo:** a noite passa a correr sozinha. Hora escolhida pelo utilizador
-com a medida da Fase 3; rotina a apontar para `main` depois do merge; tabela
-"Estado atual" de `docs/ops/fila-automatica.md` com "Turno da noite: Ligado".
+#### Necessidade identificada
+
+O utilizador não trabalha neste projeto todos os dias e não quer branches a
+acumular. Duas decisões dele:
+
+- **A noite pára com 3 branches por resolver** e só volta a produzir quando
+  ele decidir alguma.
+- **O horário só é ligado quando o turno do dia existir** (às 04:07 de
+  Lisboa) — sem turno do dia, cada branch chegaria sem teste no browser nem
+  avaliação.
+
+#### Alteração
+
+| Arquivo | Mudança |
+|---|---|
+| `docs/ops/fila-automatica.md` | regra "Limite de 3 à espera" na elegibilidade e no passo 1 da noite; "Estado atual": turno da noite pronto e desligado; bloco "A rotina" (qual é, o texto, o aviso dos conectores) |
+| `docs/implementations/feat-fila-turno-do-dia-avaliador.md` | "ligar o horário da noite" passa a ser o último passo desse item |
+
+A rotina ficou com o texto definitivo, a apontar para `main`, desligada e sem
+conectores.
+
+#### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(hash a registar)* | limite de 3 branches à espera + horário adiado para o turno do dia |
+
+#### Relatório da Fase 5 — o que mudou na prática
+
+**Antes:** ligada a rotina, a noite produziria uma branch por noite sem
+parar, e tudo ficaria à tua espera.
+**Agora:** a rotina está pronta mas desligada. Quando for ligada, pára
+sozinha ao chegar a 3 branches por resolver.
+**Para validar:** nada novo — é uma regra escrita; será vista a funcionar na
+primeira noite agendada.
 
 ---
 
@@ -399,9 +431,13 @@ decisão do utilizador.
   (instalar dependências + testes) demora mais. A medida limpa é a da
   primeira noite agendada, com o PC desligado.
 
-### Cenário D1 — Hora da rotina (Fase 4)
-- [ ] O utilizador escolhe a hora, com a medida do N4
-- [ ] Confirmar no dia seguinte: a execução agendada aconteceu
+### Cenário D1 — Hora da rotina
+- [x] O utilizador escolhe a hora, com a medida do N4 — 04:07 de Lisboa
+      (janela das 3h às 6h30), em 04/10/2026
+- [⏭️] Confirmar no dia seguinte: a execução agendada aconteceu — **pulado
+      nesta implementação por decisão do utilizador** (04/10/2026): o horário
+      só é ligado quando o turno do dia existir. O check passou para
+      `feat-fila-turno-do-dia-avaliador.md`, "Último passo deste item".
 
 ---
 
