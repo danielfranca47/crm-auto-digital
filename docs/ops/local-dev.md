@@ -724,7 +724,8 @@ Pontos a saber:
   Uma alteração a `.claude/settings.json` só vale em conversas novas, e uma
   regra que ainda só existe numa worktree não vale numa conversa aberta na pasta
   principal.
-- **Sessões sem ecrã (`claude -p`):** uma regra `ask` conta como recusa, porque
+- **Sessões sem ecrã (`claude -p`):** uma regra `ask`, ou um "perguntar" do
+  verificador de comandos, conta como recusa, porque
   não há quem responda ao pedido. Numa pasta que nunca foi aberta de forma
   interativa, as regras `allow` do projeto são ignoradas ("this workspace has
   not been trusted"); as `deny` e `ask` valem na mesma e o revisor automático

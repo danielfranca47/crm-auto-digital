@@ -181,21 +181,26 @@ Code. Nenhum cenário executa a ação real — usam `--dry-run` ou `--help`.
   podem ser travados, scripts em disco, entrada inválida → código 2)
 
 ### Cenário A1 — Push forçado escrito de outra forma é recusado (Fase 2)
-- [ ] Abrir uma sessão do Claude Code **dentro da worktree** (o hook só existe aí até ao merge)
-- [ ] Pedir: corre `git -C . push --force --dry-run origin HEAD:refs/heads/teste-inexistente`
-- [ ] Confirmar: o comando é recusado, com a mensagem do verificador ("Barreira dura do projeto: push forçado…")
+- [x] Abrir uma sessão do Claude Code **dentro da worktree** (o hook só existe aí até ao merge)
+- [x] Pedir: corre `git -C . push --force --dry-run origin HEAD:refs/heads/teste-inexistente`
+- [x] Confirmar: o comando é recusado, com a mensagem do verificador ("Barreira dura do projeto: push forçado…")
+- **Validado em:** 04/10/2026 — sessão sem ecrã (`claude -p`, CLI 2.1.288, modo auto) aberta na worktree; o comando não chegou a correr e o resultado foi a mensagem do verificador
 
 ### Cenário A2 — Nome alternativo do Railway é recusado (Fase 2)
-- [ ] Na mesma sessão, pedir: corre `railway volumes delete --help`
-- [ ] Confirmar: recusado pelo verificador (a regra antiga não apanhava `volumes`)
+- [x] Na mesma sessão, pedir: corre `railway volumes delete --help`
+- [x] Confirmar: recusado pelo verificador (a regra antiga não apanhava `volumes`)
+- **Validado em:** 04/10/2026 — mesma sessão; recusado com "Barreira dura do projeto: comandos do Railway que apagam ou desligam coisas…"
 
 ### Cenário A3 — Ação sensível pergunta; sem ecrã é recusada (Fase 2)
 - [ ] Sessão interativa: pedir `railway vars --help` → aparece o pedido de confirmação
-- [ ] Sessão sem ecrã (`claude -p`, a partir da worktree): o mesmo pedido termina sem executar o comando
+- [x] Sessão sem ecrã (`claude -p`, a partir da worktree): o mesmo pedido termina sem executar o comando
+- **Validado em:** 04/10/2026 (só a parte sem ecrã) — o Claude Code registou a recusa com origem no hook (`decision_reason_type: hook`) e a mensagem "Ação sensível no Railway… precisa de confirmação do utilizador"; o comando não correu
+- **Pendente:** a parte interativa precisa do utilizador a ver o ecrã
 
 ### Cenário A4 — Não atrapalha o trabalho normal (Fase 2)
-- [ ] Na sessão da worktree: `git status`, `railway status` e `python -m pytest scripts/claude_hooks/tests -q` correm sem pergunta nova
-- [ ] Um commit cuja mensagem cita "git push --force" é feito sem pergunta nova
+- [x] Na sessão da worktree: `git status`, `railway status` e `python -m pytest scripts/claude_hooks/tests -q` correm sem pergunta nova
+- [x] Um commit cuja mensagem cita "git push --force" é feito sem pergunta nova
+- **Validado em:** 04/10/2026 — na sessão sem ecrã (onde uma pergunta seria uma recusa) os três comandos correram (200 testes a passar) e `git commit --dry-run --allow-empty -m "docs: git push --force é recusado"` passou pelo verificador; o git respondeu "nothing to commit", como esperado num ensaio
 
 ---
 
