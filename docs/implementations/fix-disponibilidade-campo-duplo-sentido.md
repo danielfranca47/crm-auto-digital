@@ -1,7 +1,7 @@
 # Separar "janela de resposta do agente" de "horários de atendimento do profissional"
 
 **Branch:** `worktree-fix+disponibilidade-campo-duplo-sentido` (worktree `.claude/worktrees/fix+disponibilidade-campo-duplo-sentido` — a ferramenta de worktree troca `fix/<slug>` por este formato)
-**Status:** Em andamento — Fases 1 e 2 implementadas; Cenários P1–P4 e C1 por validar
+**Status:** Em andamento — Fases 1 e 2 implementadas; Cenários P1–P4 validados (04/10/2026); C1 por validar — a simulação local mostrou que a janela de resposta é ignorada quando o buffer de mensagens está ligado (ver "Fase 3 — Diagnóstico")
 **Origem:** `docs/implementations/feat-workflows-por-gatilho.md` — "Evidência no código", ponto 7 (análise comparativa de janelas de horário pedida pelo utilizador em 03/10/2026)
 
 ---
@@ -158,28 +158,37 @@ não é a outra. Com os horários de atendimento vazios aparece "Não configurad
 ## Checks de Validação
 
 ### Cenário P1 — A caixa mostra texto, não código
-- [ ] Abrir Configurar Agente → Apresentação numa conta que já existia
-- [ ] Confirmar: "Horários de atendimento do profissional" mostra "Seg a Sex: 09:00–18:00" (ou o texto que a conta já tinha), nunca `{"mon":…}`
+- [x] Abrir Configurar Agente → Apresentação numa conta que já existia
+- [x] Confirmar: "Horários de atendimento do profissional" mostra "Seg a Sex: 09:00–18:00" (ou o texto que a conta já tinha), nunca `{"mon":…}`
+- **Validado em:** 04/10/2026 — conta de teste (grade seg–sex 09–20, sáb–dom 09–18 antes da migração): a caixa mostra "Seg a Sex: 09:00–20:00 / Sáb a Dom: 09:00–18:00", sem código e sem o aviso "Não configurado". No arranque, as outras contas com grade ficaram com "Seg a Sex: 09:00–18:00" e as sem grade ficaram vazias.
 
 ### Cenário P2 — Uma tela não desfaz a outra
-- [ ] Escrever horários de atendimento na Apresentação e salvar
-- [ ] Em Pipeline → Janela de horário, escolher "Personalizado", definir uma grade e salvar
-- [ ] Confirmar: de volta à Apresentação, o texto continua igual; reabrindo a Janela de horário, a grade continua igual
+- [x] Escrever horários de atendimento na Apresentação e salvar
+- [x] Em Pipeline → Janela de horário, escolher "Personalizado", definir uma grade e salvar
+- [x] Confirmar: de volta à Apresentação, o texto continua igual; reabrindo a Janela de horário, a grade continua igual
+- **Validado em:** 04/10/2026 — texto "Ter e Qui: 14h, 16h" salvo na Apresentação; grade alterada para segunda 10:00–16:00 e salva no Pipeline. Depois de recarregar a página, o texto e a grade continuavam iguais (conferido também no banco: cada valor no seu campo).
 
 ### Cenário P3 — A IA usa os horários do profissional
-- [ ] Horários de atendimento "Ter e Qui: 14h, 16h"; Janela de horário "24 horas"
-- [ ] No Playground, pedir um agendamento
-- [ ] Confirmar: a Lara propõe horários de terça/quinta
+- [x] Horários de atendimento "Ter e Qui: 14h, 16h"; Janela de horário "24 horas"
+- [x] No Playground, pedir um agendamento
+- [x] Confirmar: a Lara propõe horários de terça/quinta
+- **Validado em:** 04/10/2026 — duas conversas. Na primeira, ao pedir "dias e horários esta semana", a Lara propôs "quinta-feira às 14h ou 16h". Na segunda, ao pedir "terça-feira à tarde", respondeu "às 14h e 16h". Nunca propôs horários da grade da janela de resposta (09–20h).
+- **Observação:** na primeira conversa, depois de já ter proposto quinta, a Lara disse que não havia horário na terça quando o lead perguntou "na quarta de manhã ou na terça?" — a agenda estava vazia e a terça estava nos horários. Numa conversa nova, perguntando só pela terça, ofereceu-a corretamente. É variação da IA perante uma pergunta ambígua, não do campo; fica registado caso se repita.
 
 ### Cenário P4 — Conta sem horários
-- [ ] Apagar os horários de atendimento e salvar
-- [ ] No Playground, pedir um agendamento
-- [ ] Confirmar: a Lara pergunta que horário o cliente prefere, em vez de propor
+- [x] Apagar os horários de atendimento e salvar
+- [x] No Playground, pedir um agendamento
+- [x] Confirmar: a Lara pergunta que horário o cliente prefere, em vez de propor
+- **Validado em:** 04/10/2026 — com a caixa vazia aparece o aviso "Não configurado — o bot pergunta ao lead que horário prefere". No Playground a Lara perguntou "qual dia você tem em mente?" e, escolhido o dia, "Que horário você prefere? Vou verificar a agenda para confirmar." — sem propor horários concretos.
 
 ### Cenário C1 — Janela de resposta real
-- [ ] Janela de horário "Personalizado" com uma grade que exclui a hora atual
+- [x] Janela de horário "Personalizado" com uma grade que exclui a hora atual
 - [ ] Enviar uma mensagem real pelo WhatsApp
 - [ ] Confirmar: a resposta fica agendada para a próxima abertura (não sai de imediato)
+- **Tentado em:** 04/10/2026 — **não validado.** O envio real não foi feito: a ligação WhatsApp da conta de teste local está desligada e as mensagens reais chegam ao servidor de produção, não ao ambiente local. Em substituição, a chegada da mensagem foi simulada no ambiente local (domingo 03:04, janela de domingo 09:00–18:00, ou seja, fechada):
+  - **Buffer de mensagens em 8s (como a conta estava, e como nasce toda conta nova):** a resposta ficou agendada para 8 segundos depois — a janela foi ignorada. ❌
+  - **Buffer desligado:** a resposta ficou agendada para segunda às 10:00 — a janela foi respeitada e leu a grade nova. ✅ (Mas saltou a abertura do próprio domingo às 09:00 — é o problema já anotado em "Ajustes Possíveis".)
+  - Ver "Fase 3 — Diagnóstico", abaixo. O C1 só deve ser repetido com WhatsApp real depois dessa correção.
 
 ---
 
@@ -204,3 +213,34 @@ não é a outra. Com os horários de atendimento vazios aparece "Não configurad
 - O recuo para o campo antigo em `_build_child_prompt_agendamento` (perfil sem
   a chave nova) só serve a janela de deploy — pode ser removido depois de o
   backend-core em produção já servir `professional_availability`.
+
+---
+
+## Fase 3 — Diagnóstico (04/10/2026) — aguarda plano aprovado
+
+### Problema identificado
+
+O teste do Cenário C1 (simulação local) mostrou dois defeitos na janela de
+resposta. Nenhum foi criado pelas Fases 1 e 2 — o código da janela não foi
+alterado — mas ambos impedem validar o C1.
+
+1. **Com o buffer de mensagens ligado, a janela de horário não é aplicada.**
+   Em `backend-crm/services/whatsapp_inbound/inbound_handler.py:543-566`, quando
+   `multi_message_buffer_seconds > 0` a resposta é agendada para "agora + buffer"
+   e `compute_scheduled_at()` (a única chamada que consulta a janela) fica no
+   ramo `else`, só para buffer igual a zero. O buffer nasce em 8s em toda conta
+   (`backend-core/app/db.py:276`, `frontend-crm/src/types/agente.ts:436`), por
+   isso, na prática, a "Janela de horário" não tem efeito a menos que o
+   utilizador desligue o buffer. Medido: janela fechada + buffer 8s → resposta
+   agendada para 8s depois.
+2. **A abertura do próprio dia é saltada** (já anotado em "Ajustes Possíveis").
+   Medido com buffer desligado: mensagem de domingo às 03:04, janela de domingo
+   09:00–18:00 → resposta agendada para segunda às 10:00, em vez de domingo às
+   09:00. Causa: `humanization.py::next_available_at` começa a procurar em
+   `delta_days = 1`.
+
+### Correção
+
+Por definir em Plan Mode. O ponto a decidir é como combinar buffer e janela
+(ex.: aplicar a janela ao instante "agora + buffer", mantendo a acumulação de
+mensagens) e incluir o dia corrente na procura da próxima abertura.
