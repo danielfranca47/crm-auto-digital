@@ -1,7 +1,9 @@
 import os
 import sqlite3
 import sys
+import tempfile
 import unittest
+from contextlib import closing
 from unittest.mock import patch
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -86,12 +88,22 @@ def _create_schema(conn: sqlite3.Connection) -> None:
 
 class LeadDeleteTest(unittest.TestCase):
     def setUp(self):
-        self.conn = sqlite3.connect(":memory:")
-        self.conn.row_factory = sqlite3.Row
+        # Banco em ficheiro (não :memory:): a rota fecha a ligação que recebe,
+        # por isso o resultado é verificado por uma ligação separada.
+        fd, self.db_path = tempfile.mkstemp(suffix="_lead_delete.db")
+        os.close(fd)
+        self.conn = self._connect()
         _create_schema(self.conn)
 
     def tearDown(self):
         self.conn.close()
+        if os.path.exists(self.db_path):
+            os.remove(self.db_path)
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
 
     def _seed_lead_with_children(self, *, user_id: int) -> int:
         cur = self.conn.cursor()
@@ -129,28 +141,29 @@ class LeadDeleteTest(unittest.TestCase):
         self.assertEqual(response["status"], "ok")
         self.assertEqual(response["deleted_lead_id"], lead_id)
 
-        lead_count = self.conn.execute("SELECT COUNT(*) AS c FROM leads WHERE id = ?", (lead_id,)).fetchone()["c"]
-        self.assertEqual(lead_count, 0)
+        with closing(self._connect()) as check_conn:
+            lead_count = check_conn.execute("SELECT COUNT(*) AS c FROM leads WHERE id = ?", (lead_id,)).fetchone()["c"]
+            self.assertEqual(lead_count, 0)
 
-        for table in [
-            "messages",
-            "prospection_logs",
-            "appointments",
-            "lead_outcomes",
-            "message_selections",
-            "prospection_whatsapp_queue",
-            "outbound_events",
-            "orion_conversations",
-            "atividades",
-        ]:
-            count = self.conn.execute(
-                f"SELECT COUNT(*) AS c FROM {table} WHERE lead_id = ?",
-                (lead_id,),
-            ).fetchone()["c"]
-            self.assertEqual(count, 0, f"Tabela {table} ainda possui dados do lead")
+            for table in [
+                "messages",
+                "prospection_logs",
+                "appointments",
+                "lead_outcomes",
+                "message_selections",
+                "prospection_whatsapp_queue",
+                "outbound_events",
+                "orion_conversations",
+                "atividades",
+            ]:
+                count = check_conn.execute(
+                    f"SELECT COUNT(*) AS c FROM {table} WHERE lead_id = ?",
+                    (lead_id,),
+                ).fetchone()["c"]
+                self.assertEqual(count, 0, f"Tabela {table} ainda possui dados do lead")
 
-        jobs_count = self.conn.execute("SELECT COUNT(*) AS c FROM jobs").fetchone()["c"]
-        self.assertEqual(jobs_count, 1)
+            jobs_count = check_conn.execute("SELECT COUNT(*) AS c FROM jobs").fetchone()["c"]
+            self.assertEqual(jobs_count, 1)
 
     def test_delete_other_user_lead_returns_404(self):
         owner_id = 7
