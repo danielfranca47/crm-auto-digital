@@ -69,9 +69,9 @@ comando → separar em comandos simples (cadeias, subshells, $(...), crases)
   │              ├─ --force / -f / --force-with-lease / --mirror / +destino → RECUSAR
   │              └─ argumento só conhecido ao executar + sinal de força no texto → PERGUNTAR
   ├─ railway  → saltar opções, normalizar nomes alternativos
-  │              ├─ down, delete, environment|project delete,
+  │              ├─ down, delete, environment|project|service delete,
   │              │  volume delete|rm|remove|detach, volume files delete → RECUSAR
-  │              └─ variable, run, ssh, up, volume files upload → PERGUNTAR
+  │              └─ variable, run, shell, connect, ssh, up, volume files upload → PERGUNTAR
   ├─ outra shell (bash -c, cmd /c, powershell -Command, eval…) → analisar o texto de dentro
   ├─ script (.sh .ps1 .bat .cmd, npm run) → ler o ficheiro e analisar como comandos
   ├─ código (.py .js, python -c, node -e) → procurar as mesmas ações no texto → PERGUNTAR
@@ -166,6 +166,24 @@ push forçado na `main`, qualquer que seja a ferramenta ou a forma do comando.
 Push normal continua igual. Só é feita com um "sim" explícito do utilizador no
 momento, porque altera uma configuração externa.
 
+**Feita em 04/10/2026**, com o "sim" do utilizador. Não tem commit: é uma
+configuração do GitHub, não um ficheiro do repositório.
+
+- Regra criada (`gh api -X POST repos/danielfranca47/crm-auto-digital/rulesets`):
+  ruleset **`main - sem push forcado`**, id `24438757`, estado `active`, alvo
+  a branch por omissão (`main`), uma única regra `non_fast_forward`, sem
+  ninguém na lista de exceções (vale também para o dono do repositório).
+- Antes não havia nenhuma proteção: a lista de rulesets estava vazia e a
+  proteção clássica respondia "Branch not protected".
+- Como desfazer: GitHub → Settings → Rules → Rulesets → apagar ou desativar
+  `main - sem push forcado`.
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** se um push forçado para a `main` escapasse às camadas do Claude Code, o GitHub aceitava-o.
+**Agora:** o GitHub recusa qualquer push forçado na `main`, venha de onde vier e escrito como for. Push normal e o fluxo de graduação continuam iguais. As outras branches não são afetadas.
+**Para validar:** Cenário G1, abaixo.
+
 ---
 
 ## Checks de Validação
@@ -202,19 +220,65 @@ Code. Nenhum cenário executa a ação real — usam `--dry-run` ou `--help`.
 - [x] Um commit cuja mensagem cita "git push --force" é feito sem pergunta nova
 - **Validado em:** 04/10/2026 — na sessão sem ecrã (onde uma pergunta seria uma recusa) os três comandos correram (200 testes a passar) e `git commit --dry-run --allow-empty -m "docs: git push --force é recusado"` passou pelo verificador; o git respondeu "nothing to commit", como esperado num ensaio
 
+### Cenário G1 — O GitHub recusa push forçado na `main` (Fase 3)
+- [x] Ler as regras ativas na branch: `gh api repos/danielfranca47/crm-auto-digital/rules/branches/main`
+- [x] Confirmar: aparece a regra `non_fast_forward`, vinda do ruleset `24438757`
+- **Validado em:** 04/10/2026 — a resposta foi `{"ruleset_id":24438757,"type":"non_fast_forward"}` e o ruleset está `active`. Não foi tentado um push forçado real.
+
+### Cenário T2 — Barreiras adicionais do Railway (Fase 4)
+- [x] Na worktree: `python -m pytest scripts/claude_hooks/tests -q`
+- [x] Confirmar: todos passam, incluindo os casos de `service delete`, `shell` e `connect`
+- **Validado em:** 04/10/2026 — 211 testes passam
+
+---
+
+## Fase 4 — Barreiras adicionais do Railway (04/10/2026)
+
+### Necessidade identificada
+
+O diagnóstico encontrou ações do Railway do mesmo tipo das barreiras, mas fora
+da lista aprovada. O utilizador decidiu incluir três: recusar
+`railway service delete` e perguntar em `railway shell` e `railway connect`.
+
+### Alteração
+
+| Arquivo | Mudança |
+|---|---|
+| `scripts/claude_hooks/verificar_comando.py` | `service` junta-se a `environment` e `project` (apagar → recusar); `shell` e `connect` juntam-se às ações que perguntam |
+| `scripts/claude_hooks/tests/test_verificar_comando.py` | 11 casos novos |
+| `.claude/settings.json` | regras `deny` para `railway service delete` e `ask` para `railway shell` / `railway connect`, em `Bash` e `PowerShell` |
+| `docs/ops/local-dev.md` | listas de barreiras atualizadas |
+
+`railway service files delete` também é recusado: a regra apanha qualquer
+`delete` / `rm` / `remove` dentro de `railway service`, tal como já acontece
+com os volumes.
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `27518fb` | barreiras para apagar serviço, `shell` e `connect` |
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** apagar um serviço do Railway, ou abrir uma shell com as variáveis de produção, só dependia do revisor automático.
+**Agora:** apagar um serviço é recusado sempre; `railway shell` e `railway connect` pedem confirmação (em sessão sem ecrã, são recusados).
+**Para validar:** Cenário T2, acima (já validado — é automático).
+
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
 - **Não é uma garantia absoluta.** Um verificador de texto não apanha
   ofuscação deliberada (script que gera outro script, comando montado letra a
-  letra, atalho de git gravado na configuração do repositório). A garantia que
-  não depende do texto é a Fase 3.
-- **Ações do Railway parecidas que ficaram de fora**, porque não estavam na
-  lista de barreiras aprovada — a decidir pelo utilizador se entram:
-  `railway service delete` (apaga um serviço), `railway redeploy` / `restart`,
-  `railway shell` e `railway connect` (abrem uma shell com as variáveis de
-  produção), `railway volume files rename`, apagar domínios ou buckets.
+  letra, atalho de git gravado na configuração do repositório). Para o push
+  forçado na `main`, a garantia que não depende do texto é a regra do GitHub
+  (Fase 3); para o Railway não existe equivalente.
+- **A regra do GitHub só cobre push forçado.** Apagar a branch `main` no
+  remoto não é travado por ela; o GitHub tem uma regra própria para isso
+  ("Restrict deletions"), que não foi pedida.
+- **Ações do Railway parecidas que continuam de fora:** `railway redeploy` /
+  `restart`, `railway volume files rename`, apagar domínios ou buckets.
 - **Apagar uma branch remota** (`git push origin :main`, `git push --delete`)
   não é barreira hoje e continua a não ser.
 - **Pergunta a mais em casos raros:** `git push -u origin "$RAMO" && rm -f tmp`

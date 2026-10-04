@@ -681,6 +681,21 @@ Limites — o que é preciso saber:
   argumentos, na mesma linha de outro comando com `-f`, pergunta. Separar os
   dois comandos resolve.
 
+#### Do lado do GitHub — push forçado na `main`
+
+O repositório `danielfranca47/crm-auto-digital` tem um ruleset ativo,
+**`main - sem push forcado`** (GitHub → Settings → Rules → Rulesets), com uma
+única regra: recusar push forçado na branch por omissão. Não tem exceções, por
+isso vale também para o dono do repositório, e não depende do Claude Code nem
+da forma do comando. Push normal e as outras branches não são afetados.
+
+- Conferir: `gh api repos/danielfranca47/crm-auto-digital/rules/branches/main`
+  deve listar `non_fast_forward`.
+- Só cobre push forçado; apagar a branch no remoto é outra regra do GitHub
+  ("Restrict deletions"), que não está ligada.
+- Não vive no repositório: num fork ou num repositório novo tem de ser criada
+  de novo.
+
 ### Na máquina (não versionado) — `~/.claude/settings.json`
 
 O Claude Code não lê a configuração do revisor a partir do repositório, só das
