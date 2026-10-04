@@ -584,10 +584,38 @@ Vale em qualquer modo de permissão e em todas as worktrees:
 - **`ask` — pergunta sempre, mesmo em modo auto:** `railway variable*` (ler
   expõe segredos; alterar dispara redeploy), `railway run`, `railway ssh`,
   `railway up`, e enviar ficheiros para um volume (`railway volume files upload`).
-- **`allow`:** não acrescentar regras de intérprete com código livre
-  (`python -c ' *`, `node -e`, `powershell -Command ' *`) nem de término de
-  processo por PID coringa — conteúdo malicioso lido de uma página ou ficheiro
+- **`allow` — corre sem passar pelo revisor.** Lista curta e fechada, só com
+  três grupos:
+  - **Testes automáticos:** `pytest`, `unittest` e `npx tsc --noEmit`, nas
+    formas `python -m …` e `.venv/Scripts/python.exe -m …`, para `Bash` e
+    `PowerShell`.
+  - **Browser, na página já aberta** (servidores `chrome-devtools` do plugin e
+    `chrome-devtools-manual`): olhar (`take_snapshot`, `take_screenshot`,
+    `list_pages`, `select_page`, `wait_for`, pedidos de rede e mensagens da
+    consola) e interagir (`click`, `hover`, `fill`, `fill_form`, `type_text`,
+    `press_key`, `handle_dialog`, `resize_page`, `emulate`).
+  - **Desktop, só olhar:** `screenshot`, `screenshot_window`, `list_windows`,
+    `cursor_position` do `desktop-control`.
+
+O que **não** entra em `allow`, nem com um clique em "permitir sempre":
+
+- **Qualquer comando que não seja teste** — `git add`/`commit`/`push`, `curl`,
+  `npm install`/`run`, término de processos. É o revisor que impede um segredo
+  de entrar num commit deste repositório público; uma regra `allow` tira-lhe
+  essa oportunidade. Regras com coringa enganam: `curl -s http://localhost:*`
+  aceita um segundo endereço externo a seguir ao primeiro.
+- **Intérprete com código livre** (`python -c ' *`, `python -`, `node -e`,
+  `powershell -Command ' *`) — conteúdo malicioso lido de uma página ou ficheiro
   poderia ser executado sem revisão.
+- **Ferramentas de browser que abrem um endereço ou executam código**
+  (`navigate_page`, `new_page`, `evaluate_script`, `upload_file`) e clique ou
+  teclado ao nível do desktop.
+- **Regras de leitura** (`ls`, `grep`, `git status`, …) — em modo auto os
+  comandos só de leitura já correm sem revisor e sem clique, por isso a regra
+  não acrescenta nada. Pelo mesmo motivo, não usar a skill
+  `fewer-permission-prompts` neste projeto.
+- **Um comando inteiro com senha, token ou chave** — a regra guarda o texto do
+  comando tal como foi escrito, em texto simples.
 
 `git push` normal não leva pergunta: faz parte do fluxo de graduação (ver
 `CLAUDE.md`, "Estratégia de branch por implementação").
@@ -623,6 +651,12 @@ definições pessoais. Num dispositivo novo, acrescentar a `~/.claude/settings.j
 
 Pontos a saber:
 
+- **`permissions.allow` pessoal fica vazia.** As definições pessoais valem em
+  todos os projetos, por isso uma regra ali salta o revisor em todo o lado. O
+  que faz sentido manter está na lista do projeto, acima.
+- **`autoMode.classifyAllShell` fica desligado.** Ligado, obriga todos os
+  comandos de shell a passar pelo revisor e anula as regras de teste da lista
+  `allow` do projeto. Só ligar se essas regras forem retiradas.
 - **Quem aplica é o utilizador, não o Claude.** O revisor automático recusa que
   o Claude altere as próprias regras de permissão (motivo `[Self-Modification]`)
   — é o comportamento esperado e não deve ser contornado.
