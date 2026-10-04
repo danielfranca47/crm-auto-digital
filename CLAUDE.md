@@ -394,7 +394,7 @@ feat: adicionar rota de exportação de leads
 
 - Commitar sempre na branch da implementação em curso (ver "Estratégia de branch por implementação" acima) — nunca trocar de branch no meio de uma fase sem commitar (ou stash) o que estiver pendente
 - **Nunca** usar `--amend` em commits já publicados no remote
-- Push automático só ocorre no passo de merge de volta de uma implementação graduada (ver "Estratégia de branch por implementação"); fora disso, **nunca** fazer push automático — somente commit local
+- Push automático só ocorre no passo de merge de volta de uma implementação graduada (ver "Estratégia de branch por implementação") e, numa sessão da fila automática, para a branch `claude/<slug>` do item (ver "Fila automática"); fora disso, **nunca** fazer push automático — somente commit local
 - Usar `git add` nos arquivos específicos alterados (evitar `git add -A` com arquivos sensíveis)
 - Se não houver alteração de código (apenas leitura/análise), **não criar commit**
 
@@ -479,3 +479,39 @@ Quando um pedido ou levantamento traz **incerteza** (não se sabe se o problema 
 | [`docs/implementations/_processo-graduacao-implementacao.md`](docs/implementations/_processo-graduacao-implementacao.md) | Como graduar para docs/architecture/ |
 | [`docs/implementations/_guia-resolucao-conflitos.md`](docs/implementations/_guia-resolucao-conflitos.md) | Como resolver conflitos de merge (mecânico vs. comportamento) |
 
+
+---
+
+## Fila automática
+
+Regras completas: [`docs/ops/fila-automatica.md`](docs/ops/fila-automatica.md) —
+ler antes de trabalhar numa branch `claude/*` ou de mexer em qualquer peça da fila.
+
+A fila de `docs/implementations/` (e os itens `Prioridade: ALTA` de `docs/plans/`)
+pode ser executada sem o utilizador dar o "start": de noite, uma rotina na cloud
+implementa um item e deixa-o numa branch `claude/<slug>`; de dia, no PC do
+utilizador, o item é testado e um agente avaliador decide se vai para `main`.
+
+**Uma sessão só é "da fila" quando foi lançada por um desses gatilhos.** Numa
+conversa normal com o utilizador, todo o resto deste ficheiro vale sem exceções.
+
+Numa sessão da fila, e só nela:
+
+- o agente escreve o diagnóstico e o plano no `.md` e segue sem aprovação — ou
+  pára em "só plano" quando há decisão de produto em aberto, mais de 3 fases, ou
+  dependência por resolver;
+- a branch é `claude/<slug-do-ficheiro>`, sem confirmação do nome;
+- a triagem dos "Ajustes Possíveis" na graduação não faz perguntas: tudo vai para
+  `docs/plans/` com `Prioridade: por definir`.
+
+Regras que valem para **qualquer** sessão:
+
+- `**Autonomia:** manual` no cabeçalho de um ficheiro de implementação tira-o da
+  fila automática (sem a linha vale `noturna`). Ao começar à mão um item que estava
+  na fila, pôr essa linha em `main` primeiro.
+- Uma branch que toque numa categoria que sobe sempre (regras do próprio agente,
+  pagamento, envio real a clientes, estrutura da base de dados, instruções da IA)
+  nunca é mergeada sem o utilizador — quem decide é
+  `python scripts/fila/categorias_que_sobem.py`, não a opinião de quem avalia.
+- O "Poder de merge do avaliador", em `docs/ops/fila-automatica.md`, só é alterado
+  com um "sim" explícito do utilizador nessa conversa.

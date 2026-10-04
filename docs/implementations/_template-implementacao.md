@@ -8,6 +8,7 @@
 
 **Branch:** `feat/etapa-X-Y-slug-descritivo` (ou `fix/...` para correções)
 **Status:** Em andamento
+**Autonomia:** noturna *(ou `manual` para a fila automática não pegar neste item — ver `docs/ops/fila-automatica.md`; sem esta linha vale `noturna`)*
 **Sprint:** `docs/plans/plano-sprint-YYYY-MM-DD.md` *(remover linha se não veio de sprint plan)*
 
 ---

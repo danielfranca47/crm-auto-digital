@@ -40,6 +40,15 @@ momento — todos os anteriores já foram graduados (ver `docs/architecture/`).
 > retomar um desses, basta pedir para continuar aquele arquivo — o Passo 0 roda nesse
 > momento, usando a Motivação já escrita como ponto de partida.
 >
+> **Linha `**Autonomia:**` e fila automática:** um ficheiro "Aguardando Plan Mode"
+> pode ser pego pelo agente que executa a fila sozinho, a não ser que tenha
+> `**Autonomia:** manual` no cabeçalho (sem a linha vale `noturna`). O trabalho
+> desse agente fica numa branch `claude/<slug>`, com um destes estados no
+> ficheiro: `Implementado de noite — por validar`, `Só plano — precisa da tua
+> decisão`, `Interrompido de noite — continuar`, `À espera da tua decisão`,
+> `Avaliado: não passou`. Regras em
+> [`docs/ops/fila-automatica.md`](../ops/fila-automatica.md).
+>
 > O mesmo formato é usado pelos comandos de discovery (`/discovery-levantar` para bugs
 > confirmados, `/discovery-decidir` para investigações promovidas — ver
 > [`docs/discovery/`](../discovery/)); nesse caso a linha `**Origem:**` aponta para o

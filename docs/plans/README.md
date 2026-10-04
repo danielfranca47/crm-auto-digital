@@ -74,6 +74,12 @@ relevantes se já souber.]
 Não há formato obrigatório rígido — o importante é que cada item seja identificável
 (M1, M2... ou por título) e tenha prioridade declarada.
 
+**`Prioridade: por definir`** aparece em itens que a fila automática deixou aqui ao
+graduar uma implementação sem o utilizador presente (ver
+[`docs/ops/fila-automatica.md`](../ops/fila-automatica.md)). Estão à espera de triagem:
+na análise de sprint, perguntar ao utilizador a prioridade de cada um (ou se é para
+descartar). A fila automática só pega sozinha em itens `ALTA`.
+
 ---
 
 ## Como disparar uma análise de sprint

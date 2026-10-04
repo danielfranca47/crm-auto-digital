@@ -143,6 +143,12 @@ melhorias) que historicamente eram perdidas ao deletar o arquivo na graduação,
 sem nenhuma decisão explícita sobre o que fazer com elas. Este passo obrigatório
 garante que nada é descartado silenciosamente.
 
+> **Sessão da fila automática** (ver
+> [`docs/ops/fila-automatica.md`](../ops/fila-automatica.md)): não há quem
+> responda às perguntas dos pontos 2 e 3. Nada é descartado e nada é promovido
+> a urgente — **todos** os itens seguem o ponto 5, com
+> `**Prioridade: por definir**`. A triagem fica para a revisão do utilizador.
+
 ### 1. Extrair e listar os itens
 
 Ler a secção e listar cada sugestão como um item numerado (um item por

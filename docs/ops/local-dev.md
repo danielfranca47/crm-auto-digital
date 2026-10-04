@@ -324,6 +324,7 @@ ainda — isso só acontece depois do Passo 0 ser aprovado, ver abaixo), criar
 # <Título do item>
 
 **Status:** Aguardando Plan Mode
+**Autonomia:** noturna
 **Sprint:** `docs/plans/plano-sprint-YYYY-MM-DD.md` (item P<N>)
 **Origem:** `docs/plans/<arquivo-original>.md` — <seção/item de origem>
 
@@ -354,6 +355,10 @@ de aprovado seguir para a criação de branch + worktree (Passo 1).
 **Nome do arquivo:** seguir o Passo 1 de `_guia-documentar-implementacao.md` — slug
 descritivo direto (sem código de etapa, já que ainda não houve Plan Mode para confirmar
 o escopo exato).
+
+**Linha `Autonomia`:** `noturna` deixa a fila automática pegar no item sozinha; trocar
+para `manual` se o usuário disser que quer acompanhar esse item de perto (ver
+`docs/ops/fila-automatica.md`).
 
 Isso não conta como "avançar para código sem plano aprovado" — nenhuma branch, worktree
 ou linha de código é criada aqui, só um documento de fila com o contexto já levantado.
