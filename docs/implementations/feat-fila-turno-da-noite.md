@@ -160,7 +160,7 @@ cloud e o verificador recusou o push forçado de ensaio.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(hash a registar)* | recusa das ferramentas de GitHub da cloud + instalação em ambiente virtual + resultados das sondas |
+| 1 | `1848093` | recusa das ferramentas de GitHub da cloud + instalação em ambiente virtual + resultados das sondas |
 
 ### Relatório da Fase 2 — o que mudou na prática
 
