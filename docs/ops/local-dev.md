@@ -620,9 +620,64 @@ O que **não** entra em `allow`, nem com um clique em "permitir sempre":
 `git push` normal não leva pergunta: faz parte do fluxo de graduação (ver
 `CLAUDE.md`, "Estratégia de branch por implementação").
 
-Estas regras apanham a forma habitual de escrever o comando, não todas as
-formas possíveis — são uma barreira contra engano, e o revisor automático é a
-segunda camada.
+Estas regras comparam o texto do comando com um padrão, por isso só apanham a
+forma habitual de o escrever. As outras formas ficam a cargo do verificador,
+abaixo.
+
+#### Verificador de comandos — `scripts/claude_hooks/verificar_comando.py`
+
+Segunda camada das barreiras `deny` e `ask`. Está ligado no bloco `hooks` de
+`.claude/settings.json` (evento `PreToolUse`, ferramentas `Bash` e
+`PowerShell`): corre antes de cada comando de shell, lê a estrutura do comando
+em vez de comparar o início do texto, e aplica a mesma lista de barreiras:
+
+- **Recusa** push forçado (`--force`, `-f`, `--force-with-lease`, `--mirror`,
+  destino a começar por `+`) e, no Railway, `down`, `delete`, apagar um
+  ambiente ou o projeto, apagar ou desanexar um volume, apagar ficheiros de um
+  volume.
+- **Pergunta** em `railway variable`, `run`, `ssh`, `up` e
+  `volume files upload`.
+- **Não diz nada** no resto — o comando segue para as regras acima e para o
+  revisor automático. O verificador nunca aprova um comando.
+
+Formas que cobre e que as regras não apanham:
+
+- nomes alternativos do Railway: `rm` / `remove`, `project delete`, `volumes`,
+  `env`, `vars` / `var`, `local`
+- opções antes do subcomando: `git -C . push -f`, `railway -s <serviço> volume delete`
+- outro nome do executável: `git.exe`, caminho completo, aspas, `npx @railway/cli`
+- invólucros: `env`, `timeout`, `sudo`, `xargs`, `find -exec`, `git submodule foreach`
+- shell dentro de shell: `bash -c`, `cmd /c`, `powershell -Command`,
+  `-EncodedCommand`, `eval`, `Invoke-Expression`, `Start-Process`
+- scripts chamados pelo comando (`.sh`, `.ps1`, `.bat`, `.cmd`, `npm run`): o
+  ficheiro é lido e analisado como comandos; em código (`.py`, `.js`,
+  `python -c`) as mesmas ações são procuradas no texto e, se aparecerem,
+  pergunta
+- formas que não dá para ler (variável no lugar do programa ou da opção,
+  `| bash`, aspas por fechar): pergunta quando o texto aparenta uma das ações
+
+Texto que é dado e não comando não conta: mensagem de `git commit -m`, heredoc
+lido por `cat`, argumento de `grep` ou `echo`.
+
+Limites — o que é preciso saber:
+
+- **Não é uma garantia absoluta.** Não apanha ofuscação deliberada (script que
+  gera outro script, comando montado letra a letra, atalho de git gravado na
+  configuração do repositório). O revisor automático continua a ser a camada
+  seguinte.
+- **Se o verificador não arrancar, o comando segue.** Sem `python` no PATH, ou
+  se o script passar do tempo limite (10 s), o Claude Code trata o hook como
+  "sem decisão". É por isso que as regras `deny`/`ask` acima se mantêm: valem
+  mesmo com o verificador partido, e nenhum hook as consegue anular. Um erro
+  dentro do script, pelo contrário, bloqueia o comando (código de saída 2).
+- **Dispositivo novo:** confirmar que `python --version` responde na shell.
+- **Alterar a lista de barreiras** exige mexer nos dois sítios: as regras em
+  `.claude/settings.json` e as tabelas no topo do script. Os testes correm com
+  `python -m pytest scripts/claude_hooks/tests -q` e só passam texto ao script
+  — nenhum comando real é executado.
+- **Pergunta a mais em casos raros.** Um `git push` com uma variável nos
+  argumentos, na mesma linha de outro comando com `-f`, pergunta. Separar os
+  dois comandos resolve.
 
 ### Na máquina (não versionado) — `~/.claude/settings.json`
 

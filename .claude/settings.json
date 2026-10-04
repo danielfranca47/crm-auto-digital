@@ -106,5 +106,19 @@
       "PowerShell(railway volume files upload*)",
       "PowerShell(railway volume files * upload*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/scripts/claude_hooks/verificar_comando.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }
