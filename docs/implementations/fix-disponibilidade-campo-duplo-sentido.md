@@ -281,7 +281,7 @@ desligado, como a tela já diz. Sem mudança de banco, de telas ou de prompts.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | `(a registar)` | Janela de horário aplicada com buffer ligado + abertura do próprio dia, testes e docs |
+| 1 | `c5fef6e` | Janela de horário aplicada com buffer ligado + abertura do próprio dia, testes e docs |
 
 ### Relatório da Fase 3 — o que mudou na prática
 
