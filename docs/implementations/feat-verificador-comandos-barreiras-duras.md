@@ -210,10 +210,9 @@ Code. Nenhum cenário executa a ação real — usam `--dry-run` ou `--help`.
 - **Validado em:** 04/10/2026 — mesma sessão; recusado com "Barreira dura do projeto: comandos do Railway que apagam ou desligam coisas…"
 
 ### Cenário A3 — Ação sensível pergunta; sem ecrã é recusada (Fase 2)
-- [ ] Sessão interativa: pedir `railway vars --help` → aparece o pedido de confirmação
+- [x] Sessão interativa: pedir `railway vars --help` → aparece o pedido de confirmação
 - [x] Sessão sem ecrã (`claude -p`, a partir da worktree): o mesmo pedido termina sem executar o comando
-- **Validado em:** 04/10/2026 (só a parte sem ecrã) — o Claude Code registou a recusa com origem no hook (`decision_reason_type: hook`) e a mensagem "Ação sensível no Railway… precisa de confirmação do utilizador"; o comando não correu
-- **Pendente:** a parte interativa precisa do utilizador a ver o ecrã
+- **Validado em:** 04/10/2026 — sessão interativa: o utilizador viu a caixa de confirmação com a mensagem do verificador antes de o comando correr, aprovou, e o comando mostrou a ajuda normal; sessão sem ecrã: o Claude Code registou a recusa com origem no hook (`decision_reason_type: hook`) e a mensagem "Ação sensível no Railway… precisa de confirmação do utilizador"; o comando não correu
 
 ### Cenário A4 — Não atrapalha o trabalho normal (Fase 2)
 - [x] Na sessão da worktree: `git status`, `railway status` e `python -m pytest scripts/claude_hooks/tests -q` correm sem pergunta nova
