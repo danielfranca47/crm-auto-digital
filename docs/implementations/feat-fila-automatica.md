@@ -120,7 +120,14 @@ sempre. Nada corre sozinho ainda.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | (a registar) | contrato da fila: procedimento, script + testes, guias e itens seguintes |
+| 1 | `1f5e190` | contrato da fila: procedimento, script + testes, guias e itens seguintes |
+
+**Detalhes do commit `1f5e190`:**
+- `docs/ops/fila-automatica.md` — regras completas; tabela "Estado atual" com o poder de merge desligado
+- `scripts/fila/categorias_que_sobem.py` — `classificar` (caminhos e linhas alteradas → categorias), `ler_diff` (separa ficheiros e linhas do `git diff -U0`), `avaliar_ramo` (compara `base...ramo`), `main` (saída 0/1/2, texto ou `--json`)
+- `scripts/fila/tests/test_categorias_que_sobem.py` — tabelas de casos por categoria + repositório temporário para a ponta a ponta
+- `CLAUDE.md` — secção "Fila automática" no fim; regra de push automático
+- guias de `docs/implementations/`, `docs/ops/local-dev.md`, `docs/plans/README.md` — linha `Autonomia`, exceções das sessões da fila, `Prioridade: por definir`
 
 ### Relatório da Fase 1 — o que mudou na prática
 
