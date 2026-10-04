@@ -1,7 +1,7 @@
 # Fila automática — turno da noite (rotina na cloud)
 
 **Branch:** `worktree-feat+fila-turno-da-noite` (worktree `.claude/worktrees/feat+fila-turno-da-noite`)
-**Status:** Em andamento — Fases 1 a 4 implementadas; por validar: N2 (recusa do push para `main` na cloud) e N4 (consumo); Fase 5 (ligar o horário) por fazer
+**Status:** Em andamento — Fases 1 a 4 implementadas e validadas; falta a Fase 5 (ligar o horário: Cenário D1)
 **Autonomia:** manual
 **Origem:** Fase 2 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
@@ -232,7 +232,7 @@ recusado.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | *(hash a registar)* | redirecionamento de saída deixa de contar como argumento |
+| 1 | `74b1165` | redirecionamento de saída deixa de contar como argumento |
 
 #### Relatório da Fase 4 — o que mudou na prática
 
@@ -369,9 +369,16 @@ decisão do utilizador.
 - **Validado em (só a parte das ferramentas):** 04/10/2026 — no ensaio,
   `mcp__github__get_me` respondeu "Permission to use mcp__github__get_me has
   been denied" (recusa por regra).
-- **Pendente:** a recusa do push para `main`. No ensaio o comando correu
-  antes de a sessão mudar para esta branch e não foi recusado (ver "Relatório
-  da Fase 3").
+- [x] Depois da Fase 4, numa sessão da cloud já nesta branch, em comandos
+      separados: push de ensaio para `main` (recusado), para `claude/…` com
+      `2>&1 | tail -3` (passa), e para `main` com `2>&1 | tail -3` (recusado)
+- **Validado em:** 04/10/2026 — execução `cse_01EvYXAmakQwwnkSiKYrbM3c`
+  (22 s), já com o commit `74b1165`: os dois pushes para `main` foram
+  recusados pelo verificador com a mensagem das sessões da cloud; o push de
+  ensaio para `claude/sonda-teste` com `2>&1 | tail -3` correu
+  (`* [new branch] HEAD -> claude/sonda-teste`). No primeiro ensaio o comando
+  para `main` tinha corrido antes de a sessão mudar para esta branch e não
+  fora recusado (ver "Relatório da Fase 3").
 
 ### Cenário N3 — Rotina sem acessos a mais (Fase 3)
 - [x] Confirmar na rotina: zero conectores
@@ -383,9 +390,14 @@ decisão do utilizador.
   defeito da Fase 4), nenhuma ficou à espera de resposta.
 
 ### Cenário N4 — Consumo de uma noite (Fase 3)
-- [ ] Registar o uso do plano antes e depois do disparo à mão
-- **Antes do ensaio:** sessão 24% usado, semana 4% usado (conta Pro,
-  04/10/2026). **Depois:** por registar.
+- [x] Registar o uso do plano antes e depois do disparo à mão
+- **Registado em:** 04/10/2026 (conta Pro) — antes: sessão 24%, semana 4%;
+  sete minutos depois: sessão 32%, semana 5%. **É um teto, não o custo da
+  noite:** nesses sete minutos correram o ensaio (87 s, Sonnet 5.5), a
+  verificação da Fase 4 (22 s) e a conversa que os lançou, que gasta do mesmo
+  limite e pesa bem mais. O item era só de documentação; um item com código
+  (instalar dependências + testes) demora mais. A medida limpa é a da
+  primeira noite agendada, com o PC desligado.
 
 ### Cenário D1 — Hora da rotina (Fase 4)
 - [ ] O utilizador escolhe a hora, com a medida do N4
