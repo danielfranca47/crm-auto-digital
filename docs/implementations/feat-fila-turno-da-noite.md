@@ -1,7 +1,7 @@
 # Fila automática — turno da noite (rotina na cloud)
 
 **Branch:** `worktree-feat+fila-turno-da-noite` (worktree `.claude/worktrees/feat+fila-turno-da-noite`)
-**Status:** Em andamento — Fase 1 implementada; Fases 2 a 4 por fazer
+**Status:** Em andamento — Fases 1 e 2 implementadas; à espera do Cenário N0 (aplicação do Claude no GitHub) para o ensaio da Fase 3
 **Autonomia:** manual
 **Origem:** Fase 2 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
@@ -136,14 +136,46 @@ corte a meio nunca passe despercebido. **Ainda nada corre sozinho.**
 Uma sessão única, sem commits nem pushes reais, com o texto de
 `## Texto da sonda`, abaixo.
 
-A lançar pelo utilizador num terminal (`claude --cloud "<texto>"`) ou a partir
-de claude.ai/code — a sessão do Claude Code não consegue lançá-la sozinha.
+Feita em 04/10/2026 com o "sim" do utilizador: a rotina "Fila automática —
+turno da noite" (`trig_01H55ZGUhNCdAcHqzkri2djD`,
+https://claude.ai/code/routines/trig_01H55ZGUhNCdAcHqzkri2djD) foi criada sem
+conectores e usada para três sondas de leitura. A API não aceita uma rotina
+"sem horário": foi criada com um disparo único (a primeira sonda) e ficou
+desligada depois dele; as outras duas foram disparos à mão. A API também
+anexou por omissão os conectores da conta — retirados antes do primeiro
+disparo.
 
-Conforme o resultado: se `python` não existir na cloud, corrigir a forma de
-chamar o verificador em `.claude/settings.json`; se a sessão tiver ferramentas
-de GitHub que juntem código sem passar pela linha de comandos, acrescentar a
-recusa; se o push aparecer no GitHub como uma aplicação, propor a regra do
-lado do GitHub.
+O que as sondas obrigaram a mudar:
+
+| Arquivo | O que muda |
+|---|---|
+| `.claude/settings.json` | regra `deny` para `mcp__github` — todas as ferramentas de GitHub que a cloud traz e que escrevem sem passar pela linha de comandos |
+| `docs/ops/fila-automatica.md` | "Turno da noite": dependências e `pytest` instalados num ambiente virtual em `/tmp/venv` (o `pip` do sistema falha); as ferramentas `mcp__github__…` estão recusadas |
+| `docs/ops/local-dev.md` | a regra `deny` nova |
+
+Não foi preciso mexer na forma de chamar o verificador: `python` existe na
+cloud e o verificador recusou o push forçado de ensaio.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(hash a registar)* | recusa das ferramentas de GitHub da cloud + instalação em ambiente virtual + resultados das sondas |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** a barreira da Fase 1 só olhava para comandos de terminal. A cloud
+tem, além disso, ferramentas próprias de GitHub que juntam pull requests e
+escrevem ficheiros diretamente numa branch — incluindo `main`. E a noite não
+conseguiria correr um único teste: nem as dependências nem o `pytest` se
+instalavam.
+**Agora:** essas ferramentas estão todas recusadas por regra; o procedimento
+diz como instalar as dependências de forma que funciona (confirmado na cloud:
+242 testes do backend-crm e a verificação do frontend passam).
+**Falta um passo teu:** a cloud consegue ler o repositório (é público) mas
+**não consegue escrever** — o GitHub recusa o push. É preciso instalar a
+aplicação do Claude no repositório (Cenário N0).
+**Para validar:** Cenário S1 (validado) e N0 (precisa de ti).
 
 ### Fase 3 — Ensaio: rotina sem horário + um disparo à mão
 
@@ -206,11 +238,55 @@ decisão do utilizador.
   confirmada na sonda, ponto 5)
 
 ### Cenário S1 — Sonda na cloud (Fase 2)
-- [ ] Lançar a sessão da cloud com o texto de `## Texto da sonda`
-- [ ] Registar aqui as respostas aos 8 pontos
-- [ ] Confirmar: o ponto 3 é recusado pelo verificador (prova de que ele corre
+- [x] Lançar a sessão da cloud com o texto de `## Texto da sonda`
+- [x] Registar aqui as respostas aos 8 pontos
+- [x] Confirmar: o ponto 3 é recusado pelo verificador (prova de que ele corre
       na cloud); o ponto 5 termina com os 242 testes aprovados; o ponto 7 não
       encontra nenhum `.env`
+- **Validado em:** 04/10/2026 — em três execuções (a instalação só passou à
+  terceira, com ambiente virtual)
+- **Executado em:** 04/10/2026, 12:58 (Lisboa) — rotina
+  `trig_01H55ZGUhNCdAcHqzkri2djD`, execução `cse_01J5526SvLVEYr3923bb9ffn`,
+  55 segundos, modelo Sonnet 5.5, sem conectores. Resultados:
+
+| Ponto | Resultado |
+|---|---|
+| 1. Ferramentas | `python` e `python3` existem (3.11.15); Node 22.22.0, npm 10.9.4. **`pytest` não está instalado**, ao contrário do que a documentação diz. |
+| 2. Ambiente | `CLAUDE_CODE_REMOTE=true`; pasta `/home/user/crm-auto-digital`; branch `main`. |
+| 3. Push forçado de ensaio | ✅ **Recusado pelo verificador antes de correr**, com a mensagem da barreira — o `.claude/settings.json` e o verificador valem na cloud. |
+| 4. Push de ensaio para `claude/…` | ❌ Falhou com erro 403: "Claude doesn't have GitHub access to danielfranca47/crm-auto-digital". O clone funciona porque o repositório é público; **o push precisa de a aplicação do Claude estar instalada no repositório** (passo do utilizador). |
+| 5. Dependências e testes | ❌ `pip install -r requirements.txt` falhou ao compilar o pacote `googlemaps`; sem `pytest`, os testes não correram. |
+| 7. `.env` | ✅ Nenhum no clone. |
+| 8. Identidade | `gh api user` responde `danielfranca47` — as chamadas ao GitHub aparecem como o utilizador. |
+
+- **Segunda sonda** (execução `cse_014PJPcGv7ojbJGEj7UuUiNA`, 39 s) — causa
+  da falha de instalação e ferramentas de GitHub:
+  - `googlemaps` falha com `AttributeError: install_layout`: o `pip` do
+    sistema (24.0, instalado pelo Debian, com `setuptools` 68.1.2) não se
+    entende com o Python 3.11.15 da cloud. Atualizar `setuptools`/`wheel` não
+    resolve (o sistema não deixa desinstalar os seus).
+  - **A sessão tem ferramentas de GitHub que não passam pela linha de
+    comandos:** `mcp__github__merge_pull_request`, `push_files`,
+    `create_or_update_file`, `delete_file`, `create_branch`,
+    `enable_pr_auto_merge`, `actions_run_trigger`, `create_pull_request`, e
+    as de leitura. O verificador de comandos não as vê.
+- **Terceira sonda** (execução `cse_01QHae3DwQGnzxL4pSccnANi`, 146 s) — a
+  correção da instalação:
+  - ambiente virtual em `/tmp/venv` + `pip install -r requirements.txt pytest`:
+    ✅ 32 s; `pytest tests/ -q` no backend-crm: ✅ **242 passed**
+  - `npm ci` no frontend-crm: ✅ 87 s; `npx tsc --noEmit`: ✅ sem erros
+  - `git status` limpo no fim — a sonda não deixou nada no clone
+- **Por validar no S1:** nada — o ponto 3 foi recusado pelo verificador, o
+  ponto 5 passa com o ambiente virtual, o ponto 7 não encontrou `.env`. O que
+  ficou por resolver (acesso de escrita ao repositório, ponto 4) passa para o
+  Cenário N0.
+
+### Cenário N0 — A cloud consegue escrever em `claude/…` (pré-requisito da Fase 3)
+- [ ] O utilizador instala a aplicação do Claude no GitHub para
+      `danielfranca47/crm-auto-digital`
+      (https://github.com/apps/claude/installations/select_target)
+- [ ] Numa sessão da cloud: `git push --dry-run origin HEAD:refs/heads/claude/sonda-teste`
+- [ ] Confirmar: deixa de dar o erro 403 "Claude doesn't have GitHub access"
 
 ### Cenário N1 — Uma noite inteira, disparada à mão (Fase 3)
 - [ ] Disparar a rotina à mão
@@ -222,6 +298,8 @@ decisão do utilizador.
 ### Cenário N2 — A barreira funciona na cloud (Fase 3)
 - [ ] Numa sessão da cloud sobre esta branch: `git push --dry-run origin HEAD:main`
 - [ ] Confirmar: recusado pelo verificador, com a mensagem das sessões da cloud
+- [ ] Na mesma sessão: pedir uma ferramenta `mcp__github__…` de leitura (ex.: `get_me`)
+- [ ] Confirmar: recusada pela regra `deny`
 
 ### Cenário N3 — Rotina sem acessos a mais (Fase 3)
 - [ ] Confirmar na rotina: zero conectores
@@ -239,11 +317,18 @@ decisão do utilizador.
 
 ## Ajustes Possíveis Pós-Implementação
 
-- **A barreira não é uma garantia absoluta.** É um verificador de texto: não
-  apanha ofuscação deliberada, nem uma ferramenta de GitHub que não passe pela
-  linha de comandos (a verificar na sonda). A garantia que não depende do
-  texto seria uma regra do GitHub — só possível se a cloud for vista como uma
-  aplicação diferente do utilizador.
+- **A barreira não é uma garantia absoluta.** O verificador lê texto e não
+  apanha ofuscação deliberada; a regra `deny` cobre o servidor `github` de
+  hoje, não um servidor novo com outro nome que a cloud venha a trazer. A
+  garantia que não depende de nada disto seria uma regra do GitHub — só
+  possível se o GitHub distinguir a cloud do PC do utilizador, e a sonda
+  mostrou que as chamadas aparecem como `danielfranca47`. A rever depois de a
+  aplicação do Claude estar instalada (o push pode aparecer como a aplicação).
+- **A regra `deny` de `mcp__github` vale também no PC.** Hoje não tem efeito
+  (não há servidor com esse nome); se um dia se quiser um servidor de GitHub
+  local, tem de ter outro nome ou a regra tem de ser afinada.
+- **A API das rotinas anexa todos os conectores da conta por omissão.** Ao
+  alterar a rotina pela interface web, confirmar que continuam a zero.
 - **Código que menciona `git push` num comentário é recusado na cloud** quando
   o ficheiro é executado diretamente (`python ficheiro.py`). Não afeta
   `python -m pytest`.

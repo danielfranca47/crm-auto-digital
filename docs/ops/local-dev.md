@@ -635,7 +635,11 @@ Vale em qualquer modo de permissão e em todas as worktrees:
   (`--force`, `-f`), e no Railway tudo o que apaga ou desliga coisas — apagar ou
   desanexar um volume, apagar ficheiros dentro de um volume (é onde ficam as
   bases de dados e os backups), `railway down`, `railway delete`,
-  `railway environment delete`, `railway service delete`.
+  `railway environment delete`, `railway service delete`. E todas as
+  ferramentas do servidor `github` (`mcp__github`): as sessões da cloud trazem
+  ferramentas que juntam pull requests e escrevem ficheiros numa branch sem
+  passar pela linha de comandos, fora do alcance do verificador de comandos.
+  No PC esse servidor não existe — o GitHub usa-se pela CLI `gh`.
 - **`ask` — pergunta sempre, mesmo em modo auto:** `railway variable*` (ler
   expõe segredos; alterar dispara redeploy), `railway run`, `railway shell` e
   `railway connect` (abrem uma shell com as variáveis de produção, ou na base

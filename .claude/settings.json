@@ -59,6 +59,7 @@
       "mcp__desktop-control__cursor_position"
     ],
     "deny": [
+      "mcp__github",
       "Bash(git push --force*)",
       "Bash(git push -f *)",
       "Bash(git push * --force*)",

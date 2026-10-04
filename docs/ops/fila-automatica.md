@@ -129,8 +129,10 @@ item por noite.
 verificador de comandos (`scripts/claude_hooks/verificar_comando.py`) recusa,
 em sessões da cloud, qualquer `git push` que não seja para uma branch
 `claude/…` escrita por extenso no comando, e os comandos `gh` que alteram o
-repositório (juntar um pull request, `gh api` de escrita). O push faz-se
-sempre assim: `git push -u origin claude/<slug>`.
+repositório (juntar um pull request, `gh api` de escrita). As ferramentas de
+GitHub que a cloud traz (`mcp__github__…`), que escrevem sem passar pela linha
+de comandos, estão recusadas por regra em `.claude/settings.json`. O push
+faz-se sempre assim: `git push -u origin claude/<slug>`.
 
 1. **Escolher** o item (secção "Que itens a fila pode pegar"). Sem item
    elegível: terminar e dizê-lo.
@@ -154,10 +156,20 @@ sempre assim: `git push -u origin claude/<slug>`.
 5. **Implementar** fase a fase, como manda o guia. Os Checks de Validação têm
    de poder ser executados de dia por quem não viu esta sessão: setup, ação,
    o que confirmar.
-6. **Testes automáticos** dos serviços tocados (`python -m pytest tests/ -q`
-   no backend, `npx tsc --noEmit` no frontend). O clone não traz dependências:
-   instalar primeiro as do serviço tocado (`pip install -r requirements.txt`,
-   `npm ci`). Registar no ficheiro, na secção
+6. **Testes automáticos** dos serviços tocados. O clone não traz dependências
+   nem `pytest`, e o `pip` do sistema da cloud não consegue instalar as do
+   backend (falha em `googlemaps`) — usar sempre um ambiente virtual fora do
+   repositório:
+
+   ```bash
+   # backend (a partir da pasta do serviço, ex.: backend-crm)
+   python3 -m venv /tmp/venv && /tmp/venv/bin/python -m pip install -r requirements.txt pytest
+   /tmp/venv/bin/python -m pytest tests/ -q
+   # frontend (a partir da pasta do frontend)
+   npm ci && npx tsc --noEmit
+   ```
+
+   Registar no ficheiro, na secção
    `## Testes automáticos (turno da noite)`: o que correu e o resultado. Um
    teste que falha e não é resolvido fica dito com todas as letras.
 7. **Fechar:** `**Status:** Implementado de noite — por validar`, commit e
