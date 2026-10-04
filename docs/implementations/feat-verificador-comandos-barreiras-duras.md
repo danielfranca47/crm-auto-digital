@@ -117,6 +117,22 @@ do Claude Code.
 | `scripts/claude_hooks/tests/test_verificar_comando.py` | novo — 200 casos (texto do comando → decisão esperada) |
 | `docs/implementations/feat-verificador-comandos-barreiras-duras.md` | template preenchido |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `cee2ab7` | script verificador + 200 testes + este arquivo preenchido |
+
+**Detalhes do commit `cee2ab7`:**
+- `scripts/claude_hooks/verificar_comando.py` — `_Leitor` separa o texto em comandos simples respeitando aspas, heredocs e substituições (Bash e PowerShell); `_git` e `_railway` aplicam a lista de barreiras; `_Analise` trata invólucros, shell dentro de shell, scripts em disco e formas ilegíveis; `main` lê o JSON do hook e falha fechada (código 2)
+- `scripts/claude_hooks/tests/test_verificar_comando.py` — tabelas de casos por decisão esperada, scripts criados em pasta temporária, e o contrato do hook testado pelo stdin
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** não existia nenhum programa a olhar para o comando inteiro — só as regras de texto.
+**Agora:** existe o verificador e a sua bateria de testes, mas **ainda desligado**: o comportamento do Claude Code é exatamente o mesmo de antes.
+**Para validar:** Cenário T1, abaixo (já validado — é automático).
+
 ### Fase 2 — Ligar o verificador e documentar
 
 **Objetivo:** ativar o hook e atualizar a doc de operação.
@@ -125,6 +141,23 @@ do Claude Code.
 |---|---|
 | `.claude/settings.json` | bloco `hooks.PreToolUse` (`matcher: "Bash\|PowerShell"`); `permissions` intacto |
 | `docs/ops/local-dev.md` | secção "Modo auto e regras de permissão do Claude Code" descreve as duas camadas |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `d3d56fb` | hook `PreToolUse` ligado + doc de operação |
+
+**Detalhes do commit `d3d56fb`:**
+- `.claude/settings.json` — bloco `hooks.PreToolUse` com `python "${CLAUDE_PROJECT_DIR}/scripts/claude_hooks/verificar_comando.py"`, tempo limite de 10 s; `permissions` sem alterações (ficheiro dentro de pasta ignorada: `git add -f`)
+- `docs/ops/local-dev.md` — nova subsecção "Verificador de comandos" (o que recusa, o que pergunta, formas cobertas, limites)
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** uma ação proibida escrita de forma diferente da habitual (por exemplo `railway volumes delete`, ou `git -C . push -f`) passava pelas regras e só o revisor automático a podia travar.
+**Agora:** antes de cada comando de shell, o verificador lê o comando inteiro e recusa essas ações (ou pergunta, nas sensíveis) seja qual for a forma. As regras antigas continuam ativas por baixo.
+**Atenção:** só vale em conversas abertas numa pasta que já tenha esta alteração — hoje, só a worktree; a pasta principal passa a ter depois do merge.
+**Para validar:** Cenários A1 a A4, abaixo.
 
 ### Fase 3 — (opcional, fora do repositório) Proteção do lado do GitHub
 
