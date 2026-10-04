@@ -560,3 +560,57 @@ def test_hook_na_cloud_recusa_push_para_main():
 def test_hook_fora_da_cloud_nao_decide_push_para_main():
     r = correr(entrada("git push origin main"))
     assert (r.returncode, r.stdout) == (0, b"")
+
+
+# --------------------------------------------------------------------------
+# Redirecionamento de saída: o descritor e o destino não são argumentos
+# --------------------------------------------------------------------------
+
+CLOUD_LIVRES_COM_REDIRECIONAMENTO = [
+    "git push -u origin claude/item 2>&1|tail -3",
+    "git push -u origin claude/item 2>&1 | tail -3",
+    "git push -u origin claude/item 2>&1",
+    "git push -u origin claude/item > /tmp/p.log 2>&1",
+    "git push -u origin claude/item >/dev/null",
+    "git push -u origin claude/item >> /tmp/p.log",
+    "git push -u origin claude/item &> /tmp/p.log",
+    "git push -u origin claude/item 2>/dev/null && git status",
+    'git push -u origin claude/item > "/tmp/um ficheiro.log"',
+    "git checkout -b claude/item origin/main\nsed -i 's/a/b/' f.md\ngit push -u origin claude/item 2>&1|tail -1",
+]
+
+
+@pytest.mark.parametrize("comando", CLOUD_LIVRES_COM_REDIRECIONAMENTO)
+def test_na_cloud_push_para_claude_com_redirecionamento_passa(comando):
+    assert decisao_cloud(comando) is None
+
+
+CLOUD_RECUSA_COM_REDIRECIONAMENTO = [
+    "git push --dry-run origin HEAD:main 2>&1 | tail -5",
+    "git push origin main > /tmp/p.log 2>&1",
+    "git push origin main &> /tmp/p.log",
+    "git push origin 2>&1",
+    "git push > claude/item",
+    "git push origin > claude/item",
+    "gh pr merge 3 2>&1 | tail -2",
+]
+
+
+@pytest.mark.parametrize("comando", CLOUD_RECUSA_COM_REDIRECIONAMENTO)
+def test_na_cloud_redirecionamento_nao_esconde_o_destino(comando):
+    assert decisao_cloud(comando) == vc.DENY
+
+
+def test_redirecionamento_nao_muda_as_barreiras_de_sempre():
+    assert decisao("git push -f origin main 2>&1 | tail -3") == vc.DENY
+    assert decisao("git push origin main --force > /tmp/p.log 2>&1") == vc.DENY
+    assert decisao("railway down > /tmp/r.log 2>&1") == vc.DENY
+    assert decisao("railway vars > vars.txt") == vc.ASK
+    assert decisao("git push origin main 2>&1 | tail -3") is None
+    assert decisao("echo x > deploy.sh") is None
+    assert decisao("git log > --force") is None
+
+
+def test_redirecionamento_de_entrada_continua_a_ser_lido(tmp_path):
+    (tmp_path / "publicar.sh").write_text("git push --force\n", encoding="utf-8")
+    assert decisao("bash < publicar.sh", cwd=str(tmp_path)) == decisao("bash publicar.sh", cwd=str(tmp_path))

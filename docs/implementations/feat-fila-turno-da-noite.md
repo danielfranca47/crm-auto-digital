@@ -1,7 +1,7 @@
 # Fila automática — turno da noite (rotina na cloud)
 
 **Branch:** `worktree-feat+fila-turno-da-noite` (worktree `.claude/worktrees/feat+fila-turno-da-noite`)
-**Status:** Em andamento — Fases 1 e 2 implementadas; Cenário N0 validado; falta o ensaio da Fase 3 (precisa do "sim" do utilizador)
+**Status:** Em andamento — Fases 1 a 4 implementadas; por validar: N2 (recusa do push para `main` na cloud) e N4 (consumo); Fase 5 (ligar o horário) por fazer
 **Autonomia:** manual
 **Origem:** Fase 2 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
@@ -191,7 +191,60 @@ olhar.
   elegível; corrige três documentos).
 - Medir o consumo do limite de uso antes e depois.
 
-### Fase 4 — Ligar o horário
+**Feito em 04/10/2026**, com o "sim" do utilizador (execução
+`cse_01U7DJUnyute8d69DVr3eWQN`, 87 segundos, Sonnet 5.5, sem conectores). Não
+tem commit próprio nesta branch: o que produziu está em
+`origin/claude/fix-docs-campos-obrigatorios-qualificacao` (2 commits).
+
+### Relatório da Fase 3 — o que o ensaio mostrou
+
+**Correu bem:** a noite escolheu o item esperado, marcou-o como interrompido
+no primeiro commit, corrigiu cinco documentos, deixou o trabalho numa branch
+`claude/…` com o estado `Implementado de noite — por validar`, e avisou por si
+que o item toca no `CLAUDE.md` (sobe para ti). `main` não mudou. A ferramenta
+de GitHub da cloud foi recusada pela regra.
+**Correu mal:** a barreira da Fase 1 recusou um push legítimo, escrito como
+`git push -u origin claude/<slug> 2>&1 | tail -3` — a noite contornou com um
+push simples. Corrigido na Fase 4.
+**Ficou por provar:** a recusa de um push para `main` na cloud. O comando de
+ensaio correu antes de a sessão mudar para esta branch, com o verificador de
+`main` (sem a regra). O que ficou provado é o contrário: sem a regra, a cloud
+consegue mesmo escrever em `main`.
+
+### Fase 4 — Redirecionamentos lidos como destinos do push (04/10/2026)
+
+#### Necessidade identificada
+
+Quem lê o comando (`_Leitor.ler`) partia `2>&1` em dois e deixava o `2` e o
+destino de um `>` como argumentos do comando. Para as regras antigas isso não
+tinha efeito; para a regra do push na cloud, cada um desses bocados era lido
+como uma branch de destino que não começa por `claude/` — e o push era
+recusado.
+
+#### Alteração
+
+| Arquivo | Mudança |
+|---|---|
+| `scripts/claude_hooks/verificar_comando.py` | em `_Leitor.ler`, um redirecionamento de saída (`>`, `>>`, `2>`, `>&`, `&>`) deixa de gerar argumentos e `>&` / `&>` deixam de partir o comando em dois. O redirecionamento de entrada (`<`) fica como estava: `bash < script.sh` continua a ser lido |
+| `scripts/claude_hooks/tests/test_verificar_comando.py` | 19 casos novos |
+
+#### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | *(hash a registar)* | redirecionamento de saída deixa de contar como argumento |
+
+#### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** na cloud, um envio para a branch certa era recusado se o comando
+guardasse ou cortasse a saída (`2>&1 | tail`, `> ficheiro`), que é como o
+Claude costuma escrevê-lo.
+**Agora:** esses envios passam; um envio para `main` com os mesmos
+acrescentos continua recusado. As barreiras de sempre (push forçado, Railway)
+não mudaram.
+**Para validar:** Cenário T1 (automático) e N2 (na cloud).
+
+### Fase 5 — Ligar o horário
 
 **Objetivo:** a noite passa a correr sozinha. Hora escolhida pelo utilizador
 com a medida da Fase 3; rotina a apontar para `main` depois do merge; tabela
@@ -228,6 +281,8 @@ decisão do utilizador.
   push para `main` e outras branches recusado, push sem destino recusado,
   apagar e `--all` recusados, `gh pr merge` e `gh api` de escrita recusados,
   push para `claude/…` e trabalho normal passam, e fora da cloud nada muda)
+- **Revalidado em:** 04/10/2026, depois da Fase 4 — 295 testes passam (mais
+  19: push com `2>&1 | tail`, `> ficheiro` e `&> ficheiro`)
 
 ### Cenário T2 — Os testes do backend-crm não dependem do `.env` (Fase 1)
 - [x] Exportar `backend-crm` do repositório para uma pasta vazia (sem `.env`)
@@ -294,25 +349,43 @@ decisão do utilizador.
   Cenário N1.
 
 ### Cenário N1 — Uma noite inteira, disparada à mão (Fase 3)
-- [ ] Disparar a rotina à mão
-- [ ] Confirmar: existe `origin/claude/<slug>`; o `.md` do item diz
+- [x] Disparar a rotina à mão
+- [x] Confirmar: existe `origin/claude/<slug>`; o `.md` do item diz
       `Implementado de noite — por validar` (ou `Só plano — precisa da tua
       decisão`); a secção `## Testes automáticos (turno da noite)` está
       preenchida; `main` não mudou
+- **Validado em:** 04/10/2026 — existe
+  `origin/claude/fix-docs-campos-obrigatorios-qualificacao` (commits `0387450`
+  e `4424527`); estado `Implementado de noite — por validar`; a secção de
+  testes diz "alteração só de documentação: não corri testes de código";
+  `origin/main` continua em `db1e175`. A instalação e os testes em si foram
+  vistos a funcionar na terceira sonda (S1), não nesta execução.
 
 ### Cenário N2 — A barreira funciona na cloud (Fase 3)
 - [ ] Numa sessão da cloud sobre esta branch: `git push --dry-run origin HEAD:main`
 - [ ] Confirmar: recusado pelo verificador, com a mensagem das sessões da cloud
-- [ ] Na mesma sessão: pedir uma ferramenta `mcp__github__…` de leitura (ex.: `get_me`)
-- [ ] Confirmar: recusada pela regra `deny`
+- [x] Na mesma sessão: pedir uma ferramenta `mcp__github__…` de leitura (ex.: `get_me`)
+- [x] Confirmar: recusada pela regra `deny`
+- **Validado em (só a parte das ferramentas):** 04/10/2026 — no ensaio,
+  `mcp__github__get_me` respondeu "Permission to use mcp__github__get_me has
+  been denied" (recusa por regra).
+- **Pendente:** a recusa do push para `main`. No ensaio o comando correu
+  antes de a sessão mudar para esta branch e não foi recusado (ver "Relatório
+  da Fase 3").
 
 ### Cenário N3 — Rotina sem acessos a mais (Fase 3)
-- [ ] Confirmar na rotina: zero conectores
-- [ ] Confirmar no registo da execução: nenhum `.env`, nenhum comando do
+- [x] Confirmar na rotina: zero conectores
+- [x] Confirmar no registo da execução: nenhum `.env`, nenhum comando do
       Railway, nenhum pedido de permissão
+- **Validado em:** 04/10/2026 — a rotina tem `mcp_connections: []`; o registo
+  do ensaio não tem leituras de `.env` nem comandos do Railway; as 3 recusas
+  registadas são as esperadas (a ferramenta de GitHub e os dois pushes do
+  defeito da Fase 4), nenhuma ficou à espera de resposta.
 
 ### Cenário N4 — Consumo de uma noite (Fase 3)
 - [ ] Registar o uso do plano antes e depois do disparo à mão
+- **Antes do ensaio:** sessão 24% usado, semana 4% usado (conta Pro,
+  04/10/2026). **Depois:** por registar.
 
 ### Cenário D1 — Hora da rotina (Fase 4)
 - [ ] O utilizador escolhe a hora, com a medida do N4

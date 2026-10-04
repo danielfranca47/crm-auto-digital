@@ -718,7 +718,8 @@ Formas que cobre e que as regras não apanham:
   `| bash`, aspas por fechar): pergunta quando o texto aparenta uma das ações
 
 Texto que é dado e não comando não conta: mensagem de `git commit -m`, heredoc
-lido por `cat`, argumento de `grep` ou `echo`.
+lido por `cat`, argumento de `grep` ou `echo`, e o destino de um
+redirecionamento de saída (`> ficheiro`, `2>&1`).
 
 **Só em sessões da cloud** (variável `CLAUDE_CODE_REMOTE=true` — a rotina do
 turno da noite da [fila automática](fila-automatica.md)) recusa também:
