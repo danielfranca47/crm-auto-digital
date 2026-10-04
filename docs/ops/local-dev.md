@@ -580,10 +580,12 @@ Vale em qualquer modo de permissão e em todas as worktrees:
   (`--force`, `-f`), e no Railway tudo o que apaga ou desliga coisas — apagar ou
   desanexar um volume, apagar ficheiros dentro de um volume (é onde ficam as
   bases de dados e os backups), `railway down`, `railway delete`,
-  `railway environment delete`.
+  `railway environment delete`, `railway service delete`.
 - **`ask` — pergunta sempre, mesmo em modo auto:** `railway variable*` (ler
-  expõe segredos; alterar dispara redeploy), `railway run`, `railway ssh`,
-  `railway up`, e enviar ficheiros para um volume (`railway volume files upload`).
+  expõe segredos; alterar dispara redeploy), `railway run`, `railway shell` e
+  `railway connect` (abrem uma shell com as variáveis de produção, ou na base
+  de dados), `railway ssh`, `railway up`, e enviar ficheiros para um volume
+  (`railway volume files upload`).
 - **`allow` — corre sem passar pelo revisor.** Lista curta e fechada, só com
   três grupos:
   - **Testes automáticos:** `pytest`, `unittest` e `npx tsc --noEmit`, nas
@@ -633,9 +635,9 @@ em vez de comparar o início do texto, e aplica a mesma lista de barreiras:
 
 - **Recusa** push forçado (`--force`, `-f`, `--force-with-lease`, `--mirror`,
   destino a começar por `+`) e, no Railway, `down`, `delete`, apagar um
-  ambiente ou o projeto, apagar ou desanexar um volume, apagar ficheiros de um
-  volume.
-- **Pergunta** em `railway variable`, `run`, `ssh`, `up` e
+  ambiente, um serviço ou o projeto, apagar ou desanexar um volume, apagar
+  ficheiros de um volume.
+- **Pergunta** em `railway variable`, `run`, `shell`, `connect`, `ssh`, `up` e
   `volume files upload`.
 - **Não diz nada** no resto — o comando segue para as regras acima e para o
   revisor automático. O verificador nunca aprova um comando.

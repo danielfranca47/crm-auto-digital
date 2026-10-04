@@ -4,7 +4,8 @@ Recebe no stdin o JSON do hook (ferramentas Bash e PowerShell), lê a estrutura
 do comando em vez de comparar o início do texto, e responde uma de três coisas:
 
   recusar    ação proibida (push forçado; apagar ou desligar coisas no Railway)
-  perguntar  ação sensível (variáveis, run, ssh, up, envio para volume), ou
+  perguntar  ação sensível (variáveis, run, shell, connect, ssh, up, envio para
+             volume), ou
              forma que não dá para ler com certeza e aparenta uma dessas ações
   nada       segue o fluxo normal (regras de permissão + revisor automático)
 
@@ -32,12 +33,12 @@ MOTIVO_PUSH = (
 )
 MOTIVO_RAILWAY_APAGA = (
     "Barreira dura do projeto: comandos do Railway que apagam ou desligam coisas (down, "
-    "delete, apagar ambiente, apagar ou desanexar volume, apagar ficheiros de um volume) "
-    "nunca são executados, seja qual for a forma do comando. " + _DOC
+    "delete, apagar ambiente ou serviço, apagar ou desanexar volume, apagar ficheiros de "
+    "um volume) nunca são executados, seja qual for a forma do comando. " + _DOC
 )
 MOTIVO_RAILWAY_SENSIVEL = (
-    "Ação sensível no Railway (variáveis, run, ssh, up ou envio de ficheiros para um "
-    "volume): precisa de confirmação do utilizador. " + _DOC
+    "Ação sensível no Railway (variáveis, run, shell, connect, ssh, up ou envio de "
+    "ficheiros para um volume): precisa de confirmação do utilizador. " + _DOC
 )
 MOTIVO_ALIAS = (
     "O comando define um atalho (alias) de git na própria linha, o que pode esconder um "
@@ -121,7 +122,7 @@ _RE_FORCA = re.compile(r"--for|--mir|(?<![\w-])-[A-Za-z]*f[A-Za-z]*(?![\w-])|(?<
 _RE_GIT = re.compile(r"\bgit\b", re.I)
 _RE_RAILWAY = re.compile(r"\brailway\b", re.I)
 _RE_RAILWAY_PALAVRAS = re.compile(
-    r"\b(down|delete|rm|remove|detach|variables?|vars?|run|local|ssh|up|upload)\b", re.I
+    r"\b(down|delete|rm|remove|detach|variables?|vars?|run|local|shell|connect|ssh|up|upload)\b", re.I
 )
 
 
@@ -249,7 +250,7 @@ def _railway(args: list, incerto: bool = False):
 
     if p0 in ("down", "delete"):
         return DENY, MOTIVO_RAILWAY_APAGA
-    if p0 in ("environment", "project"):
+    if p0 in ("environment", "project", "service"):
         if resto & _RAILWAY_APAGAR:
             return DENY, MOTIVO_RAILWAY_APAGA
         return (ASK, MOTIVO_INCERTO) if resto_incerto else None
@@ -262,7 +263,7 @@ def _railway(args: list, incerto: bool = False):
         elif resto & (_RAILWAY_APAGAR | {"detach"}):
             return DENY, MOTIVO_RAILWAY_APAGA
         return (ASK, MOTIVO_INCERTO) if resto_incerto else None
-    if p0 in ("variable", "run", "ssh", "up"):
+    if p0 in ("variable", "run", "shell", "connect", "ssh", "up"):
         return ASK, MOTIVO_RAILWAY_SENSIVEL
     return None
 
