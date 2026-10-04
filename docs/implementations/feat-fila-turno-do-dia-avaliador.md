@@ -220,6 +220,14 @@ limpar esse resto. Validado pelo próprio Cenário D2.
 | `docs/plans/fila-automatica-melhorias-futuras.md` | M4 sai, com o achado registado no contrato |
 | `docs/ops/fila-automatica.md` | "Estado atual": turno da noite ligado; achado do M4 em "Turno da noite" |
 
+**Merge intermédio em `main` (decisão do utilizador, 04/10/2026).** A rotina
+da noite lê as regras de `main`, e o comando `/fila-validar` só existe com
+elas lá. Por isso as Fases 1, 2 e 2b são juntadas a `main` antes de ligar a
+noite, **sem graduar**: o item continua `Em andamento`, a worktree fica, e os
+checks D4 e L1 a L3 validam-se depois, com a noite a correr. Descartado
+graduar já e abrir um item novo só para "ligar a noite": partiria em dois o
+que o utilizador decidiu ser o último passo deste item.
+
 Fora do repositório, com o "sim" do utilizador no momento: aceitar o aviso de
 confiança (o utilizador corre `claude` uma vez num terminal na pasta
 principal) e ligar o horário da rotina `trig_01H55ZGUhNCdAcHqzkri2djD`,
