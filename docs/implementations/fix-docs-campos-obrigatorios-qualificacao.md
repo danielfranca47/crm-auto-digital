@@ -1,7 +1,7 @@
 # Corrigir a documentação sobre campos obrigatórios de qualificação
 
-**Branch:** (a criar)
-**Status:** Aguardando Plan Mode
+**Branch:** `claude/fix-docs-campos-obrigatorios-qualificacao`
+**Status:** Interrompido de noite — continuar
 **Origem:** este item surgiu como "Ajuste possível" na graduação de `fix-testes-backend-crm-a-falhar.md` (04/10/2026), marcado como urgente
 
 ---
