@@ -3,7 +3,7 @@
 **Branch:** (a criar)
 **Status:** Aguardando Plan Mode
 **Autonomia:** manual
-**Origem:** Fase 2 do plano aprovado em 04/10/2026 (`feat-fila-automatica.md`)
+**Origem:** Fase 2 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
 ---
 
@@ -34,9 +34,18 @@ decidir nesse passo:
 - Primeiro disparo **à mão**, sobre um item pequeno que o utilizador conheça,
   antes de ligar o horário.
 - Medir quanto do limite do plano Pro uma noite consome, e escolher a hora.
+- Antes de ligar o horário: os itens que já estão a ser trabalhados à mão
+  noutras worktrees mas que em `main` ainda dizem "Aguardando Plan Mode" sem
+  `**Autonomia:** manual` (em 04/10/2026: `fix-disponibilidade-campo-duplo-sentido`
+  e `otimizar-imagem-hero-lara-desktop`) têm de receber essa linha em `main`,
+  senão a noite pega-os em duplicado.
+- Aproveitar o diagnóstico para a verificação M3 de
+  [`fila-automatica-melhorias-futuras.md`](../plans/fila-automatica-melhorias-futuras.md)
+  (um push só de documentação reinicia produção?).
 
-**Dependência:** a correção dos testes do backend-crm
-(`fix-testes-backend-crm-a-falhar`) tem de estar em `main` — sem isso a noite
-não distingue um teste que ela partiu de um que já falhava.
+**Dependência:** a correção dos testes do backend-crm — **cumprida**, está em
+`main` desde 04/10/2026 (`python -m pytest tests/ -q` em `backend-crm`: tudo
+aprovado). Sem isso a noite não distinguiria um teste que ela partiu de um que
+já falhava.
 
 `Autonomia: manual` porque mexe nas regras do próprio agente.

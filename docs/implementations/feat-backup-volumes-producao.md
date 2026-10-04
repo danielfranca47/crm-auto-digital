@@ -3,7 +3,7 @@
 **Branch:** (a criar)
 **Status:** Aguardando Plan Mode
 **Autonomia:** manual
-**Origem:** pré-requisito levantado no Plan Mode de `feat-fila-automatica.md` (04/10/2026)
+**Origem:** pré-requisito levantado no Plan Mode do contrato da fila automática (04/10/2026; regras em `docs/ops/fila-automatica.md`)
 
 ---
 

@@ -3,7 +3,7 @@
 **Branch:** (a criar)
 **Status:** Aguardando Plan Mode
 **Autonomia:** manual
-**Origem:** Fase 4 do plano aprovado em 04/10/2026 (`feat-fila-automatica.md`)
+**Origem:** Fase 4 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
 ---
 
@@ -23,8 +23,9 @@ utilizador. Tudo o resto continua a parar e a gerar relatório.
       reposição testada.
 - [ ] Placar do modo sombra com **5 vereditos seguidos** a concordar com o
       utilizador (`docs/ops/fila-automatica.md`).
-- [ ] `main` protegida contra push forçado no GitHub (push normal continua
-      igual) — configuração externa, só com o "sim" do utilizador no momento.
+- [x] `main` protegida contra push forçado no GitHub (push normal continua
+      igual) — feito em 04/10/2026 com o "sim" do utilizador: ruleset
+      `main - sem push forcado` (id `24438757`), regra `non_fast_forward`.
 - [ ] "Sim" explícito do utilizador para ligar o poder de merge.
 
 ## Área do sistema

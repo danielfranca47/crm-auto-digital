@@ -3,7 +3,7 @@
 **Branch:** (a criar)
 **Status:** Aguardando Plan Mode
 **Autonomia:** manual
-**Origem:** Fase 3 do plano aprovado em 04/10/2026 (`feat-fila-automatica.md`)
+**Origem:** Fase 3 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
 ---
 
@@ -43,7 +43,8 @@ decidir nesse passo:
   `docs/plans/`.
 - Onde o relatório fica para o utilizador o ler sem abrir a branch.
 
-**Dependências:** `feat-fila-turno-da-noite` (é quem produz as branches) e o
-verificador de comandos (`feat-verificador-comandos-barreiras-duras`) em `main`.
+**Dependências:** `feat-fila-turno-da-noite` (é quem produz as branches). O
+verificador de comandos já está em `main` desde 04/10/2026
+(`scripts/claude_hooks/verificar_comando.py`).
 
 `Autonomia: manual` porque mexe nas regras do próprio agente.

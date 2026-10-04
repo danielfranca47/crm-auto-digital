@@ -3,7 +3,7 @@
 **Branch:** (a criar)
 **Status:** Aguardando Plan Mode
 **Autonomia:** manual
-**Origem:** Fase 5 do plano aprovado em 04/10/2026 (`feat-fila-automatica.md`)
+**Origem:** Fase 5 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
 ---
 

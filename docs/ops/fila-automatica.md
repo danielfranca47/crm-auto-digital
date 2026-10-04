@@ -21,8 +21,8 @@ conversa normal com o utilizador vale o processo normal do `CLAUDE.md`.
 
 O poder de merge só passa a "Ligado" com as quatro condições juntas: backup
 da base de dados de produção a funcionar, 5 vereditos seguidos no placar
-(abaixo), `main` protegida contra push forçado no GitHub, e um "sim" explícito
-do utilizador. Quem altera essa linha é uma sessão com o utilizador presente —
+(abaixo), `main` protegida contra push forçado no GitHub (já está: ruleset
+`main - sem push forcado`), e um "sim" explícito do utilizador. Quem altera essa linha é uma sessão com o utilizador presente —
 nunca uma sessão da fila.
 
 ---
