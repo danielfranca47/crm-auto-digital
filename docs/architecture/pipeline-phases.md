@@ -88,9 +88,9 @@ backfill — os campos de "Critérios de Qualificação" continuam 100% manuais.
 
 ### Implementado (comum a todos os agentes)
 
-- Campos obrigatórios por `agent_mode` — `backend-crm/services/qualification_guardrails.py`:
-  - `consultivo`: 6 campos | `agenda`: 4 campos | `direto`: 3 campos
-  - Override por perfil: `ai_profile.qualification_required_fields` (lista explícita) substitui o default do modo; cada campo em `qualification_fields` tem `mode: "required"|"optional"` — só os `required` entram em `missing_fields`
+- Campos obrigatórios — `backend-crm/services/qualification_guardrails.py` (`required_fields_for_mode`) e `backend-executors/app/contracts/qualification_contract.py`:
+  - Fonte única: `ai_profile.qualification_required_fields`. Sem configuração = lista vazia = nenhum campo obrigatório (não há mínimos fixos por `agent_mode`)
+  - Ao criar um AI Profile, o backend-core sugere uma lista inicial editável por modo (`_DEFAULT_QUAL_FIELDS`, `backend-core/app/api/ai_profiles.py`); cada campo em `qualification_fields` tem `mode: "required"|"optional"` — só os `required` entram em `missing_fields`
 - Bloqueio de avanço: HTTP 409 se campos faltantes — `backend-crm/routes/leads.py`
 - Extração heurística de campos por regex/keywords — `backend-executors/app/contracts/qualification_contract.py`
 - Persistência em `lead_qualification_state` com histórico de perguntas (max 3/campo) —

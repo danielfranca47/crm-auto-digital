@@ -1,7 +1,7 @@
 # Corrigir a documentação sobre campos obrigatórios de qualificação
 
 **Branch:** `claude/fix-docs-campos-obrigatorios-qualificacao`
-**Status:** Interrompido de noite — continuar
+**Status:** Implementado de noite — por validar
 **Origem:** este item surgiu como "Ajuste possível" na graduação de `fix-testes-backend-crm-a-falhar.md` (04/10/2026), marcado como urgente
 
 ---
@@ -39,16 +39,46 @@ hoje.
   `backend-crm/services/qualification_guardrails.py`,
   `backend-executors/app/contracts/qualification_contract.py`
 
-Diagnóstico (Plan Mode) ainda não feito — próximo passo é seguir o Passo 0 de
-`_guia-documentar-implementacao.md`. A decidir nesse passo:
+## Diagnóstico
 
-- Se o `backend-executors` segue a mesma regra do `backend-crm` ("sem
-  configuração = nenhum obrigatório") ou ainda tem mínimos fixos por modo.
-  `docs/plans/qualificacao-guardrails-testes-falhando-melhorias-futuras.md`
-  regista um teste do executor que espera `price_acceptance` obrigatório no
-  modo `direto` e recebe lista vazia — indício de que segue a mesma regra,
-  por confirmar.
-- Se os números "6 / 4 / 3" ainda correspondem a alguma coisa (por exemplo,
-  os campos sugeridos por omissão ao criar um AI Profile) ou devem sair dos
-  documentos por completo.
-- Se há outros documentos com a mesma afirmação além destes três.
+- **Já existe?** O código não tem mínimos fixos: `required_fields_for_mode`
+  (`backend-crm/services/qualification_guardrails.py`) e `compute_missing_fields`
+  (`backend-executors/app/contracts/qualification_contract.py`) devolvem lista
+  vazia sem configuração no AI Profile. O executor segue a mesma regra do CRM.
+- Os números "6 / 4 / 3" não correspondem a nada. O que existe é uma
+  sugestão inicial editável ao criar o perfil (`_DEFAULT_QUAL_FIELDS`,
+  `backend-core/app/api/ai_profiles.py`): 2 a 3 campos por modo.
+- Os campos `min_qualification_*` de `admin-agents-contract.md` não existem
+  em nenhum código.
+- **Riscos:** nenhum — só documentação.
+
+## Fase 1 — Corrigir os documentos
+
+Feito: `CLAUDE.md`, `docs/architecture/pipeline-phases.md`,
+`docs/architecture/agents.md` (tabela passou a mostrar a sugestão inicial),
+`docs/architecture/admin-agents-contract.md` (secção `min_qualification_*`
+substituída), `docs/guia-campos-ai-profile.md` (linha 77).
+
+**Em linguagem simples:** a documentação dizia que cada tipo de agente exigia
+6, 4 ou 3 campos. Já não é assim: só é obrigatório o que o utilizador marca no
+perfil de IA; sem nada marcado, nada é obrigatório. Os documentos agora dizem isto.
+
+## Testes automáticos (turno da noite)
+
+Alteração só de documentação (`.md`): não corri testes de código.
+
+## Checks de Validação
+
+- [ ] Abrir `CLAUDE.md` (linha ~122), `docs/architecture/pipeline-phases.md`
+  (secção Qualification) e `docs/architecture/agents.md` (tabela `agent_mode`):
+  confirmar que nenhum diz "6/4/3 campos" e que dizem "sem configuração = nenhum obrigatório".
+- [ ] `grep -rn "min_qualification" docs frontend-admin/src backend-crm` não devolve nada.
+
+## Ajustes Possíveis
+
+- `docs/guia-campos-ai-profile.md:242` e `docs/agente-1-sdr-alto-ticket.md`,
+  `docs/agente-2-closer-agressivo.md`, `docs/agente-3-hibrido.md` ainda falam
+  em "4 campos / 3 campos padrão" — rever se descrevem os defaults reais.
+  (`**Prioridade: por definir**`)
+
+**Aviso:** `CLAUDE.md` está alterado, categoria "sobe sempre" — precisa de decisão do utilizador.

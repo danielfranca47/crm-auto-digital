@@ -74,7 +74,7 @@
 | **Valores possíveis** | `sdr_scheduler` · `agenda` · `closer` · `direto` · `consultivo` |
 | **Onde é usado** | Determina os campos obrigatórios de qualificação, os guardrails de avanço e o tom do prompt filho. |
 | **Para o Agente 3** | Deve ser **`agenda`** — foco em qualificar para agendar uma sessão/consulta, não em fechar venda diretamente. |
-| **Impacto** | Se for `consultivo`, o agente exige 6 campos de qualificação (mais lento). Se for `closer`, pula a fase de aquecimento. |
+| **Impacto** | Se for `consultivo`, o agente sugere mais campos de qualificação por omissão (mais lento). Se for `closer`, pula a fase de aquecimento. |
 
 ---
 

@@ -23,13 +23,9 @@ Origem: tabela `ai_profiles` em `backend-core` (via `GET /admin/agents/users/{us
 | `llm_provider` | string | Provedor de LLM usado nas chamadas de IA (`openai`\|`openrouter`), default `openai` — ver [`llm-architecture.md`](llm-architecture.md) | Badge "OpenRouter" ao lado do seletor de usuário quando `≠ openai`; entra no cálculo de `has_custom_config`/`diff` |
 | `llm_provider_model` | string\|null | Modelo curado do OpenRouter (só relevante quando `llm_provider=openrouter`) | Incluído no texto do badge OpenRouter |
 
-### Campos de qualificação mínima por modo
+### Campos obrigatórios de qualificação
 
-| Campo | Tipo | Modo ao qual se aplica |
-|---|---|---|
-| `min_qualification_consultivo` | int / lista | `consultivo` — mínimo 6 campos |
-| `min_qualification_agenda` | int / lista | `agenda` — mínimo 4 campos |
-| `min_qualification_direto` | int / lista | `direto` — mínimo 3 campos |
+Não há campos `min_qualification_*`. Os obrigatórios são `qualification_required_fields` do AI Profile (lista de chaves; vazia = nenhum obrigatório).
 
 ---
 
