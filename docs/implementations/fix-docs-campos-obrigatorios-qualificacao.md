@@ -1,8 +1,33 @@
 # Corrigir a documentação sobre campos obrigatórios de qualificação
 
 **Branch:** `claude/fix-docs-campos-obrigatorios-qualificacao`
-**Status:** À espera da tua decisão
+**Status:** Interrompido de noite — continuar
 **Origem:** este item surgiu como "Ajuste possível" na graduação de `fix-testes-backend-crm-a-falhar.md` (04/10/2026), marcado como urgente
+
+---
+
+## Correções pedidas
+
+_04/10/2026 — o utilizador devolveu a branch com as correções que o avaliador
+propôs (secção "Avaliação", no fim). A noite começa por aqui e regista por
+baixo de cada ponto o que fez._
+
+1. `docs/architecture/admin-agents-contract.md`, linha 28: reescrever a frase
+   para descrever só o que existe hoje (os obrigatórios são
+   `qualification_required_fields` do AI Profile; lista vazia = nenhum
+   obrigatório), sem mencionar o nome antigo `min_qualification_*`.
+2. Corrigir os dois sítios que ainda repetem a ideia de mínimos por tipo de
+   agente: `docs/architecture/_mapa-sistema.md`, linha 92 ("campos mínimos por
+   agent_mode"), e `docs/architecture/pipeline-phases.md`, linha 381 ("Campos
+   obrigatórios por modo").
+3. Reescrever o segundo check de validação para que consiga passar: procurar o
+   nome antigo só em `docs/architecture`, `frontend-admin/src` e
+   `backend-crm`, não em `docs/` inteiro (que inclui este ficheiro).
+4. Registar neste ficheiro o hash do commit da Fase 1 (`4424527`) e o do
+   commit destas correções, como manda o guia de implementações.
+
+Fora deste pedido, e já anotado em "Ajustes Possíveis": os guias dos três
+agentes e a linha 242 do guia de campos do perfil de IA.
 
 ---
 
