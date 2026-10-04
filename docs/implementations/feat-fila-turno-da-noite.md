@@ -1,7 +1,7 @@
 # Fila automática — turno da noite (rotina na cloud)
 
 **Branch:** `worktree-feat+fila-turno-da-noite` (worktree `.claude/worktrees/feat+fila-turno-da-noite`)
-**Status:** Em andamento — Fases 1 e 2 implementadas; à espera do Cenário N0 (aplicação do Claude no GitHub) para o ensaio da Fase 3
+**Status:** Em andamento — Fases 1 e 2 implementadas; Cenário N0 validado; falta o ensaio da Fase 3 (precisa do "sim" do utilizador)
 **Autonomia:** manual
 **Origem:** Fase 2 do plano aprovado em 04/10/2026 (contrato: `docs/ops/fila-automatica.md`)
 
@@ -282,11 +282,16 @@ decisão do utilizador.
   Cenário N0.
 
 ### Cenário N0 — A cloud consegue escrever em `claude/…` (pré-requisito da Fase 3)
-- [ ] O utilizador instala a aplicação do Claude no GitHub para
+- [x] O utilizador instala a aplicação do Claude no GitHub para
       `danielfranca47/crm-auto-digital`
       (https://github.com/apps/claude/installations/select_target)
-- [ ] Numa sessão da cloud: `git push --dry-run origin HEAD:refs/heads/claude/sonda-teste`
-- [ ] Confirmar: deixa de dar o erro 403 "Claude doesn't have GitHub access"
+- [x] Numa sessão da cloud: `git push --dry-run origin HEAD:refs/heads/claude/sonda-teste`
+- [x] Confirmar: deixa de dar o erro 403 "Claude doesn't have GitHub access"
+- **Validado em:** 04/10/2026 — execução `cse_019trzxU7ujSGsbPRUyH6sDm` (13 s):
+  o push de ensaio terminou com código 0 e
+  `* [new branch] HEAD -> claude/sonda-teste`; o remoto continua só com
+  `main` (o ensaio não cria nada). O primeiro push a sério acontece no
+  Cenário N1.
 
 ### Cenário N1 — Uma noite inteira, disparada à mão (Fase 3)
 - [ ] Disparar a rotina à mão
