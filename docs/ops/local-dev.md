@@ -580,10 +580,12 @@ Vale em qualquer modo de permissão e em todas as worktrees:
   (`--force`, `-f`), e no Railway tudo o que apaga ou desliga coisas — apagar ou
   desanexar um volume, apagar ficheiros dentro de um volume (é onde ficam as
   bases de dados e os backups), `railway down`, `railway delete`,
-  `railway environment delete`.
+  `railway environment delete`, `railway service delete`.
 - **`ask` — pergunta sempre, mesmo em modo auto:** `railway variable*` (ler
-  expõe segredos; alterar dispara redeploy), `railway run`, `railway ssh`,
-  `railway up`, e enviar ficheiros para um volume (`railway volume files upload`).
+  expõe segredos; alterar dispara redeploy), `railway run`, `railway shell` e
+  `railway connect` (abrem uma shell com as variáveis de produção, ou na base
+  de dados), `railway ssh`, `railway up`, e enviar ficheiros para um volume
+  (`railway volume files upload`).
 - **`allow` — corre sem passar pelo revisor.** Lista curta e fechada, só com
   três grupos:
   - **Testes automáticos:** `pytest`, `unittest` e `npx tsc --noEmit`, nas
@@ -620,9 +622,79 @@ O que **não** entra em `allow`, nem com um clique em "permitir sempre":
 `git push` normal não leva pergunta: faz parte do fluxo de graduação (ver
 `CLAUDE.md`, "Estratégia de branch por implementação").
 
-Estas regras apanham a forma habitual de escrever o comando, não todas as
-formas possíveis — são uma barreira contra engano, e o revisor automático é a
-segunda camada.
+Estas regras comparam o texto do comando com um padrão, por isso só apanham a
+forma habitual de o escrever. As outras formas ficam a cargo do verificador,
+abaixo.
+
+#### Verificador de comandos — `scripts/claude_hooks/verificar_comando.py`
+
+Segunda camada das barreiras `deny` e `ask`. Está ligado no bloco `hooks` de
+`.claude/settings.json` (evento `PreToolUse`, ferramentas `Bash` e
+`PowerShell`): corre antes de cada comando de shell, lê a estrutura do comando
+em vez de comparar o início do texto, e aplica a mesma lista de barreiras:
+
+- **Recusa** push forçado (`--force`, `-f`, `--force-with-lease`, `--mirror`,
+  destino a começar por `+`) e, no Railway, `down`, `delete`, apagar um
+  ambiente, um serviço ou o projeto, apagar ou desanexar um volume, apagar
+  ficheiros de um volume.
+- **Pergunta** em `railway variable`, `run`, `shell`, `connect`, `ssh`, `up` e
+  `volume files upload`.
+- **Não diz nada** no resto — o comando segue para as regras acima e para o
+  revisor automático. O verificador nunca aprova um comando.
+
+Formas que cobre e que as regras não apanham:
+
+- nomes alternativos do Railway: `rm` / `remove`, `project delete`, `volumes`,
+  `env`, `vars` / `var`, `local`
+- opções antes do subcomando: `git -C . push -f`, `railway -s <serviço> volume delete`
+- outro nome do executável: `git.exe`, caminho completo, aspas, `npx @railway/cli`
+- invólucros: `env`, `timeout`, `sudo`, `xargs`, `find -exec`, `git submodule foreach`
+- shell dentro de shell: `bash -c`, `cmd /c`, `powershell -Command`,
+  `-EncodedCommand`, `eval`, `Invoke-Expression`, `Start-Process`
+- scripts chamados pelo comando (`.sh`, `.ps1`, `.bat`, `.cmd`, `npm run`): o
+  ficheiro é lido e analisado como comandos; em código (`.py`, `.js`,
+  `python -c`) as mesmas ações são procuradas no texto e, se aparecerem,
+  pergunta
+- formas que não dá para ler (variável no lugar do programa ou da opção,
+  `| bash`, aspas por fechar): pergunta quando o texto aparenta uma das ações
+
+Texto que é dado e não comando não conta: mensagem de `git commit -m`, heredoc
+lido por `cat`, argumento de `grep` ou `echo`.
+
+Limites — o que é preciso saber:
+
+- **Não é uma garantia absoluta.** Não apanha ofuscação deliberada (script que
+  gera outro script, comando montado letra a letra, atalho de git gravado na
+  configuração do repositório). O revisor automático continua a ser a camada
+  seguinte.
+- **Se o verificador não arrancar, o comando segue.** Sem `python` no PATH, ou
+  se o script passar do tempo limite (10 s), o Claude Code trata o hook como
+  "sem decisão". É por isso que as regras `deny`/`ask` acima se mantêm: valem
+  mesmo com o verificador partido, e nenhum hook as consegue anular. Um erro
+  dentro do script, pelo contrário, bloqueia o comando (código de saída 2).
+- **Dispositivo novo:** confirmar que `python --version` responde na shell.
+- **Alterar a lista de barreiras** exige mexer nos dois sítios: as regras em
+  `.claude/settings.json` e as tabelas no topo do script. Os testes correm com
+  `python -m pytest scripts/claude_hooks/tests -q` e só passam texto ao script
+  — nenhum comando real é executado.
+- **Pergunta a mais em casos raros.** Um `git push` com uma variável nos
+  argumentos, na mesma linha de outro comando com `-f`, pergunta. Separar os
+  dois comandos resolve.
+
+#### Do lado do GitHub — push forçado na `main`
+
+O repositório `danielfranca47/crm-auto-digital` tem um ruleset ativo,
+**`main - sem push forcado`** (GitHub → Settings → Rules → Rulesets), com uma
+única regra: recusar push forçado na branch por omissão. Não tem exceções, por
+isso vale também para o dono do repositório, e não depende do Claude Code nem
+da forma do comando. Push normal e as outras branches não são afetados.
+
+- Conferir: `gh api repos/danielfranca47/crm-auto-digital/rules/branches/main`
+  deve listar `non_fast_forward`.
+- Só cobre push forçado; apagar a branch no remoto é outra regra do GitHub
+  ("Restrict deletions"), que não está ligada.
+- Não vive no repositório: num fork ou num repositório novo tem de ser criada
+  de novo.
 
 ### Na máquina (não versionado) — `~/.claude/settings.json`
 
@@ -669,7 +741,8 @@ Pontos a saber:
   Uma alteração a `.claude/settings.json` só vale em conversas novas, e uma
   regra que ainda só existe numa worktree não vale numa conversa aberta na pasta
   principal.
-- **Sessões sem ecrã (`claude -p`):** uma regra `ask` conta como recusa, porque
+- **Sessões sem ecrã (`claude -p`):** uma regra `ask`, ou um "perguntar" do
+  verificador de comandos, conta como recusa, porque
   não há quem responda ao pedido. Numa pasta que nunca foi aberta de forma
   interativa, as regras `allow` do projeto são ignoradas ("this workspace has
   not been trusted"); as `deny` e `ask` valem na mesma e o revisor automático
