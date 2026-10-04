@@ -162,6 +162,32 @@ principal leria as regras antigas. Por isso os Cenários D1 a D3 são executados
 pela sessão da implementação, a seguir a secção "Turno do dia" **desta branch**
 passo a passo, como o comando fará. O comando verdadeiro é exercitado no D4.
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4a8debf` | Regras do turno do dia, da decisão do utilizador e do placar; comando `/fila-validar` registado |
+
+**Detalhes do commit `4a8debf`:**
+- `docs/ops/fila-automatica.md` — "Turno do dia" passo a passo, "Decisão do utilizador", regra do placar e coluna "Conta?", retoma pela secção `## Correções pedidas`, exceção dos `.env`, "Estado atual"
+- `docs/ops/local-dev.md` — subsecção `/fila-validar` com o conteúdo do comando
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** as regras diziam em traços largos o que o dia fazia com uma branch
+da noite, mas não havia comando para o lançar, não estava escrito o que
+acontecia quando o utilizador dizia "não", nem que casos contavam para os 5
+vereditos seguidos.
+**Agora:** está escrito, passo a passo, o que o `/fila-validar` faz com cada
+branch: testa, verifica, corre o script do que sobe sempre, lança o avaliador,
+escreve um relatório em linguagem simples e mostra-o na conversa com um link.
+No fim o utilizador escolhe uma de quatro respostas — juntar, devolver à noite
+com correções, fechar, ou decidir depois — e cada uma tem um efeito definido.
+Fechar deixa o item marcado para a noite não o refazer igual. O placar só soma
+nos casos em que o avaliador poderia ter decidido sozinho.
+**Para validar:** Cenários D1, D2 e D3, abaixo. O D4 só é possível depois do
+merge e da primeira branch real da noite.
+
 ### Fase 3 — Ligar a noite
 
 **Objetivo:** a rotina da noite passa a correr às 04:07 de Lisboa.
