@@ -1,4 +1,3 @@
-import importlib.machinery
 import importlib.util
 import os
 import sys
@@ -9,118 +8,13 @@ import unittest
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-if "fastapi" not in sys.modules:
-    fastapi_stub = importlib.util.module_from_spec(
-        importlib.machinery.ModuleSpec("fastapi", None)
-    )
-
-    class HTTPException(Exception):
-        def __init__(self, status_code: int, detail: str) -> None:
-            super().__init__(detail)
-            self.status_code = status_code
-            self.detail = detail
-
-    def Depends(_dep=None):
-        return None
-
-    fastapi_stub.HTTPException = HTTPException
-    fastapi_stub.Depends = Depends
-    sys.modules["fastapi"] = fastapi_stub
-
-    security_stub = importlib.util.module_from_spec(
-        importlib.machinery.ModuleSpec("fastapi.security", None)
-    )
-
-    class HTTPAuthorizationCredentials:
-        def __init__(self, credentials: str = "") -> None:
-            self.credentials = credentials
-
-    class HTTPBearer:
-        def __init__(self, auto_error: bool = False) -> None:
-            self.auto_error = auto_error
-
-        def __call__(self, *args, **kwargs):
-            return None
-
-    security_stub.HTTPAuthorizationCredentials = HTTPAuthorizationCredentials
-    security_stub.HTTPBearer = HTTPBearer
-    sys.modules["fastapi.security"] = security_stub
-
-if "pydantic" not in sys.modules:
-    pydantic_stub = importlib.util.module_from_spec(
-        importlib.machinery.ModuleSpec("pydantic", None)
-    )
-
-    class FieldInfo:
-        def __init__(self, default, alias: str | None = None) -> None:
-            self.default = default
-            self.alias = alias
-
-    def Field(default=None, *, alias: str | None = None, default_factory=None):
-        if default is None and default_factory is not None:
-            default = default_factory()
-        return FieldInfo(default, alias=alias)
-
-    def ConfigDict(**kwargs):
-        return dict(**kwargs)
-
-    class BaseModel:
-        def __init__(self, **data):
-            annotations = getattr(self, "__annotations__", {})
-            for name, _type in annotations.items():
-                field = getattr(self.__class__, name, None)
-                alias = field.alias if isinstance(field, FieldInfo) else None
-                key = name if name in data else alias
-                if key is None or key not in data:
-                    value = field.default if isinstance(field, FieldInfo) else None
-                else:
-                    value = data.get(key)
-                setattr(self, name, value)
-
-    pydantic_stub.BaseModel = BaseModel
-    pydantic_stub.ConfigDict = ConfigDict
-    pydantic_stub.Field = Field
-    sys.modules["pydantic"] = pydantic_stub
-
-if "httpx" not in sys.modules:
-    httpx_stub = importlib.util.module_from_spec(
-        importlib.machinery.ModuleSpec("httpx", None)
-    )
-
-    class RequestError(Exception):
-        pass
-
-    class Client:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def get(self, *args, **kwargs):
-            raise RequestError("httpx stub")
-
-    class Response:
-        def __init__(self, status_code: int = 500, text: str = ""):
-            self.status_code = status_code
-            self.text = text
-
-        def json(self):
-            return {}
-
-    httpx_stub.RequestError = RequestError
-    httpx_stub.Client = Client
-    httpx_stub.Response = Response
-    sys.modules["httpx"] = httpx_stub
-
 import database
 from database import get_connection, init_db
 HANDLER_PATH = os.path.join(PROJECT_ROOT, "services", "whatsapp_inbound", "inbound_handler.py")
-spec = importlib.util.spec_from_file_location("inbound_handler", HANDLER_PATH)
+spec = importlib.util.spec_from_file_location("inbound_handler_orchestrator_flag", HANDLER_PATH)
 inbound_handler = importlib.util.module_from_spec(spec)
+# O pydantic resolve as anotações de InboundWebhookPayload via sys.modules[<módulo>].
+sys.modules[spec.name] = inbound_handler
 spec.loader.exec_module(inbound_handler)
 
 
@@ -133,7 +27,7 @@ class DummyBundle:
 
 class InboundOrchestratorFlagTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.db_path = os.path.join(self.temp_dir.name, "crm-test.db")
         os.environ["CRM_WHATSAPP_STUB"] = "1"
         os.environ["CRM_STUB_USER_ID"] = "123"
