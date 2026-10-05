@@ -1,7 +1,7 @@
 # Corrigir a documentação sobre campos obrigatórios de qualificação
 
 **Branch:** `claude/fix-docs-campos-obrigatorios-qualificacao`
-**Status:** Interrompido de noite — continuar
+**Status:** Implementado de noite — por validar
 **Origem:** este item surgiu como "Ajuste possível" na graduação de `fix-testes-backend-crm-a-falhar.md` (04/10/2026), marcado como urgente
 
 ---
@@ -28,6 +28,17 @@ baixo de cada ponto o que fez._
 
 Fora deste pedido, e já anotado em "Ajustes Possíveis": os guias dos três
 agentes e a linha 242 do guia de campos do perfil de IA.
+
+---
+
+### Correções feitas (noite de 05/10/2026)
+
+1. Contrato do painel admin (linha 28) reescrito: só diz que os obrigatórios são `qualification_required_fields`; vazio = nenhum. Sem o nome antigo.
+2. Corrigidos `_mapa-sistema.md` (linha 92) e `pipeline-phases.md` (linha 381).
+3. Segundo check reescrito para procurar só em `docs/architecture`, `frontend-admin/src` e `backend-crm`.
+4. Hashes: Fase 1 = `4424527`; correções = `957095c`.
+
+Testes automáticos (turno da noite, 05/10/2026): só `.md` alterados, não corri testes de código; o `grep` do check dá 0 resultados.
 
 ---
 
@@ -150,8 +161,8 @@ documentação (seis ficheiros `.md`), por isso não corri testes de código.
     "Sem configuração = lista vazia = nenhum campo obrigatório". `agents.md`
     linhas 219 a 227: a tabela passou a "sugestão inicial", e "vazio significa
     nenhum campo obrigatório".
-- [ ] `grep -rn "min_qualification" docs frontend-admin/src backend-crm` não devolve nada.
-  - **Não passou em:** 04/10/2026 (turno do dia) — o comando devolve quatro
+- [ ] `grep -rn "min_qualification" docs/architecture frontend-admin/src backend-crm` não devolve nada (confirmado na noite de 05/10/2026: 0 resultados; falta validar de dia).
+  - _Histórico — versão anterior do check (procurava em `docs/` inteiro), não passou em:_ 04/10/2026 (turno do dia) — o comando devolve quatro
     linhas: uma em `docs/architecture/admin-agents-contract.md:28`, escrita
     por esta branch ("Não há campos `min_qualification_*`"), e três neste
     próprio ficheiro. Em `frontend-admin/src` e `backend-crm` não há nada. O
