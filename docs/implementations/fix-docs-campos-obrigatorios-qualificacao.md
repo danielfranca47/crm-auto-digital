@@ -1,7 +1,7 @@
 # Corrigir a documentação sobre campos obrigatórios de qualificação
 
 **Branch:** `claude/fix-docs-campos-obrigatorios-qualificacao`
-**Status:** Implementado de noite — por validar
+**Status:** À espera da tua decisão
 **Origem:** este item surgiu como "Ajuste possível" na graduação de `fix-testes-backend-crm-a-falhar.md` (04/10/2026), marcado como urgente
 
 ---
@@ -44,44 +44,49 @@ Testes automáticos (turno da noite, 05/10/2026): só `.md` alterados, não corr
 
 ## Relatório para decisão
 
-_Turno do dia, 04/10/2026._
+_Turno do dia, 05/10/2026 — segunda passagem, depois das correções da noite._
 
 **O que foi feito.** A documentação dizia que cada tipo de agente exigia
 sempre 6, 4 ou 3 campos de qualificação. Isso deixou de ser verdade há meses:
 só é obrigatório o que estiver marcado no perfil de IA da conta, e sem nada
-marcado nada é obrigatório. A noite corrigiu essa informação em cinco
-documentos, incluindo o `CLAUDE.md`. Não mexeu em código.
+marcado nada é obrigatório. A branch corrige essa informação em sete
+documentos, incluindo o `CLAUDE.md`. Não mexe em código. Esta noite fez os
+quatro acertos que pediste ontem ao devolvê-la.
 
 **O que foi testado.** Juntei o trabalho mais recente de `main` a esta branch,
-sem conflitos. Não havia testes de código a correr, porque só mudou texto. Das
-duas verificações do item:
+sem conflitos. Não havia testes de código a correr, porque só mudou texto. As
+duas verificações do item passaram, repetidas hoje:
 
-- a primeira passou — os três documentos principais já dizem a coisa certa;
-- a segunda não passou, e não consegue passar tal como está escrita: pede que
-  um nome antigo não apareça em lado nenhum, mas a própria branch voltou a
-  escrevê-lo numa frase a dizer que esse campo não existe.
+- os documentos principais dizem a coisa certa, incluindo os dois sítios que
+  ontem ainda repetiam a ideia antiga;
+- o nome antigo de um campo que nunca existiu já não aparece em nenhum
+  documento de arquitetura nem em código.
 
-**Porque está à tua espera.** Por duas razões, e qualquer uma bastava: a
-branch altera o `CLAUDE.md`, que são regras do próprio agente e sobem sempre
-para ti; e ficou uma verificação por validar.
+Nada ficou por validar.
 
-**Veredito do avaliador: não aprovado**, por três motivos pequenos — a
-verificação que não consegue passar, dois sítios nos documentos de arquitetura
-que ainda repetem a ideia antiga, e o número do commit por registar. Diz também
-que o essencial está bem feito: a correção é verdadeira e não faz mais do que
-o previsto. O detalhe está na secção "Avaliação", no fim.
+**Porque está à tua espera.** A branch altera o `CLAUDE.md`, que são regras do
+próprio agente e sobem sempre para ti, seja qual for o veredito.
+
+**Veredito do avaliador: não aprovado**, por um único motivo, pequeno — ficou
+uma linha noutro documento de arquitetura (o da paridade entre o playground e
+o WhatsApp real) a dizer que os campos obrigatórios vêm "do perfil ou do
+default do tipo de agente", e esse default não existe. Confirmei que a linha
+lá está. A avaliação de ontem não a tinha apanhado, por isso a noite não a
+podia ter corrigido: fez tudo o que lhe foi pedido. O avaliador diz que tudo o
+resto está certo e verdadeiro, e aponta mais três frases soltas, fora dos
+documentos de arquitetura, com restos da mesma ideia. O detalhe está na secção
+"Avaliação", no fim.
 
 **O que podes responder.**
 
-- **Juntar** — a correção vai para `main` como está. Os dois sítios por
-  corrigir e a verificação mal escrita ficam anotados como pendentes.
-- **Devolver com correções** — a noite seguinte retoma esta branch e faz os
-  acertos que o avaliador propõe (ou outros que indiques); depois volta aqui.
+- **Juntar** — a correção vai para `main` como está. A linha que sobrou e as
+  três frases soltas ficam anotadas como pendentes, para não se perderem.
+- **Devolver com correções** — a noite seguinte retoma esta branch, corrige a
+  linha (e as três frases, se quiseres) e ela volta aqui amanhã.
 - **Fechar** — a branch é apagada e o item fica marcado para a noite não o
   refazer igual.
 - **Decidir depois** — fica como está e conta para o limite de 3 branches à
   espera.
-
 ---
 
 ## Motivação
@@ -189,40 +194,44 @@ igual.
 
 ## Avaliação
 
-**Veredito:** não aprovado — 04/10/2026
+**Veredito:** não aprovado — 05/10/2026
 
-**O que foi feito:** A branch só mexe em documentação (seis ficheiros de texto, nenhum código). Os documentos diziam que cada tipo de agente exigia sempre 6, 4 ou 3 campos de qualificação. Isso já não é verdade: só é obrigatório o que estiver marcado no perfil de IA da conta, e sem nada marcado nada é obrigatório. A branch corrigiu essa frase no CLAUDE.md, em dois documentos de arquitetura (fases do pipeline e agentes), no contrato do painel admin e numa linha do guia de campos do perfil de IA. Confirmei no código que o que ficou escrito está certo, incluindo a lista de campos sugeridos ao criar um perfil.
+**O que foi feito:** A branch só mexe em documentação: sete ficheiros de texto, nenhum código, nenhum teste. Os documentos diziam que cada tipo de agente exigia sempre 6, 4 ou 3 campos de qualificação. Isso já não é verdade: só é obrigatório o que estiver marcado no perfil de IA da conta, e sem nada marcado nada é obrigatório. A branch corrigiu essa ideia no CLAUDE.md, em quatro documentos de arquitetura (fases do pipeline, agentes, mapa do sistema e contrato do painel admin) e numa linha do guia de campos do perfil de IA.
 
-**Porque não passou:** Não passou por três razões, todas pequenas.
+Depois da primeira avaliação (04/10), a noite fez os quatro acertos pedidos: reescreveu a frase do contrato do painel admin sem o nome antigo, corrigiu as duas linhas que tinham sobrado, reescreveu a segunda verificação para conseguir passar, e registou os identificadores dos commits.
 
-1. Uma das duas verificações ficou por validar. Pedia que um nome antigo de campo deixasse de aparecer em qualquer lado, mas a própria branch escreveu esse nome no contrato do painel admin ("não há campos com este nome") e no ficheiro do item. Tal como está escrita, a verificação nunca consegue passar.
-2. Ficaram dois sítios nos documentos de arquitetura a repetir a ideia errada de "campos mínimos por tipo de agente": uma linha no mapa do sistema e uma linha na tabela final do documento das fases do pipeline. Nenhum dos dois está na lista de pendentes do item.
-3. Faltou registar no ficheiro do item o identificador do commit da fase, que é regra do processo.
+Conferi no código que o que ficou escrito é verdade: no CRM e no executor, sem configuração no perfil a lista de obrigatórios fica vazia; e a lista de campos sugeridos ao criar um perfil é exatamente a que a tabela nova mostra.
 
-O essencial está bem feito: a correção é verdadeira, não inventa nada e não faz mais do que o previsto. Não havia testes de código a correr, e nenhum foi tocado.
+**Porque não passou:** Não passou por uma única razão, e pequena: ficou uma linha num documento de arquitetura a repetir a ideia antiga.
 
-Independentemente do veredito, esta branch altera o CLAUDE.md, que está na lista do que sobe sempre, por isso a decisão final é tua. Não consegui correr o script que confirma isso (a minha sessão não teve permissão); cabe ao turno do dia corrê-lo.
+No documento da paridade entre o playground e o WhatsApp real, a tabela que explica o registo de qualificação diz que os campos obrigatórios vêm "do perfil ou do default do tipo de agente". Esse default por tipo de agente não existe — confirmei no código que, sem configuração no perfil, a lista fica vazia. É o mesmo erro que este item existe para eliminar, num documento que o agente é mandado ler antes de mexer no playground. A linha não foi corrigida nem está anotada como pendente. A primeira avaliação também não a tinha apanhado, por isso não fazia parte das correções pedidas à noite — a noite fez tudo o que lhe foi pedido.
 
-**O que proponho a seguir:** Um pequeno acerto na mesma branch, só de texto, e depois nova avaliação:
+Tudo o resto está bem: os três documentos apontados na Motivação estão certos, as duas verificações passam (repeti-as e vi o mesmo resultado), os identificadores dos commits estão registados, e a branch não fez mais do que o previsto.
 
-- Reescrever a frase do contrato do painel admin para dizer só o que existe hoje, sem mencionar o nome antigo.
-- Reescrever a segunda verificação para procurar o nome antigo apenas nos documentos de arquitetura e no código, e não no próprio ficheiro do item.
-- Corrigir as duas linhas que sobraram (mapa do sistema e tabela final das fases do pipeline).
-- Registar no ficheiro do item o identificador do commit da fase.
+Encontrei ainda três sítios fora dos documentos de arquitetura com restos da mesma ideia. Não pesaram no veredito, mas não estão na lista de pendentes do item:
+- o guia de resolução de conflitos usa como exemplo "campos mínimos por tipo de agente" (duas passagens, uma delas a dizer para manter "os 6 campos mínimos");
+- o guia de campos do perfil de IA, na mesma tabela que a branch corrigiu, ainda diz que o tipo de agente "determina os campos obrigatórios";
+- o mapa de prompts descreve um ficheiro do executor como contendo "campos por modo".
 
-Os guias dos três agentes e outra linha do guia de campos, que ainda falam em "4 campos / 3 campos padrão", já estão anotados como pendentes e podem ficar para depois.
+Independentemente do veredito, esta branch altera o CLAUDE.md, que está na lista do que sobe sempre, por isso a decisão final é tua. Não corri o script que confirma isso (a minha sessão é só de leitura); cabe ao turno do dia.
 
-Como a branch toca no CLAUDE.md, mesmo depois do acerto precisa do teu "sim" para ir para main.
+**O que proponho a seguir:** Um acerto de uma frase na mesma branch, só de texto:
 
-**Como desfazer:** Nada foi para main, por isso não há nada a desfazer agora. Para deitar fora este trabalho, basta apagar a branch (no PC e no GitHub) e a pasta de trabalho dela. Se mais tarde for aprovada e mergeada, pede "desfaz o item fix-docs-campos-obrigatorios-qualificacao": é um commit novo que anula o merge. Como são só documentos, não há risco para dados nem para o sistema em produção.
+- No documento da paridade do playground, reescrever a descrição dos campos obrigatórios para dizer que vêm só do perfil de IA, e que vazio significa nenhum.
+
+E acrescentar aos "Ajustes Possíveis" do item os três sítios que ficaram fora dos documentos de arquitetura (guia de resolução de conflitos, a outra linha do guia de campos do perfil, e o mapa de prompts), para não se perderem. Se for mais simples, podem ser corrigidos já na mesma passagem — são frases soltas.
+
+Em alternativa, se preferires não gastar mais uma noite com isto, podes responder "Juntar": o essencial está certo e verdadeiro, e esta linha fica anotada como pendente. Como a branch toca no CLAUDE.md, precisa sempre do teu "sim" para ir para main.
+
+**Como desfazer:** Nada foi para main, por isso não há nada a desfazer agora. Para deitar fora este trabalho, basta apagar a branch (no PC e no GitHub) e a pasta de trabalho dela. Se mais tarde for juntada, pede "desfaz o item fix-docs-campos-obrigatorios-qualificacao": é um commit novo que anula o merge, sem push forçado. Como são só documentos, não há risco para dados nem para o sistema em produção.
 
 | # | Critério | Cumprido | Porquê |
 |---|---|---|---|
-| 1 | Resolve a dor descrita na Motivação | Sim | A dor era a documentação, sobretudo o CLAUDE.md, afirmar mínimos fixos de 6, 4 e 3 campos. Os três sítios apontados na Motivação foram corrigidos e o novo texto corresponde ao que o código faz no CRM, no executor e na criação do perfil. Não é uma versão mais fácil do problema. |
-| 2 | Checks obrigatórios validados, com o que foi observado | Não | Só uma das duas verificações está validada. A segunda está em aberto e marcada como "não passou": a própria branch escreveu o nome antigo que a verificação diz que não pode aparecer, por isso não consegue passar tal como está. |
-| 3 | Testes automáticos passam, nenhum apagado ou enfraquecido | Sim | A branch só altera ficheiros de documentação. Não há testes de código a correr para esta mudança, e nenhum teste foi apagado ou enfraquecido. |
-| 4 | Não faz mais do que o plano dizia | Sim | Além dos três documentos previstos, corrigiu a mesma afirmação em mais dois (contrato do painel admin e guia de campos). O item já deixava em aberto procurar outros documentos com o mesmo erro, por isso está dentro do plano. Nenhum código foi tocado. |
-| 5 | Convenções do CLAUDE.md respeitadas | Não | O identificador do commit da fase não foi registado no ficheiro do item, como o processo exige. Além disso, a frase nova do contrato do painel admin descreve o que deixou de existir, quando a regra dos documentos de arquitetura é descrever só o estado atual. A regra do filtro por utilizador não se aplica, porque não há código. |
-| 6 | Docs de arquitetura afetados atualizados | Não | Ficaram dois sítios nos documentos de arquitetura com a ideia antiga de campos mínimos por tipo de agente: uma linha no mapa do sistema e uma linha na tabela final do documento das fases do pipeline. Não foram corrigidos nem listados como pendentes. |
+| 1 | Resolve a dor descrita na Motivação | Sim | A dor era a documentação, sobretudo o CLAUDE.md, afirmar mínimos fixos de 6, 4 e 3 campos. Os três sítios apontados na Motivação foram corrigidos e o texto novo corresponde ao que o código faz no CRM, no executor e na criação do perfil. Não é uma versão mais fácil do problema. |
+| 2 | Checks obrigatórios validados, com o que foi observado | Sim | As duas verificações estão marcadas como validadas, com data e com o que foi observado, e foram repetidas depois das correções. Repeti as duas por leitura e vi o mesmo: os três documentos principais dizem a coisa certa e o nome antigo já só aparece no próprio ficheiro do item. Nenhuma foi pulada. |
+| 3 | Testes automáticos passam, nenhum apagado ou enfraquecido | Sim | A branch só altera ficheiros de documentação. Não há testes de código para esta mudança, o turno do dia registou isso mesmo, e nenhum teste foi apagado ou enfraquecido. |
+| 4 | Não faz mais do que o plano dizia | Sim | Mexeu em sete ficheiros de texto: os três previstos, mais o contrato do painel admin, o mapa do sistema e uma linha do guia de campos, todos com a mesma afirmação errada — os dois últimos acertos foram pedidos na devolução. Nenhum código foi tocado. |
+| 5 | Convenções do CLAUDE.md respeitadas | Sim | Os identificadores dos commits da fase e das correções estão registados no ficheiro do item, as mensagens de commit seguem o formato pedido, e a frase do contrato do painel admin passou a descrever só o que existe hoje. A regra do filtro por utilizador não se aplica, porque não há código. |
+| 6 | Docs de arquitetura afetados atualizados | Não | Ficou uma linha num documento de arquitetura com a ideia antiga: o documento da paridade do playground diz que os campos obrigatórios vêm do perfil "ou do default do tipo de agente", e esse default não existe. Não foi corrigida nem anotada como pendente. Os outros quatro documentos de arquitetura estão certos. |
 
-_Avaliador: sessão separada e só de leitura (modelo opus, sessão `7c1e9d68-0b69-4dd1-bf0b-6fe014131bb4`, 22 turnos, 0.58 USD de referência, 1 ação(ões) recusada(s))._
+_Avaliador: sessão separada e só de leitura (modelo opus, sessão `8a711345-4823-4a89-a33e-87619ad546ec`, 28 turnos, 0.80 USD de referência, 0 ação(ões) recusada(s))._
