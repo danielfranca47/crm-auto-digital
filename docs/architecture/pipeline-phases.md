@@ -378,7 +378,7 @@ Ver [`docs/architecture/sales-flow.md`](sales-flow.md) para detalhes completos s
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `backend-crm/services/qualification_guardrails.py` | Campos obrigatórios por modo |
+| `backend-crm/services/qualification_guardrails.py` | Campos obrigatórios (do AI Profile; vazio = nenhum) |
 | `backend-crm/services/ai_playbooks/__init__.py` | Playbooks e hardcodes por template |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | Monta ContextBundle, aplica overrides por mode |
 | `backend-executors/app/services/decision_engine.py` | Motor de decisão, prompts das filhas, guardrails anti-loop |

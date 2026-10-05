@@ -25,7 +25,7 @@ Origem: tabela `ai_profiles` em `backend-core` (via `GET /admin/agents/users/{us
 
 ### Campos obrigatórios de qualificação
 
-Não há campos `min_qualification_*`. Os obrigatórios são `qualification_required_fields` do AI Profile (lista de chaves; vazia = nenhum obrigatório).
+Os campos obrigatórios são `qualification_required_fields` do AI Profile (lista de chaves; lista vazia = nenhum obrigatório).
 
 ---
 
