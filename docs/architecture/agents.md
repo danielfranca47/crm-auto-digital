@@ -216,13 +216,15 @@ aberta.
 | `"hybrid_scheduler"` | Híbrido Agendador (agent_3) |
 
 **`agent_mode`**
-| Valor | Campos obrigatórios de qualificação | Normalizado para |
+| Valor | Sugestão inicial de obrigatórios ao criar o perfil | Normalizado para |
 |---|---|---|
-| `"sdr_scheduler"` | 4 campos | `"agenda"` |
-| `"closer"` | 3 campos | `"direto"` |
-| `"consultivo"` | 6 campos | `"consultivo"` |
-| `"agenda"` | 4 campos | `"agenda"` |
-| `"direto"` | 3 campos | `"direto"` |
+| `"sdr_scheduler"` | `service_interest`, `availability_window` | `"agenda"` |
+| `"closer"` | `service_interest`, `price_acceptance` | `"direto"` |
+| `"consultivo"` | `service_interest`, `urgency`, `decision_role` | `"consultivo"` |
+| `"agenda"` | `service_interest`, `availability_window` | `"agenda"` |
+| `"direto"` | `service_interest`, `price_acceptance` | `"direto"` |
+
+É só a sugestão gravada em `qualification_required_fields` na criação (`_DEFAULT_QUAL_FIELDS`, `backend-core/app/api/ai_profiles.py`); depois é editável. O que vale em runtime é o `qualification_required_fields` do perfil — vazio significa nenhum campo obrigatório.
 
 **`presentation_variant`**: `"sales"`, `"scheduler"`, `null`. Default por `agent_mode` quando `null` — `direto`/`closer→sales`, `agenda`/`consultivo→scheduler` (`_resolve_presentation_variant()`, `decision_engine.py`)
 

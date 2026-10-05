@@ -119,7 +119,7 @@ WhatsApp → UazAPI → POST /webhooks/whatsapp/inbound
 
 - **`services/qualification_state.py`** — extrai e persiste campos de qualificação do lead
 - **`services/qualification_guardrails.py`** — bloqueia avanço de estágio se qualificação incompleta
-  Campos mínimos por modo: `consultivo` (6 campos), `agenda` (4 campos), `direto` (3 campos)
+  Campos obrigatórios vêm só do AI Profile (`qualification_required_fields`); sem configuração, nenhum campo é obrigatório. Não há mínimos fixos por modo
 - **`services/followup_state.py`** — máquina de estado de follow-up, agenda próximo envio
 - **`services/followup_reconciler.py`** — reconcilia estado de follow-up
 - **`services/lead_category_policy.py`** — side-effects de movimentação de categoria

@@ -39,6 +39,7 @@ implementação.
 | `modo-auto-melhorias-futuras.md` | Item deixado de fora da graduação do modo auto do Claude Code: sessões sem ecrã ignoram as regras `allow` do projeto em pasta não marcada como de confiança (pré-requisito do agente que executa a fila sozinho) |
 | `fila-automatica-melhorias-futuras.md` | Itens deixados de fora da graduação do contrato da fila automática: pacotes novos passam a subir sempre (M1), reconhecer instruções da IA em ficheiros novos (M2), push só de documentação reinicia produção — configurar o Railway (M3); e do turno da noite: tranca do lado do GitHub contra escrita da cloud em `main` (M4), a noite não abrir pull requests (M5), recusa a mais em código com `git push` num comentário (M6) |
 | `knowledge-base-melhorias-futuras.md` | Base de Conhecimento: dedup narrativo por uso/conteúdo/reengajamento (M1–M3), fontes duplicadas lidas em simultâneo (M4) e conversão assistida dos itens "Para mover" em blocos do Fluxo de Venda (M5) |
+| `docs-qualificacao-campos-obrigatorios-melhorias-futuras.md` | Itens deixados de fora da graduação da correção dos documentos sobre campos obrigatórios de qualificação: frases soltas que ainda falam em campos mínimos por tipo de agente — `playground-parity.md` (M1), guias dos três agentes e guia de campos do perfil de IA (M2), exemplo do guia de conflitos e mapa de prompts (M3) |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.

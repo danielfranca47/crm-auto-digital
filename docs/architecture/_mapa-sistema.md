@@ -89,7 +89,7 @@ agent-local         local  ← agente Python local de prospecção/scraping
 | `services/ai_playbooks/__init__.py` | Playbooks por template_key; perguntas de qualificação hardcoded |
 | `services/audio_transcription.py` | Transcrição via OpenAI Whisper (`transcribe_audio_from_url`, `transcribe_audio_from_path`) |
 | `services/qualification_state.py` | Extrai e persiste campos de qualificação do lead |
-| `services/qualification_guardrails.py` | Bloqueia avanço se qualificação incompleta (campos mínimos por agent_mode) |
+| `services/qualification_guardrails.py` | Bloqueia avanço se qualificação incompleta (obrigatórios = `qualification_required_fields` do AI Profile; vazio = nenhum) |
 | `services/followup_state.py` | Máquina de estado de follow-up; agenda próximo envio |
 | `services/followup_reconciler.py` | Reconcilia follow-ups pendentes; circuit breaker (24h cooldown) |
 | `services/lead_category_policy.py` | Side-effects de mudança de categoria (ex.: closing → desactiva bot); expõe `BOT_STRUCTURALLY_INACTIVE_CATEGORIES` |
