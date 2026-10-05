@@ -147,8 +147,10 @@ Alteração só de documentação (`.md`): não corri testes de código.
 
 ## Testes automáticos (turno do dia)
 
-04/10/2026, já com `main` junto (sem conflitos): a branch só altera
-documentação (seis ficheiros `.md`), por isso não corri testes de código.
+05/10/2026, depois das correções da noite e já com `main` junto (sem
+conflitos): a branch só altera documentação (sete ficheiros `.md`), por isso
+não corri testes de código. Em 04/10/2026, antes das correções, tinha sido
+igual.
 
 ## Checks de Validação
 
@@ -161,7 +163,14 @@ documentação (seis ficheiros `.md`), por isso não corri testes de código.
     "Sem configuração = lista vazia = nenhum campo obrigatório". `agents.md`
     linhas 219 a 227: a tabela passou a "sugestão inicial", e "vazio significa
     nenhum campo obrigatório".
-- [ ] `grep -rn "min_qualification" docs/architecture frontend-admin/src backend-crm` não devolve nada (confirmado na noite de 05/10/2026: 0 resultados; falta validar de dia).
+  - **Validado outra vez em:** 05/10/2026 (turno do dia, depois das correções)
+    — as mesmas três passagens continuam certas. Os dois sítios que ainda
+    repetiam a ideia antiga também já dizem a coisa certa: `_mapa-sistema.md`
+    linha 92 e `pipeline-phases.md` linha 381 ("do AI Profile; vazio =
+    nenhum").
+- [x] `grep -rn "min_qualification" docs/architecture frontend-admin/src backend-crm` não devolve nada.
+  - **Validado em:** 05/10/2026 (turno do dia) — zero resultados nas três
+    pastas. Em todo o repositório, o nome antigo só aparece neste ficheiro.
   - _Histórico — versão anterior do check (procurava em `docs/` inteiro), não passou em:_ 04/10/2026 (turno do dia) — o comando devolve quatro
     linhas: uma em `docs/architecture/admin-agents-contract.md:28`, escrita
     por esta branch ("Não há campos `min_qualification_*`"), e três neste
