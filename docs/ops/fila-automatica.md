@@ -364,6 +364,7 @@ Quem acrescenta a linha é a sessão que executa a decisão, com um commit em
 | Data | Item | Veredito do avaliador | Decisão do utilizador | Conta? | Seguidas |
 |---|---|---|---|---|---|
 | 04/10/2026 | `fix-docs-campos-obrigatorios-qualificacao` | não aprovado | devolver com correções | não — sobe sempre (`CLAUDE.md`) e ficou um check por validar | 0 |
+| 05/10/2026 | `fix-docs-campos-obrigatorios-qualificacao` | não aprovado | juntar | não — sobe sempre (`CLAUDE.md`) | 0 |
 
 ---
 
