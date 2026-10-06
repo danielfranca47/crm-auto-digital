@@ -1,7 +1,7 @@
 # Tags de contato
 
-**Branch:** (a criar)
-**Status:** Aguardando Plan Mode
+**Branch:** claude/feat-tags-de-contato
+**Status:** Interrompido de noite — continuar
 **Origem:** docs/discovery (investigação `tags-de-contato`, graduada em 2026-10-03) — levantamento em `docs/discovery/levantamentos/2026-10-03-acompanhamento-pos-agendamento.md`, cenário 3
 **Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (quem adota o agente já tem uma carteira de clientes); secundária M2
 
