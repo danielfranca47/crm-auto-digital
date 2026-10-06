@@ -1,7 +1,7 @@
 # Tags de contato
 
 **Branch:** claude/feat-tags-de-contato
-**Status:** Interrompido de noite — continuar
+**Status:** Só plano — precisa da tua decisão
 **Origem:** docs/discovery (investigação `tags-de-contato`, graduada em 2026-10-03) — levantamento em `docs/discovery/levantamentos/2026-10-03-acompanhamento-pos-agendamento.md`, cenário 3
 **Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (quem adota o agente já tem uma carteira de clientes); secundária M2
 
@@ -165,13 +165,69 @@ no card do contato as duas devem aparecer juntas, na mesma secção.
   Kanban — decisão técnica do Plan Mode.
 - Ação "remover tag" — não pedida; deixar para depois de ver o uso real.
 
+## Decisões em aberto
+
+Escrito de noite, sem o utilizador presente. O plano abaixo está pronto, mas há
+três decisões de produto (as que o próprio ficheiro já listava) sem resposta
+óbvia no código ou nos docs. Cada uma traz a opção recomendada; basta responder
+"segue as recomendadas" ou corrigir.
+
+1. **Quem cria as etiquetas.** Recomendado: lista livre (escreves e cria na
+   hora), com sugestão das já usadas para evitar duplicados.
+2. **A Lara deve saber as etiquetas?** Recomendado: sim, mas só as que o dono
+   marca como "a IA deve ver" — fica para a fase 3, para não tocar nas
+   instruções da IA antes de decidires.
+3. **Sessão realizada: coluna ou etiqueta?** Recomendado: as duas coisas — o
+   contato vai para "Lista de Clientes" e recebe `#cliente`.
+
+Depois destas respostas, a implementação segue a ordem das fases abaixo.
+
+## Diagnóstico (turno da noite, 06/10/2026)
+
+**Já existe?** Não. Confirmado: nenhuma coluna `tags` em `leads` (`backend-crm/database.py`),
+nenhuma rota de tags em `routes/leads.py` e nenhum componente de tag em
+`frontend-crm/src/components` (`LeadCard`, `LeadCardDialog`, `KanbanBoard`). Os
+carimbos internos `phases_triggered` e `triggers_fired` existem em `leads`
+(`database.py`, ~linha 801) e ficam como estão.
+
+**O que construir (Opção B aprovada), em 3 fases:**
+
+1. **Etiquetas no contato.** Coluna `leads.tags` (texto JSON, lista de
+   etiquetas em minúsculas sem espaços) via `ensure_column`; campo `tags` lido e
+   gravado nas rotas existentes `GET /api/leads` e `PATCH /api/leads/{id}`, sempre
+   filtradas por `user_id`; lista das etiquetas já usadas pelo utilizador para
+   sugestão; edição no `LeadCardDialog`, chip no `LeadCard`, filtro no Kanban
+   (`LeadsContext`).
+2. **Condição "tem / não tem tag" e ação "adicionar tag"** no construtor do
+   Fluxo de Venda (frontend) e no motor (`routes/executor.py`,
+   `_dispatch_system_actions`, e a avaliação de blocos descrita em
+   `docs/architecture/sales-flow.md`). O "disparar uma vez" não é tocado.
+3. **Carimbar em massa e contexto para a IA.** Seleção múltipla no Kanban,
+   coluna `tags` na importação por planilha (`map_row_to_lead` em
+   `automations/assistente_ia/processor.py`) e, só para as etiquetas marcadas
+   "a IA deve ver", uma linha no contexto via `enrich_context_bundle()`
+   (`services/ai_orchestrator/orchestrator.py`), para manter a paridade
+   Playground ↔ WhatsApp real.
+
+**Riscos:**
+- Mexe em estrutura da base de dados (`ensure_column`), no motor do Fluxo de Venda
+  e, na fase 3, em contexto da IA: a branch **sobe sempre** para o utilizador
+  decidir (`docs/ops/fila-automatica.md`, "O que sobe sempre").
+- Dois mecanismos a conviver (carimbo automático + etiqueta): a tela tem de
+  explicar a diferença.
+- Alterar o contexto da IA exige ler `docs/prompts_llms.md` e respeitar a regra
+  de paridade; por isso a fase 3 espera a decisão 2.
+- Docs a atualizar na implementação: `leads-schema.md`, `sales-flow.md`.
+
+**Cabe numa noite?** As 3 fases cabem no limite, mas a decisão 2 e a ordem
+acordada (depois da fase 1 de `feat-workflows-por-gatilho.md`, ainda por fazer)
+justificam esperar pela tua resposta antes de gastar uma noite em código.
+
 ## Próximo passo
 
-Diagnóstico (Plan Mode) ainda não feito — seguir o Passo 0 de
-`_guia-documentar-implementacao.md` antes de qualquer código. Entra logo a seguir
-à fase 1 de [`feat-workflows-por-gatilho.md`](feat-workflows-por-gatilho.md) (a
-condição "primeira vez" desses workflows depende das tags para ser fiável) — ordem
-completa nesse arquivo, secção "Próximo passo".
+Responder às 3 decisões acima. Depois, a próxima noite (ou uma sessão contigo)
+implementa a fase 1. Ordem completa em
+[`feat-workflows-por-gatilho.md`](feat-workflows-por-gatilho.md), secção "Próximo passo".
 
 ## Fontes
 
