@@ -1,7 +1,7 @@
 # Workflows por gatilho — acompanhamento do cliente depois do agendamento
 
 **Branch:** (a criar)
-**Status:** Aguardando Plan Mode
+**Status:** Interrompido de noite — continuar
 **Origem:** docs/discovery (investigação `jornada-pos-agendamento`, graduada em 2026-10-03) — levantamento em `docs/discovery/levantamentos/2026-10-03-acompanhamento-pos-agendamento.md`
 **Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (nicho inicial: massoterapia com o agente agendador); secundária M2
 
