@@ -1,7 +1,7 @@
 # Workflows por gatilho — acompanhamento do cliente depois do agendamento
 
 **Branch:** (a criar)
-**Status:** Interrompido de noite — continuar
+**Status:** Só plano — precisa da tua decisão
 **Origem:** docs/discovery (investigação `jornada-pos-agendamento`, graduada em 2026-10-03) — levantamento em `docs/discovery/levantamentos/2026-10-03-acompanhamento-pos-agendamento.md`
 **Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (nicho inicial: massoterapia com o agente agendador); secundária M2
 
@@ -379,6 +379,57 @@ Por decidir — nenhuma trava a fase 1, cada uma pode esperar pela fase respetiv
   resolvedor atual só remove o marcador; decidir se a linha inteira deve sumir.
 - Unificar a janela de envios por iniciativa própria (follow-up + workflows)
   depende da correção do campo de disponibilidade com duplo sentido.
+
+## Diagnóstico e plano (turno da noite, 07/10/2026)
+
+**Já existe?** Só em parte (ver "Evidência no código"): recibo de reserva escrito
+pela IA, 2 lembretes fixos sem janela de horário, nenhuma mensagem de
+pós-sessão. Não há motor de workflows por evento — só a fila de jobs
+(`jobs_service.py`) e o vocabulário de blocos são reaproveitáveis. Nada
+equivalente entrou em `main` desde o levantamento.
+
+**O que construir (fase 1):**
+- Tabelas próprias no CRM (`workflows`, `workflow_runs`), perto da fila de jobs,
+  com `user_id` em tudo. Recomendação: tabela própria e não o AI Profile — o
+  motor corre por relógio, fora da resposta da IA, e precisa de estado por
+  contato (passo atual, até quando espera).
+- Novo tipo de job `workflow.step` em `jobs_service.py`, reutilizando
+  `scheduled_at`, lease e retry dos lembretes atuais.
+- Gatilhos "agendamento criado" e "X antes/depois do horário"
+  (`routes/appointments.py`), passos Mensagem fixa e Mídia, variáveis
+  `{{agendamento.*}}` e do contato (`variable_resolver.py`).
+- Colunas novas em `appointments` (serviço, profissional) e tabela de variáveis
+  por contato.
+- Modelos prontos com formulário simples em Configurar Agente; substituem o
+  recibo e os lembretes atuais (sem mensagens em dobro).
+
+**Riscos:** envio real a clientes (WhatsApp não oficial); mensagens em dobro com
+a configuração atual da conta de produção (não lida); alteração da estrutura da
+base de dados; mexe no prompt do recibo (`decision_engine.py`). Todas são
+categorias que **sobem sempre** — a branch nunca seria mergeada sem o utilizador.
+
+**Porque ficou em "só plano":**
+1. 6 fases; a fase 1 sozinha toca backend-crm, backend-executors, backend-core e
+   frontend-crm — não cabe numa noite.
+2. Depende de `fix-disponibilidade-campo-duplo-sentido.md`, ainda não em `main`.
+3. Há decisões de produto sem resposta (abaixo).
+
+## Decisões em aberto
+
+1. **Dependência.** Fazer primeiro o `fix-disponibilidade-campo-duplo-sentido`
+   (hoje com `Autonomia: manual`)? *Recomendado: sim — é a ordem acordada em
+   03/10/2026.*
+2. **Pós-sessão sem marcação.** Se ninguém marcar "realizada", a mensagem não
+   sai (como a Fresha) ou sai sozinha X horas depois? *Recomendado: não sai.*
+3. **"Cliente chegou".** Como o profissional avisa hoje? Define onde fica o
+   botão (fase 6; não bloqueia a fase 1).
+4. **Dúvidas depois de agendar.** A Lara responde sempre ou só perto do
+   horário? *Recomendado: sempre* (fase 6).
+5. **Partir a fase 1** em 1a (dados + motor + gatilho "agendamento criado" +
+   Mensagem) e 1b (lembretes antes/depois + variáveis do contato + modelos
+   prontos), cada uma numa noite. *Recomendado: sim.*
+6. **Configuração em produção.** Alguém tem de ler o Fluxo de Venda e os
+   lembretes atuais da conta do dono antes da fase 1.
 
 ## Próximo passo
 
