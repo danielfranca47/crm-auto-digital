@@ -176,6 +176,61 @@ para o perfil de teste. O backend-core arrancou com SMTP vazio no processo.
 
 ---
 
+## Fase 3 — Diagnóstico + Correção: Recepção ignorava a orientação da Fase 0 (25/10/2026)
+
+### Problema identificado
+
+No Cenário P1, com a orientação da Lara na Fase 0 (com e sem "seguir à risca"), a Recepção
+respondia só "Seja bem-vindo(a)! / Agradeço pelo contato. / Me conta o que você está
+buscando.". A orientação entrava no prompt (`phases_triggered=["p0"]`), mas perdia para o
+texto fixo de `_build_child_prompt_recepcao()`:
+- "Não faz perguntas de qualificação neste turno";
+- exemplos ✅ só de cumprimento;
+- `"message_text": "<cumprimento caloroso — máximo 2-3 linhas>"`;
+- o bloco do Fluxo de Venda era colado no fim, depois do formato JSON.
+
+Baixar a temperatura até reforçava isto, porque o modelo obedece mais ao que está escrito
+com mais força.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_recepcao`: avalia o Fluxo de Venda antes de montar o texto. Com blocos, insere "INSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO" no meio do prompt (com motivo e exemplo ✅/❌), acrescenta o item 4 em "O QUE VOCÊ FAZ" e troca a regra de pergunta e o modelo de `message_text`. Sem blocos, o prompt fica igual |
+| `backend-executors/tests/test_recepcao_sales_flow_orientation.py` | 4 testes: sem orientação, com orientação, orientação estrita, fora da entrada da fase |
+| `docs/architecture/llm-architecture.md`, `docs/architecture/sales-flow.md`, `docs/prompts_llms.md` | variante da Recepção |
+
+Decisão: vale para qualquer orientação da Fase 0, não só as estritas. Uma orientação da Fase
+0 ser ignorada é defeito por si só; o "seguir à risca" só acrescenta o modo literal e a
+temperatura baixa.
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `105414d` | Recepção obedece às instruções da Fase 0 |
+
+Testes: `backend-executors/tests` com 336 passados.
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** na primeira resposta, o agente ignorava o que estava escrito na Fase 0 do Fluxo
+de Venda e mandava sempre um cumprimento genérico, com ou sem "seguir à risca".
+**Agora:** quando a Fase 0 tem orientações, elas passam a mandar na primeira resposta. O
+agente cumprimenta e faz o que está escrito (apresentar-se como Lara, perguntar Val ou
+Daniel). Com "seguir à risca", fica o mais perto possível das palavras escritas. Sem
+orientações na Fase 0, a primeira resposta continua igual.
+**Para validar:** Cenário P1 (repetir) e Cenário P5, abaixo.
+
+### Cenário P5 — Saudação composta com a orientação da Fase 0
+- [ ] Nova conversa no Playground: "ola, gostaria de saber mais sobre as massagens da val"
+- [ ] Confirmar: a Recepção apresenta a Lara sem perguntar de novo "Val ou Daniel?"
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
 
 - Temperatura baixa fixa para a Mãe (M1) depois de medir o efeito na Filha.
+- As outras Filhas também colam o bloco do Fluxo de Venda no fim do prompt, depois do JSON.
+  Os prompts delas não proíbem perguntas como o da Recepção, mas vale observar se alguma
+  orientação de outra fase também é ignorada.
