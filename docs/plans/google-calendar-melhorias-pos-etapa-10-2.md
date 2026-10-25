@@ -31,7 +31,17 @@ todos os compromissos do CRM aparecem no Google Calendar e vice-versa (via sync 
 
 ### M1 — Sync automática periódica
 
-**Prioridade: MÉDIA — melhoria de conforto, sem impacto em receita**
+**Prioridade: ALTA — o agente agendador propõe horários sem ver a agenda do Google**
+
+> **Caso real (25/10/2026, conta Sensi Vitae, Agente 03):** a conta ligou o Google Calendar
+> para o agente consultar a disponibilidade antes de oferecer horários, mas
+> `calendar_busy_slots` (`orchestrator.py::_load_calendar_busy_slots`) só lê a tabela
+> `appointments` — um evento criado no Google só entra lá depois de alguém clicar
+> "Sincronizar Google". Sem este job, o agente pode marcar por cima de uma sessão que só
+> existe no Google. Deixa de ser conforto e passa a ser condição para o agente agendar
+> sozinho com segurança. Alternativa a avaliar no Plan Mode: sincronizar o período relevante
+> no momento em que o ContextBundle é montado para leads em fase de agendamento, em vez de
+> (ou além de) um job periódico.
 
 Actualmente o utilizador precisa de clicar "Sincronizar Google" manualmente para importar
 eventos do Google Calendar. Um job periódico (a cada 5–15 min) executaria o mesmo

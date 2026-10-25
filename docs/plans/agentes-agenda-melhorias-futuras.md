@@ -122,7 +122,19 @@ confirmado e encerrado. Reforça a M3 acima — não corrigido, só documentado.
 
 ## M4 — `next_action_hint` da Mãe pode receber valor fora do enum (ValidationError)
 
-**Prioridade: BAIXA** (falha transitória, mitigada pelo retry de `llm_service.py`; sem padrão de frequência observado)
+**Prioridade: ALTA** (era BAIXA; frequência medida em 25/10/2026 — ver "Medição" abaixo)
+
+**Medição (25/10/2026, configuração do agente Sensi Vitae no Playground local, ~90 turnos):**
+com OpenAI, 4 falhas de validação (~4% dos turnos) — 3× a Mãe devolveu `route_to="apresentacao"`
+(fase em português, fora do `Literal`) e 1× a Filha omitiu `confidence` em `ChildResult`
+(`stage=child_validate`, "Field required"). Com `llm_provider=openrouter` +
+`meta-llama/llama-3.3-70b-instruct` a Mãe devolveu `"apresentação"` logo na 1ª mensagem em
+2 de 2 tentativas — o lead recebia "Vou te conectar com alguém do time" e, com
+`handoff_policy=disable_bot`, o bot ficava desligado para ele. O padrão é sempre o mesmo: um
+campo com valor quase-certo (sinónimo, acento, campo opcional em falta) derruba a decisão
+inteira. Relacionado: [`motor-llm-otimizacoes.md`](motor-llm-otimizacoes.md) M2 (Structured
+Outputs) resolveria a causa no caminho OpenAI; normalizar sinónimos/defaults antes da validação
+resolve nos dois provedores.
 
 **Contexto:** identificado durante a mesma sessão de testes via browser (20/06/2026).
 
@@ -299,3 +311,27 @@ nenhuma outra conta.
 **Decisão:** não corrigir agora — aguardando decisão do utilizador sobre prioridade. Revisitar
 antes de qualquer venda real do agente demo "Lara" (`agente-demo.md`), já que o próprio doc de
 marketing assume que os guardrails de saúde/handoff cobrem o maior risco de reputação do nicho.
+
+---
+
+## M11 — Data com dia da semana trocado e confirmação pedida duas vezes
+
+**Prioridade: ALTA** (a data errada leva o cliente a aparecer no dia errado)
+
+**Contexto:** testes de configuração do agente Sensi Vitae no Playground local (25/10/2026).
+
+**Estado actual:**
+- Um cliente pediu "sábado às 11h"; a Filha de agendamento escreveu "sábado, 29/10" (29/10 era
+  quinta-feira) e o `meeting_datetime_candidate` foi `2026-10-29T15:00` — o appointment ficou
+  gravado na quinta. A `tabela_de_dias` está no prompt, mas nada em código confere se o dia da
+  semana escrito na mensagem bate com a data do candidato. Uma instrução no `custom_instructions`
+  ("copie a data da tabela de dias") corrigiu no teste seguinte, mas é só texto.
+- Quando o cliente já diz "pode confirmar" ao aceitar o horário, a Mãe marca
+  `meeting_scheduled=true` e o appointment é criado, mas a Filha responde no mesmo turno com o
+  resumo + "Posso confirmar?" — o cliente vê um pedido de confirmação de algo que já está gravado.
+
+**O que construir:** guardrail em código que, quando `meeting_datetime_candidate` é emitido,
+compara o dia da semana citado no `message_text` com o da data do candidato (e o dia pedido pelo
+lead) e, se divergir, não cria o appointment e pede à Filha para corrigir; e passar à Filha a
+informação de que `meeting_scheduled=true` neste turno, para ela enviar a confirmação final em
+vez de voltar a perguntar.

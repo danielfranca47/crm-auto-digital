@@ -256,3 +256,24 @@ divergente.
 divergência (Mãe retorna `route_to` "atrasado" mas `perceived_category` "adiantado"),
 e decidir se os guardrails devem também corrigir `perceived_category` quando mutam
 `route_to`.
+
+---
+
+## M14 — Pré-agendamento e Agendamento ignoram as orientações do Fluxo de Venda
+
+**Prioridade: ALTA**
+
+**Contexto:** configuração do agente Sensi Vitae (25/10/2026) — um bloco `orientacao` na fase
+p3b (formato fixo da mensagem de confirmação) nunca chegou à IA.
+
+**Estado actual:** `_build_child_prompt_pre_agendamento()` e `_build_child_prompt_agendamento()`
+(`backend-executors/app/services/decision_engine.py`) não chamam
+`_build_sales_flow_phases_block(_evaluate_sales_flow_phases(...))` — as outras 5 fases chamam.
+O builder deixa configurar blocos em p3a/p3b sem aviso, e
+[`docs/architecture/sales-flow.md`](../architecture/sales-flow.md) diz que "todas as fases"
+injetam os blocos `orientacao`. Hoje a única forma de influenciar estas duas fases é
+`custom_instructions`, que vale para todas as fases ao mesmo tempo. A avaliação de blocos de
+ação (mídia, mensagem, avançar fase) também precisa de ser conferida para p3a/p3b.
+
+**O que fazer:** ligar o bloco às duas Filhas (como nas outras fases) e corrigir o doc; ou, se
+for deliberado, esconder p3a/p3b no builder e corrigir o doc.

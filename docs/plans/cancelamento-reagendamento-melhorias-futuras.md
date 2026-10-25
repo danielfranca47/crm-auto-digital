@@ -39,3 +39,22 @@
 **Estado actual:** `_decide_post_meeting_management()` nunca define `suggested_category` — cancelar ou reagendar uma reunião via IA não move o lead entre colunas do quadro visual de vendas.
 
 **Decisão já tomada:** fora de escopo do M1 — território do M2 do plano original (`docs/plans/followup-proativo-e-cancelamento-agenda.md`, item de disparo automático de follow-up), que ainda está pendente de implementação. Revisitar apenas se, ao implementar esse M2, fizer sentido também mover a categoria neste fluxo.
+
+---
+
+## M4 — Depois de marcado, o agente não responde a perguntas simples sobre a sessão
+
+**Prioridade: MÉDIA**
+
+**Contexto:** testes do agente Sensi Vitae (25/10/2026). Nas conversas reais da conta, depois da
+marcação o cliente pergunta "Qual o valor a pagar?", "Já cheguei", a morada ou se pode tomar duche.
+
+**Estado actual:** com o bot em `bot_disabled_reason="meeting_scheduled"`,
+`_decide_post_meeting_management()` só trata cancelar/reagendar e responde "de forma mínima" —
+sem tabela de preços nem Base de Conhecimento. A "Qual o valor a pagar?" respondeu "Posso enviar
+a nossa tabela de preços?" em vez de "75€". Ao reagendar, a resposta pergunta "Posso seguir?"
+embora o reagendamento já tenha sido aplicado nesse turno.
+
+**O que construir:** dar a este caminho acesso à tabela de serviços/preços e à referência da Base
+de Conhecimento (só para responder, sem reabrir a venda), e alinhar a mensagem de reagendamento
+com a ação já aplicada.

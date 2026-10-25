@@ -30,7 +30,7 @@ O Fluxo de Venda opera **como uma camada que corre antes do prompt filho** no `d
 
 O mapeamento `effective_route_to → phase_id` está em `_ROUTE_TO_PHASE_ID` dentro de `_evaluate_sales_flow_phases()`.
 
-Todas as fases — incluindo `p5` (Fechamento) — injectam blocos `orientacao` configurados no prompt da respectiva LLM filha via `_build_sales_flow_phases_block(_evaluate_sales_flow_phases(...))`, chamado no fim de cada `_build_child_prompt_<fase>()`. É assim que, para o Closer (`direto`), instruções de fechamento (ex.: quando enviar o link de pagamento) podem ser configuradas em `p5` pelo builder — sem precisar de nenhum flag especial de bloco, ao contrário de `qual_opener`/`booking_signal_opener` (ver abaixo).
+As fases p0, p1, p2, p4 e p5 (Fechamento) injectam blocos `orientacao` configurados no prompt da respectiva LLM filha via `_build_sales_flow_phases_block(_evaluate_sales_flow_phases(...))`, chamado no fim de `_build_child_prompt_<fase>()`. **p3a (Pré-agendamento) e p3b (Agendamento) não injectam** — `_build_child_prompt_pre_agendamento()`/`_build_child_prompt_agendamento()` não chamam esse bloco, por isso orientações configuradas nessas fases não chegam à IA; a única forma de influenciar essas Filhas é `custom_instructions` (ver `docs/plans/fluxo-vendas-melhorias-futuras.md`, M14). É assim que, para o Closer (`direto`), instruções de fechamento (ex.: quando enviar o link de pagamento) podem ser configuradas em `p5` pelo builder — sem precisar de nenhum flag especial de bloco, ao contrário de `qual_opener`/`booking_signal_opener` (ver abaixo).
 
 ---
 
