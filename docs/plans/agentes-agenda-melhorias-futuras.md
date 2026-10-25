@@ -311,33 +311,3 @@ nenhuma outra conta.
 **Decisão:** não corrigir agora — aguardando decisão do utilizador sobre prioridade. Revisitar
 antes de qualquer venda real do agente demo "Lara" (`agente-demo.md`), já que o próprio doc de
 marketing assume que os guardrails de saúde/handoff cobrem o maior risco de reputação do nicho.
-
----
-
-## M11 — Data com dia da semana trocado e confirmação pedida duas vezes
-
-**Prioridade: ALTA — candidato a urgente** (a data errada leva o cliente a aparecer no dia errado)
-
-**Medição no Playground de produção (25/10/2026, `gpt-4o-mini`):** 6 de 15 marcações gravadas no dia
-errado (ex.: "sexta" → 28/10, uma quarta; "sábado" → 29/10, uma quinta; "terça" → 31/10, um sábado);
-no Playground local, 2 de ~20. A `tabela_de_dias` está correta e presente nas Filhas que marcam — a IA
-ignora-a e usa o calendário "de memória". Instruções no `custom_instructions` (procurar sempre a linha
-da tabela, propor só com o dia da semana) não reduziram o erro. Só uma checagem em código resolve.
-
-**Contexto:** testes de configuração do agente Sensi Vitae no Playground local (25/10/2026).
-
-**Estado actual:**
-- Um cliente pediu "sábado às 11h"; a Filha de agendamento escreveu "sábado, 29/10" (29/10 era
-  quinta-feira) e o `meeting_datetime_candidate` foi `2026-10-29T15:00` — o appointment ficou
-  gravado na quinta. A `tabela_de_dias` está no prompt, mas nada em código confere se o dia da
-  semana escrito na mensagem bate com a data do candidato. Uma instrução no `custom_instructions`
-  ("copie a data da tabela de dias") corrigiu no teste seguinte, mas é só texto.
-- Quando o cliente já diz "pode confirmar" ao aceitar o horário, a Mãe marca
-  `meeting_scheduled=true` e o appointment é criado, mas a Filha responde no mesmo turno com o
-  resumo + "Posso confirmar?" — o cliente vê um pedido de confirmação de algo que já está gravado.
-
-**O que construir:** guardrail em código que, quando `meeting_datetime_candidate` é emitido,
-compara o dia da semana citado no `message_text` com o da data do candidato (e o dia pedido pelo
-lead) e, se divergir, não cria o appointment e pede à Filha para corrigir; e passar à Filha a
-informação de que `meeting_scheduled=true` neste turno, para ela enviar a confirmação final em
-vez de voltar a perguntar.
