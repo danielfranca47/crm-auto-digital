@@ -18,7 +18,7 @@ from app.contracts.qualification_contract import (
 from app.clients import crm_client
 from app.core.config import settings
 from app.schemas.decision import DecisionOutput
-from app.services import fast_path, field_extractor, handoff_policy, llm_service
+from app.services import fast_path, field_extractor, handoff_policy, llm_service, meeting_date_guard
 from app.services.orchestrator_models import ChildResult, MotherDecision
 
 logger = logging.getLogger(__name__)
@@ -1782,7 +1782,7 @@ _WEEKDAY_NAMES_PT = (
 )
 
 
-def _calendar_lookup_table_pt(days_ahead: int = 14) -> str:
+def _calendar_lookup_table_pt(days_ahead: int = 14, tz_name: Optional[str] = None) -> str:
     """Tabela com hoje + próximos `days_ahead` dias, cada um com data e dia da semana.
 
     Só dar à LLM a data de hoje + nome do dia da semana ("2026-06-21
@@ -1791,14 +1791,25 @@ def _calendar_lookup_table_pt(days_ahead: int = 14) -> str:
     2026-06-25). Com a tabela completa pronta, ela só precisa localizar a
     linha cujo dia da semana bate com o que o lead disse — sem fazer
     nenhuma conta de calendário por conta própria.
+
+    "Hoje" é o do fuso do perfil — o mesmo que meeting_date_guard usa para validar a data.
     """
-    now = datetime.utcnow()
+    today = meeting_date_guard.local_today(tz_name)
     lines = []
     for offset in range(days_ahead + 1):
-        day = now + timedelta(days=offset)
+        day = today + timedelta(days=offset)
         marker = " [hoje]" if offset == 0 else ""
         lines.append(f"{day.strftime('%Y-%m-%d')} ({_WEEKDAY_NAMES_PT[day.weekday()]}){marker}")
     return "\n".join(lines)
+
+
+_MEETING_DAY_REFERENCE_RULE = (
+    "  * meeting_day_reference: sempre que preencher meeting_datetime_candidate, escreva aqui as "
+    "palavras que identificam o dia escolhido, tal como foram ditas na conversa: 'hoje', 'amanhã', "
+    "'depois de amanhã', o nome do dia da semana (ex.: 'sexta-feira') ou a data escrita (ex.: "
+    "'30/10'). Se o lead aceitou uma opção que você propôs, use o dia dessa opção. O sistema usa "
+    "este campo para conferir a data — copie as palavras da conversa, não a data calculada.\n"
+)
 
 
 def _get_mother_mode_conflict(context: Dict[str, Any], mother_decision: Optional[MotherDecision]) -> tuple[Optional[str], bool]:
@@ -1978,6 +1989,40 @@ def _normalize_scheduler_child_signals(
     normalized["meeting_proposed"] = meeting_proposed
     normalized["meeting_datetime_candidate"] = meeting_candidate
     return normalized
+
+
+def _apply_meeting_date_guard(
+    decision: DecisionOutput, context: Dict[str, Any], logger: Optional[logging.Logger] = None
+) -> None:
+    """Confere a data do candidato contra o dia que o lead pediu e corrige candidato + texto.
+
+    Corre antes do meeting_scheduler ler child_signals_structured, por isso o appointment
+    já é criado/remarcado com a data corrigida. Ver meeting_date_guard.py.
+    """
+    trace = decision.decision_trace or {}
+    signals = trace.get("child_signals_structured")
+    if not isinstance(signals, dict) or not signals.get("meeting_datetime_candidate"):
+        return
+    result = meeting_date_guard.reconcile_meeting_date(
+        signals.get("meeting_datetime_candidate"),
+        decision.message_text or "",
+        day_reference=signals.get("meeting_day_reference"),
+        tz_name=(context.get("ai_profile") or {}).get("timezone"),
+    )
+    trace["meeting_date_guard"] = result.trace
+    if not result.trace.get("applied"):
+        return
+    trace["child_signals_structured"] = {**signals, "meeting_datetime_candidate": result.candidate}
+    decision.message_text = result.message_text
+    decision.decision_trace = trace
+    (logger or logging.getLogger(__name__)).warning(
+        "event=meeting_date_corrected from=%s to=%s reference=%s source=%s text_changed=%s",
+        result.trace.get("candidate_from"),
+        result.trace.get("candidate_to"),
+        result.trace.get("reference"),
+        result.trace.get("reference_source"),
+        result.trace.get("text_changed"),
+    )
 
 
 def _is_filled_value(value: Any) -> bool:
@@ -3168,7 +3213,7 @@ def _build_child_prompt_apresentation(
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     offer_pack_summary = _build_offer_pack_summary(context)
-    dates_table = _calendar_lookup_table_pt()
+    dates_table = _calendar_lookup_table_pt(tz_name=ai_profile.get("timezone"))
 
     # Fix P9: passive reply antes do agendamento quando a qualificação foi auto-promovida
     # neste mesmo turno e o lead tinha uma pergunta aberta de serviço na mensagem.
@@ -3605,7 +3650,7 @@ def _build_child_prompt_apresentation(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": ["..."],\n'
-        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false, "meeting_proposed": false, "meeting_datetime_candidate": null} (opcional),\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false, "meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_day_reference": null} (opcional),\n'
         '  "media_keys_to_send": ["..."],\n'
         '  "confidence": 0.0\n'
         "}\n"
@@ -3622,7 +3667,8 @@ def _build_child_prompt_apresentation(
         "  * Para datas relativas (amanhã, depois de amanhã, etc.) ou nomes de dia da semana (sábado, "
         "quinta-feira, etc.), procure a linha correspondente na tabela_de_dias abaixo e use a data dessa linha — "
         "NUNCA calcule a data ou o dia da semana por conta própria, esse cálculo não é confiável.\n"
-        "  * Em confirmação final do agendamento, inclua 'meeting_scheduled' em signals para compatibilidade.\n"
+        + _MEETING_DAY_REFERENCE_RULE
+        + "  * Em confirmação final do agendamento, inclua 'meeting_scheduled' em signals para compatibilidade.\n"
         "- Em presentation_variant=sales, UM TURNO = UMA AÇÃO: ou CONFIRMAR (sem link) ou ENVIAR LINK (com link).\n"
         "- Formato CONFIRMAR (sem link): descreva oferta e peça confirmação (ex.: 'quer seguir?').\n"
         "  * Proibido URL real e proibido placeholder de link (ex.: [link_do_checkout]).\n"
@@ -4163,7 +4209,7 @@ def _build_child_prompt_pre_agendamento(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
-    dates_table = _calendar_lookup_table_pt()
+    dates_table = _calendar_lookup_table_pt(tz_name=ai_profile.get("timezone"))
 
     # Detecta se é o trigger de check-in agendado (mensagem gerada pelo job)
     is_checkin_trigger = message_text.strip() == "preagendamento_checkin_trigger"
@@ -4335,7 +4381,7 @@ def _build_child_prompt_agendamento(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
-    dates_table = _calendar_lookup_table_pt()
+    dates_table = _calendar_lookup_table_pt(tz_name=ai_profile.get("timezone"))
 
     _busy_lines = _format_busy_slots_block(context.get("calendar_busy_slots"), ai_profile.get("timezone"))
     _busy_block = (
@@ -4420,7 +4466,7 @@ def _build_child_prompt_agendamento(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": [],\n'
-        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_duration_minutes": null} (opcional),\n'
+        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_day_reference": null, "meeting_duration_minutes": null} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n\n"
         "REGRAS DE SINALIZAÇÃO ESTRUTURADA (obrigatório):\n"
@@ -4433,7 +4479,8 @@ def _build_child_prompt_agendamento(
         "  * Para datas relativas (amanhã, depois de amanhã, etc.) ou nomes de dia da semana (sábado, "
         "quinta-feira, etc.), procure a linha correspondente na tabela_de_dias abaixo e use a data dessa linha — "
         "NUNCA calcule a data ou o dia da semana por conta própria, esse cálculo não é confiável.\n"
-        "  * meeting_duration_minutes: preencha (inteiro, em minutos) só quando houver SERVIÇOS E DURAÇÕES "
+        + _MEETING_DAY_REFERENCE_RULE
+        + "  * meeting_duration_minutes: preencha (inteiro, em minutos) só quando houver SERVIÇOS E DURAÇÕES "
         "DISPONÍVEIS configurado acima e você tiver identificado claramente a qual linha o lead se refere; "
         "deixe null se não houver essa tabela configurada ou se ainda não confirmou qual serviço o lead quer.\n\n"
         f"Contexto:\n"
@@ -4466,7 +4513,7 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         "name": _resolve_lead_name(lead),
     }
     history_text = _format_history(history)
-    dates_table = _calendar_lookup_table_pt()
+    dates_table = _calendar_lookup_table_pt(tz_name=ai_profile.get("timezone"))
 
     busy_slots = context.get("calendar_busy_slots") or []
     same_lead_slots = [slot for slot in busy_slots if slot.get("lead_id") == lead.get("id")]
@@ -4495,6 +4542,8 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         "PROIBIDO responder de forma hesitante ('vou verificar', 'vou confirmar', 'um momento') "
         "quando dia e horário já foram informados — isso obriga outro turno e o lead fica sem "
         "resposta real; confirme já, como nas REGRAS acima para cancelamento.\n"
+        + _MEETING_DAY_REFERENCE_RULE
+        +
         "- Se a mensagem propuser SÓ UM HORÁRIO diferente do já confirmado, SEM mencionar um novo "
         "dia (ex.: 'pode ser às 16h em vez de 14h?', 'na verdade prefiro às 16h', 'dá pra adiantar "
         "pras 16h?'): trate como reagendamento para o MESMO DIA da reunião já confirmada (ver bloco "
@@ -4518,7 +4567,7 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": [],\n'
-        '  "signals_structured": {"meeting_cancel_requested": false, "meeting_reschedule_requested": false, "meeting_datetime_candidate": null},\n'
+        '  "signals_structured": {"meeting_cancel_requested": false, "meeting_reschedule_requested": false, "meeting_datetime_candidate": null, "meeting_day_reference": null},\n'
         '  "confidence": 0.0\n'
         "}\n\n"
         f"Contexto:\n"
@@ -4570,7 +4619,7 @@ def _decide_post_meeting_management(
             reason="meeting_management_llm_failure",
         )
 
-    return DecisionOutput(
+    decision = DecisionOutput(
         next_action="reply",
         message_text=child_result.message_text or "",
         questions=[],
@@ -4584,6 +4633,8 @@ def _decide_post_meeting_management(
             "child_signals_structured": child_result.signals_structured or {},
         },
     )
+    _apply_meeting_date_guard(decision, context, logger)
+    return decision
 
 
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
@@ -5341,6 +5392,7 @@ def compose_decision_output(
         },
     )
     decision = _apply_mode_guardrails(decision, context, mother_decision, child_result)
+    _apply_meeting_date_guard(decision, context)
 
     # Mídia rica no pitch — Agent 2 (Tarefa 3.6)
     # Se estamos em rota de apresentation para agent closer e offer_pack tem media_url,
