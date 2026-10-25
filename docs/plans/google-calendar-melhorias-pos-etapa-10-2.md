@@ -139,6 +139,27 @@ Necessário para eliminar o aviso e ultrapassar o limite de ~100 utilizadores.
 
 ---
 
+### M4 — Ligação aceite sem a permissão do calendário, e falhas escondidas
+
+**Prioridade: ALTA — o utilizador acha que o calendário está ligado e não está**
+
+**Caso real (25/10/2026, conta Sensi Vitae):** a conta ligou o Google Calendar e o ecrã mostrou
+"Conectado como …", mas o token guardado só tinha `email`/`openid` — na janela de consentimento
+granular da Google a caixa do calendário (`calendar.events`) ficou por marcar. Resultado:
+`list_events` responde 403 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` (o agente não vê a agenda do Google)
+e o push das marcações do CRM para o Google também falha — tudo silencioso, porque
+`google_calendar_service.py` é fail-silent e `POST /api/appointments/google-sync` devolve 200.
+
+**O que construir:**
+- No callback OAuth (`backend-core/app/api/auth_google.py`), conferir o `scope` devolvido pela
+  Google; sem `calendar.events`, não dar a ligação como feita e mostrar ao utilizador que tem de
+  marcar a caixa do calendário (com imagem da janela da Google).
+- Guardar o último erro do Google por utilizador e mostrá-lo em MinhaConta / na Agenda
+  ("Sem permissão para ler o calendário — volte a ligar").
+- `google-sync` devolver o erro em vez de 200 quando `list_events` falha.
+
+---
+
 ## Dependências entre os itens
 
 - **M2 depende de M1 estar pelo menos planeado:** se M2 adicionar um `calendar_id` customizado,

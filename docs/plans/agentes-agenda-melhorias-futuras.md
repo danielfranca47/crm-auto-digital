@@ -316,7 +316,13 @@ marketing assume que os guardrails de saúde/handoff cobrem o maior risco de rep
 
 ## M11 — Data com dia da semana trocado e confirmação pedida duas vezes
 
-**Prioridade: ALTA** (a data errada leva o cliente a aparecer no dia errado)
+**Prioridade: ALTA — candidato a urgente** (a data errada leva o cliente a aparecer no dia errado)
+
+**Medição no Playground de produção (25/10/2026, `gpt-4o-mini`):** 6 de 15 marcações gravadas no dia
+errado (ex.: "sexta" → 28/10, uma quarta; "sábado" → 29/10, uma quinta; "terça" → 31/10, um sábado);
+no Playground local, 2 de ~20. A `tabela_de_dias` está correta e presente nas Filhas que marcam — a IA
+ignora-a e usa o calendário "de memória". Instruções no `custom_instructions` (procurar sempre a linha
+da tabela, propor só com o dia da semana) não reduziram o erro. Só uma checagem em código resolve.
 
 **Contexto:** testes de configuração do agente Sensi Vitae no Playground local (25/10/2026).
 
