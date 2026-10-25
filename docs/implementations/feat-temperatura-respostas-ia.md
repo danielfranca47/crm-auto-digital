@@ -112,6 +112,31 @@ coberto pelos testes automáticos.
 | `frontend-admin/src/pages/AdminAgents.tsx`, `backend-crm/routes/admin_agents.py` | exibir o campo novo |
 | `docs/architecture/*.md`, `docs/prompts_llms.md`, `docs/plans/motor-llm-otimizacoes.md` | refletir o estado novo |
 
+Decisões:
+- Card como modal (`ModalCriatividade`, mesmo padrão do "Provedor de IA" com `OptCard`), na
+  grelha de identidade, logo a seguir ao card do provedor.
+- "Padrão" grava `null`. O `PATCH` com `exclude_unset` limpa o campo, e o executor não envia
+  temperatura.
+- A exportação/importação de agente (`AgentExportImportPanel.tsx`) exporta tudo menos uma
+  lista de exclusões, então leva `response_creativity` e `strict` sem mudança.
+- Typecheck: `frontend-crm` com os mesmos 66 erros que já existem em `main` e nenhum novo.
+  `frontend-admin` com 0 erros.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `99c5590` | card + modal, caixa "Seguir à risca" + etiqueta, painel admin, docs de arquitetura |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** não havia nenhum botão para controlar o quanto a IA inventa ou enfeita.
+**Agora:** em "Configurar Agente → Identidade" há um card "Criatividade das respostas"
+com Padrão, Criativa, Equilibrada e Rígida. Em cada Orientação do Fluxo de Venda há a caixa
+"Seguir à risca", e o bloco marcado mostra a etiqueta "à risca". O painel admin mostra o
+nível quando não está em "Padrão".
+**Para validar:** Cenários P1, P2 e P3, abaixo.
+
 ---
 
 ## Checks de Validação
