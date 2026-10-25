@@ -30,7 +30,7 @@ O Fluxo de Venda opera **como uma camada que corre antes do prompt filho** no `d
 
 O mapeamento `effective_route_to → phase_id` está em `_ROUTE_TO_PHASE_ID` dentro de `_evaluate_sales_flow_phases()`.
 
-Todas as fases — incluindo `p5` (Fechamento) — injectam blocos `orientacao` configurados no prompt da respectiva LLM filha via `_build_sales_flow_phases_block(_evaluate_sales_flow_phases(...))`, chamado no fim de cada `_build_child_prompt_<fase>()`. É assim que, para o Closer (`direto`), instruções de fechamento (ex.: quando enviar o link de pagamento) podem ser configuradas em `p5` pelo builder — sem precisar de nenhum flag especial de bloco, ao contrário de `qual_opener`/`booking_signal_opener` (ver abaixo).
+Todas as fases — incluindo `p5` (Fechamento) — injectam blocos `orientacao` configurados no prompt da respectiva LLM filha via `_build_sales_flow_phases_block(_evaluate_sales_flow_phases(...))`, chamado no fim de cada `_build_child_prompt_<fase>()` — exceto na Recepção (`p0`), onde o bloco é avaliado antes e inserido no meio do prompt com prioridade sobre o cumprimento padrão (ver [`llm-architecture.md`](llm-architecture.md#filha-recepção-_build_child_prompt_recepcao)), porque o prompt fixo dela proíbe perguntas e um bloco colado no fim perdia sempre. É assim que, para o Closer (`direto`), instruções de fechamento (ex.: quando enviar o link de pagamento) podem ser configuradas em `p5` pelo builder — sem precisar de nenhum flag especial de bloco, ao contrário de `qual_opener`/`booking_signal_opener` (ver abaixo).
 
 ---
 

@@ -161,6 +161,7 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 
 ### Filha Recepção (`_build_child_prompt_recepcao`)
 - Instrução restrita: só o cumprimento inicial, sem tratar pedido comercial
+- Com blocos do Fluxo de Venda da Fase 0 ativos no turno, eles entram no meio do prompt (antes dos exemplos e do JSON), sob "INSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO", com prioridade sobre o modelo de boas-vindas: a Filha cumpre-os junto com o cumprimento (apresentar-se como pedem, fazer a pergunta que pedem), a regra "não faz perguntas de qualificação" vira "só a pergunta que as instruções pedirem" e o modelo de `message_text` muda. Sem blocos, o prompt é o de cumprimento puro
 - Extrai qualquer pedido comercial embutido na mensagem para `pending_commercial_text`, sem tentar respondê-lo (ver "Saudação composta" acima)
 
 ### Filha Pré-agendamento (`_build_child_prompt_pre_agendamento`)

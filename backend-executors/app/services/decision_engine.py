@@ -2740,6 +2740,38 @@ def _build_child_prompt_recepcao(
     lead_name_ctx = f"Nome do lead: {lead_name}." if lead_name else "Nome do lead: desconhecido."
     brand_name = (ai_profile.get("brand_name") or "").strip() or "o negócio"
 
+    # Blocos do Fluxo de Venda (Fase 0) avaliados antes de montar o texto: quando existem,
+    # entram no meio do prompt com prioridade sobre o modelo de boas-vindas e as regras
+    # "só cumprimentar" ficam condicionais — colados no fim, depois do JSON, perdiam sempre
+    # para o prompt fixo. Sem blocos, o prompt é idêntico ao de antes.
+    _sf_block = _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
+    if _sf_block:
+        _owner_step = (
+            "4. Cumpre as INSTRUÇÕES DO DONO DO NEGÓCIO abaixo junto com o cumprimento —\n"
+            "   incluindo apresentar-se como elas pedem ou fazer a pergunta que elas pedem.\n"
+            "   Se a mensagem do lead já responde ao que a instrução pergunta, siga a\n"
+            "   instrução sem repetir a pergunta.\n"
+        )
+        _owner_block = (
+            "\nINSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO (prioridade sobre o modelo de boas-vindas acima):\n"
+            "O dono configurou como quer que o primeiro contato soe — siga estas instruções\n"
+            "no message_text; o cumprimento genérico dos exemplos é só o ponto de partida.\n"
+            f"{_sf_block}"
+            "Exemplo — instrução \"Apresente-se como Ana e pergunte se é a primeira visita\":\n"
+            "✅ \"Olá! Sou a Ana. É a sua primeira visita?\"\n"
+            "❌ \"Olá! Seja bem-vindo(a)! Como posso ajudar?\" (ignorou a instrução do dono)\n"
+        )
+        _question_rule = (
+            "- Só faz a pergunta que as instruções do dono pedirem; nenhuma outra\n"
+            "  pergunta de qualificação neste turno."
+        )
+        _message_text_shape = "<cumprimento + o que as instruções do dono pedem>"
+    else:
+        _owner_step = ""
+        _owner_block = ""
+        _question_rule = "- Não faz perguntas de qualificação neste turno."
+        _message_text_shape = "<cumprimento caloroso — máximo 2-3 linhas>"
+
     _recepcao_prompt = f"""{identity_block}
 {tone_block}FASE: recepção (saudação).
 
@@ -2760,14 +2792,14 @@ O QUE VOCÊ FAZ:
    comercial (agendar, preço, horário de funcionamento, disponibilidade,
    serviço, catálogo, etc.) — mesmo fundida na MESMA linha da saudação —
    extrai esse trecho, literal, para o campo "pending_commercial_text".
-
+{_owner_step}
 COMO VOCÊ FAZ:
 {greeting_instruction}
 Extração: releia linha a linha antes de responder. Copie o trecho comercial
 LITERAL (não resuma, não reescreva, não responda a ele) para
 "pending_commercial_text". Se a mensagem for saudação/social pura, sem nenhum
 pedido embutido, retorne "pending_commercial_text": null.
-
+{_owner_block}
 EXEMPLOS DO QUE FAZER (✅):
 1. Mensagem: "Oi"
    → message_text: "Oi! Seja bem-vindo(a)! Como posso ajudar?" | pending_commercial_text: null
@@ -2780,7 +2812,7 @@ O QUE VOCÊ NÃO FAZ:
 - Não responde, não promete verificar, não qualifica o pedido comercial —
   isso é trabalho de outro turno do sistema, não seu.
 - Não menciona preços, tabelas, serviços, imagens, links ou catálogo.
-- Não faz perguntas de qualificação neste turno.
+{_question_rule}
 - Máximo 2-3 linhas, sempre.
 
 EXEMPLOS DE ERRO (❌) — NÃO FAÇA ISTO:
@@ -2797,7 +2829,7 @@ EXEMPLOS DE ERRO (❌) — NÃO FAÇA ISTO:
 
 Retorne SOMENTE JSON válido:
 {{
-  "message_text": "<cumprimento caloroso — máximo 2-3 linhas>",
+  "message_text": "{_message_text_shape}",
   "should_ask": false,
   "question_text": "",
   "field": null,
@@ -2807,7 +2839,6 @@ Retorne SOMENTE JSON válido:
   "pending_commercial_text": "<trecho literal do pedido comercial, ou null se só houve saudação>"
 }}
 """
-    _recepcao_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _recepcao_prompt
 
 
