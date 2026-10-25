@@ -353,6 +353,11 @@ _ROUTE_TO_PHASE_ID: Dict[str, str] = {
 }
 
 
+# Rotas cujo builder de prompt da Filha injeta os blocos do Fluxo de Venda
+# (_build_sales_flow_phases_block) — usado para saber se uma orientação estrita entrou no prompt.
+_SALES_FLOW_INJECTING_CHILD_ROUTES = {"recepcao", "qualification", "apresentation", "follow-up", "closing"}
+
+
 def _parse_json_id_set(raw: Any) -> set:
     """Parseia um campo JSON (string ou já-lista) de IDs num set. Usado para
     leads.triggers_fired e leads.phases_triggered — JSON inválido vira set vazio."""
@@ -863,7 +868,13 @@ def _evaluate_sales_flow_phases(
                 if content:
                     priority = (block.get("priority") or "normal").strip().lower()
                     label = "INSTRUÇÃO CRÍTICA DE FLUXO DE VENDA" if priority == "critical" else "INSTRUÇÃO DE FLUXO DE VENDA"
-                    result["prompt_injections"].append(f"{label}:\n{content}")
+                    if block.get("strict"):
+                        # "Seguir à risca": rótulo literal + temperatura baixa na chamada da
+                        # Filha (decide() lê strict_active). Ver sales-flow.md, bloco orientacao.
+                        result["prompt_injections"].append(_strict_orientation_injection(label, content))
+                        result["strict_active"] = True
+                    else:
+                        result["prompt_injections"].append(f"{label}:\n{content}")
                     _oid = (block.get("id") or "").strip()
                     if _oid:
                         _injected_block_ids.add(_oid)
@@ -993,6 +1004,24 @@ def _evaluate_sales_flow_phases(
         )
 
     return result
+
+
+def _strict_orientation_injection(label: str, content: str) -> str:
+    """Injeção de uma orientação marcada "seguir à risca" (`strict=True`).
+
+    Só no turno em que a orientação dispara — a reinjeção permanente de orientações
+    críticas (segunda passagem) usa o rótulo normal, senão a Filha repetiria a mesma frase
+    literal em todo turno da fase."""
+    return (
+        f"{label} — SEGUIR À RISCA:\n{content}\n"
+        "Escreva a resposta só com o que esta instrução pede, usando as palavras dela o mais "
+        "de perto possível. O dono do negócio escreveu este texto do jeito que quer que o lead "
+        "o leia: cumprimentos, elogios ou dados (horários, preços, serviços) que não estão aqui "
+        "mudam a mensagem dele. Se a instrução pede uma pergunta, termine nessa pergunta.\n"
+        "Exemplo — instrução \"Pergunte se prefere de manhã ou à tarde\":\n"
+        "✅ \"Prefere de manhã ou à tarde?\"\n"
+        "❌ \"Que bom falar com você! Temos ótimos horários disponíveis. Prefere de manhã ou à tarde?\""
+    )
 
 
 def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
@@ -5808,6 +5837,17 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         else:
             child_prompt = _build_child_prompt(context, message_text, mother_decision)
             _prompt_function_used = "_build_child_prompt(generic)"
+        # Orientação "seguir à risca" ativa neste turno → temperatura baixa na Filha. Mesma
+        # avaliação pura que o builder do prompt acabou de fazer (só os builders abaixo
+        # injetam o Fluxo de Venda; pré-agendamento/agendamento não).
+        _strict_orientation_active = False
+        if route_for_child in _SALES_FLOW_INJECTING_CHILD_ROUTES:
+            _strict_orientation_active = bool(_evaluate_sales_flow_phases(
+                context, route_for_child, message_text,
+                detected_intents=mother_decision.detected_intents,
+                is_phase_entry=_is_phase_entry_for_prompt,
+                branch_selections=mother_decision.branch_selections,
+            ).get("strict_active"))
         stage = "child_call"
         child_result: Optional[ChildResult] = None
         validation_errors: list[str] = []
@@ -5820,9 +5860,15 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     f"{child_prompt}\n\nVALIDATION_ERRORS: {json.dumps(validation_errors, ensure_ascii=False)}\n"
                     "Corrija o JSON para field=current_field e reformule a pergunta sem repetir texto anterior."
                 )
-            child_text = llm_service.generate_child_result(
-                route_for_child, prompt_to_use, ai_profile=ai_profile
-            )
+            if _strict_orientation_active:
+                child_text = llm_service.generate_child_result(
+                    route_for_child, prompt_to_use, ai_profile=ai_profile,
+                    temperature_override=llm_service.STRICT_ORIENTATION_TEMPERATURE,
+                )
+            else:
+                child_text = llm_service.generate_child_result(
+                    route_for_child, prompt_to_use, ai_profile=ai_profile
+                )
             stage = "child_parse"
             child_payload = _extract_json_payload(child_text)
             if child_payload is None:

@@ -152,7 +152,12 @@ def _extract_output_text(cfg: _ProviderConfig, payload: Dict[str, Any]) -> str:
 
 
 def _build_payload(
-    cfg: _ProviderConfig, prompt: str, *, json_mode: bool, route: Optional[str] = None
+    cfg: _ProviderConfig,
+    prompt: str,
+    *,
+    json_mode: bool,
+    route: Optional[str] = None,
+    temperature: Optional[float] = None,
 ) -> Dict[str, Any]:
     if cfg.name == PROVIDER_OPENROUTER:
         payload: Dict[str, Any] = {
@@ -161,6 +166,8 @@ def _build_payload(
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        if temperature is not None:
+            payload["temperature"] = temperature
         return payload
 
     payload = {"model": cfg.model, "input": prompt}
@@ -168,7 +175,31 @@ def _build_payload(
         payload["text"] = {"format": {"type": "json_object"}}
     if route:
         payload["metadata"] = {"route": route}
+    if temperature is not None:
+        payload["temperature"] = temperature
     return payload
+
+
+# ai_profile.response_creativity -> temperature da Filha. Ausente/desconhecido = None:
+# o payload sai sem `temperature` e vale o padrão do provedor (comportamento anterior
+# ao campo). Ver docs/architecture/llm-architecture.md, "Temperatura da Filha".
+_RESPONSE_CREATIVITY_TEMPERATURE: Dict[str, float] = {
+    "creative": 0.9,
+    "balanced": 0.5,
+    "strict": 0.2,
+}
+# Usada quando uma orientação "seguir à risca" do Fluxo de Venda está ativa no turno.
+STRICT_ORIENTATION_TEMPERATURE = 0.2
+
+
+def resolve_child_temperature(
+    ai_profile: Optional[Dict[str, Any]], override: Optional[float] = None
+) -> Optional[float]:
+    """Override do turno (orientação estrita) > nível do AI profile > None (padrão do provedor)."""
+    if override is not None:
+        return override
+    level = (ai_profile or {}).get("response_creativity")
+    return _RESPONSE_CREATIVITY_TEMPERATURE.get(level) if isinstance(level, str) else None
 
 
 def _post_with_retry(
@@ -230,11 +261,14 @@ def _generate_json(
     stub,
     ai_profile: Optional[Dict[str, Any]] = None,
     route: Optional[str] = None,
+    temperature: Optional[float] = None,
 ) -> str:
     cfg = _resolve_provider_config(ai_profile)
     if not cfg.api_key:
         return stub()
-    payload = _build_payload(cfg, prompt, json_mode=True, route=route)
+    payload = _build_payload(cfg, prompt, json_mode=True, route=route, temperature=temperature)
+    if temperature is not None:
+        logger.info("event=llm_child_temperature route=%s temperature=%s", route, temperature)
     response = _post_with_retry(payload, api_base=cfg.api_base, api_key=cfg.api_key)
     return _extract_output_text(cfg, response)
 
@@ -257,9 +291,19 @@ def generate_mother_route(prompt: str, *, ai_profile: Optional[Dict[str, Any]] =
 
 
 def generate_child_result(
-    route: str, prompt: str, *, ai_profile: Optional[Dict[str, Any]] = None
+    route: str,
+    prompt: str,
+    *,
+    ai_profile: Optional[Dict[str, Any]] = None,
+    temperature_override: Optional[float] = None,
 ) -> str:
-    return _generate_json(prompt, stub=_stub_child_response, ai_profile=ai_profile, route=route)
+    return _generate_json(
+        prompt,
+        stub=_stub_child_response,
+        ai_profile=ai_profile,
+        route=route,
+        temperature=resolve_child_temperature(ai_profile, temperature_override),
+    )
 
 
 def generate_conflict_message(prompt: str, *, ai_profile: Optional[Dict[str, Any]] = None) -> str:
