@@ -71,6 +71,37 @@ Chamada da Filha (decide())
 | `backend-executors/app/services/decision_engine.py` | rótulo literal + `strict_active` em `_evaluate_sales_flow_phases`; `decide()` passa `temperature_override=0.2` |
 | `backend-executors/tests/` | testes de payload, mapa e orientação estrita |
 
+Decisões:
+- A orientação estrita só vale no turno em que dispara. A reinjeção permanente de
+  orientações críticas (segunda passagem) mantém o rótulo normal, senão a Filha repetiria
+  a mesma frase literal em todo turno da fase.
+- `decide()` reavalia a fase (função pura, mesmo padrão de `compose_decision_output`) só
+  nas rotas cujo builder injeta o Fluxo de Venda (`_SALES_FLOW_INJECTING_CHILD_ROUTES`):
+  pré-agendamento e agendamento não injetam blocos, então não baixam a temperatura.
+- O kwarg `temperature_override` só é passado quando há orientação estrita. Assim os
+  mocks antigos de `generate_child_result` nos testes continuam válidos.
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `1907285` | campo `response_creativity`, temperatura no payload, orientação estrita + testes |
+
+Testes: `backend-executors/tests` com 332 passados. `backend-core/tests` com 82 passados e
+8 falhas que já existem iguais em `main` (`test_ai_profile_agent_mode.py`,
+`test_ai_profile_timezone_persistence.py`), sem relação com esta mudança.
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** a IA respondia sempre no "nível de criatividade" padrão do modelo, que é
+alto. Não havia como pedir que seguisse um texto à risca.
+**Agora:** o servidor já sabe guardar o nível "Criativa / Equilibrada / Rígida" de cada
+agente e já sabe tratar uma orientação marcada "seguir à risca". Nesse caso a IA recebe a
+ordem de usar só o que está escrito, com o nível mais rígido, naquela resposta. Agentes
+que não mexerem em nada continuam exatamente como estavam.
+**Para validar:** os Cenários P1 a P3 dependem da tela (Fase 2). O Cenário P4 já está
+coberto pelos testes automáticos.
+
 ### Fase 2 — Frontend + docs
 
 | Arquivo | O que muda |
@@ -101,7 +132,8 @@ Chamada da Filha (decide())
 - [ ] Log mostra a chamada da Filha sem `temperature`
 
 ### Cenário P4 — Orientação estrita num caminho não escolhido não vale
-- [ ] Coberto por teste automatizado (`backend-executors/tests/`)
+- [x] Coberto por teste automatizado (`test_strict_orientation_in_unchosen_branch_not_active`)
+- **Validado em:** 25/10/2026: teste passa, junto com os da entrada da fase e da reinjeção crítica
 
 ---
 
