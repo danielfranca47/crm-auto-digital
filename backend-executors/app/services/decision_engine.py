@@ -1792,14 +1792,19 @@ def _calendar_lookup_table_pt(days_ahead: int = 14, tz_name: Optional[str] = Non
     linha cujo dia da semana bate com o que o lead disse — sem fazer
     nenhuma conta de calendário por conta própria.
 
-    "Hoje" é o do fuso do perfil — o mesmo que meeting_date_guard usa para validar a data.
+    Cada linha começa pelo dia da semana e traz a data já em dd/mm — a mesma ordem em que a
+    LLM escreve ("sexta-feira, 30/10"), para ela copiar a linha em vez de completar a data de
+    memória. "Hoje" é o do fuso do perfil — o mesmo que meeting_date_guard usa para validar.
     """
     today = meeting_date_guard.local_today(tz_name)
+    markers = {0: " [hoje]", 1: " [amanhã]", 2: " [depois de amanhã]"}
     lines = []
     for offset in range(days_ahead + 1):
         day = today + timedelta(days=offset)
-        marker = " [hoje]" if offset == 0 else ""
-        lines.append(f"{day.strftime('%Y-%m-%d')} ({_WEEKDAY_NAMES_PT[day.weekday()]}){marker}")
+        lines.append(
+            f"{_WEEKDAY_NAMES_PT[day.weekday()]}, {day.strftime('%d/%m')} → "
+            f"{day.isoformat()}{markers.get(offset, '')}"
+        )
     return "\n".join(lines)
 
 
@@ -1810,6 +1815,22 @@ _MEETING_DAY_REFERENCE_RULE = (
     "'30/10'). Se o lead aceitou uma opção que você propôs, use o dia dessa opção. O sistema usa "
     "este campo para conferir a data — copie as palavras da conversa, não a data calculada.\n"
 )
+
+
+def _build_meeting_already_booked_block() -> str:
+    """Quando a Mãe dá meeting_scheduled=true, a marcação é gravada neste turno — a Filha tem
+    de enviar a confirmação final, não o resumo + "Posso confirmar?" que as instruções da
+    conta pedem antes de o lead aceitar (em teste real o lead ficava sem a confirmação)."""
+    return (
+        "\nMARCAÇÃO JÁ GRAVADA NESTE TURNO (prevalece sobre o passo de pedir confirmação das "
+        "instruções personalizadas):\n"
+        "O lead já aceitou o dia e o horário (ex.: 'pode confirmar', 'sim, marque'), e o sistema "
+        "grava a marcação com meeting_datetime_candidate assim que você responder. Escreva já a "
+        "mensagem de confirmação final — no formato das instruções personalizadas, se houver um — "
+        "e termine sem pedir confirmação: o lead já confirmou, e perguntar de novo faz parecer que "
+        "nada ficou marcado. Preencha meeting_datetime_candidate e meeting_day_reference com o "
+        "dia e a hora aceites.\n"
+    )
 
 
 def _get_mother_mode_conflict(context: Dict[str, Any], mother_decision: Optional[MotherDecision]) -> tuple[Optional[str], bool]:
@@ -3537,6 +3558,8 @@ def _build_child_prompt_apresentation(
             "NÃO substituas o recibo por texto verbal solto. O recibo É a resposta principal.\n"
             f"extracted_fields disponíveis: {json.dumps(_extracted_fields_apres, ensure_ascii=False)}\n"
         )
+    elif _apres_meeting_scheduled:
+        _booking_confirmation_block = _build_meeting_already_booked_block()
 
     # Bloco de seleção contextual de mídias — a filha declara explicitamente quais
     # mídias do knowledge devem ser anexadas neste turno. O decision_engine usa essa
@@ -4493,6 +4516,7 @@ def _build_child_prompt_agendamento(
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
         + _build_knowledge_reference_block(context, exclude_categories=("service_pricing_table",))
+        + (_build_meeting_already_booked_block() if _extract_meeting_scheduled_signal(mother_decision) else "")
     )
     return _sched_prompt
 

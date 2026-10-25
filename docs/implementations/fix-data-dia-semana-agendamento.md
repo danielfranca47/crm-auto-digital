@@ -114,6 +114,23 @@ Filha devolve message_text + meeting_datetime_candidate (+ novo meeting_day_refe
 | `backend-executors/app/services/decision_engine.py` | Chama o guardrail depois da Filha (pipeline normal e gestão pós-marcação); novo sinal `meeting_day_reference` nos schemas das Filhas que marcam; tabela de dias no fuso do perfil |
 | `backend-executors/tests/test_meeting_date_guard.py` | Novo: casos reais das transcrições |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `48bd050` | guardrail de data + sinal `meeting_day_reference` + tabela no fuso do perfil |
+
+**Detalhes do commit `48bd050`:**
+- `meeting_date_guard.py` — `reconcile_meeting_date()`: referência do dia (sinal da Filha, ou dia da semana/"amanhã" colado à data na mensagem; "segunda" sozinho e "até amanhã!" não contam) → data; corrige candidato (mantém hora/offset) e reescreve `dd/mm`, "dd de mês" e o dia da semana errado no texto.
+- `decision_engine.py` — `_apply_meeting_date_guard()` chamado em `compose_decision_output()` (depois de `_apply_mode_guardrails`) e em `_decide_post_meeting_management()`, antes de o `meeting_scheduler` ler `child_signals_structured`; `_MEETING_DAY_REFERENCE_RULE` nos schemas de apresentação, agendamento e gestão pós-marcação; `_calendar_lookup_table_pt(tz_name=...)`.
+- `tests/test_meeting_date_guard.py` — 17 casos (sexta→30/10, sábado→31/10, terça dita num domingo→27/10, amanhã→26/10 com dia e data errados, remarcação quinta→29/10, datas já certas não mudam, "segunda opção", data por extenso, ligação ao decision_engine).
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** a data que a IA escrevia ia direta para a agenda — "Dia: 28/10 (sexta-feira)" gravava a sessão numa quarta.
+**Agora:** antes de gravar, o sistema confere a data contra o dia que o cliente pediu (sexta, sábado, amanhã…). Se não bater, corrige a data na agenda e na mensagem que o cliente recebe — "Dia: 30/10 (sexta-feira)". Quando a IA já acertou, nada muda.
+**Para validar:** Cenários U1, P1 e P3.
+
 ### Fase 2 — Prompt: tabela mais fácil de consultar + "marcação já gravada"
 
 **Objetivo:** menos datas erradas à partida e nenhuma confirmação pedida duas vezes.
@@ -122,6 +139,12 @@ Filha devolve message_text + meeting_datetime_candidate (+ novo meeting_day_refe
 |---|---|
 | `backend-executors/app/services/decision_engine.py` | Tabela com `dd/mm` e marcas `[hoje]`/`[amanhã]`; bloco "MARCAÇÃO JÁ GRAVADA NESTE TURNO" em pré-agendamento e agendamento quando `meeting_scheduled=true` |
 | `docs/prompts_llms.md` | Reflete os blocos novos |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** quando o cliente dizia "pode confirmar" ao aceitar o horário, a marcação ficava gravada mas a IA respondia com o resumo e "Posso confirmar?" — às vezes o cliente nunca recebia a "Experiência Agendada". A tabela de dias vinha num formato (`2026-10-30 (sexta-feira)`) diferente do que a IA escreve.
+**Agora:** nesse turno a IA recebe a indicação de que a marcação já está gravada e envia logo a confirmação final no formato da conta. A tabela passa a ter as linhas como a IA as escreve (`sexta-feira, 30/10 → 2026-10-30`) e marca hoje/amanhã/depois de amanhã.
+**Para validar:** Cenário P2 (e P1, que mede se há menos correções precisas).
 
 ### Fase 3 — Validação na bancada + docs de arquitetura
 
