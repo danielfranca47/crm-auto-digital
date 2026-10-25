@@ -141,20 +141,34 @@ nível quando não está em "Padrão".
 
 ## Checks de Validação
 
+Setup usado (25/10/2026): conta de teste local (user 15, perfil 5, OpenAI gpt-4o-mini),
+com cópias de `core.db`/`crm.db` dentro da worktree e os blocos da Fase 0 da Lara copiados
+para o perfil de teste. O backend-core arrancou com SMTP vazio no processo.
+
 ### Cenário P1 — "Seguir à risca" na Fase 0 (Playground)
-- [ ] Na Lara, marcar "Seguir à risca" na orientação da Fase 0
-- [ ] Nova conversa no Playground, enviar só "olá"
+- [x] Marcar "Seguir à risca" na orientação da Fase 0 (caixa aparece, etiqueta "à risca" no bloco, `strict: true` gravado)
+- [x] Nova conversa no Playground, enviar só "olá"
 - [ ] Confirmar: a resposta apresenta a Lara e pergunta Val ou Daniel, sem frases a mais
-- [ ] Confirmar no log do executor: chamada da Filha com `temperature=0.2`
+- [x] Confirmar no log do executor: chamada da Filha com `temperature=0.2`
+- **Validado em:** 25/10/2026 (parcial). Com o card em "Padrão", a Recepção saiu com
+  `temperature=0.2`, vinda da orientação estrita. **Falhou no conteúdo:** a resposta foi
+  "Seja bem-vindo(a)! / Agradeço pelo contato. / Me conta o que você está buscando.",
+  sem apresentar a Lara nem perguntar Val ou Daniel. Igual sem "seguir à risca". A Fase 0
+  disparou (`phases_triggered=["p0"]`), então a orientação entrou no prompt. Ver Fase 3.
 
 ### Cenário P2 — Card geral em "Rígida"
-- [ ] Camada Identidade → Criatividade das respostas → Rígida → salvar
-- [ ] Recarregar a página: valor continua "Rígida"
-- [ ] Enviar mensagem no Playground: log mostra `temperature=0.2`
+- [x] Camada Identidade → Criatividade das respostas → Rígida → "Salvar Camada 1"
+- [x] Recarregar a página: valor continua "Rígida"
+- [x] Enviar mensagem no Playground: log mostra `temperature=0.2`
+- **Validado em:** 25/10/2026: `response_creativity=strict` no banco e card "Rígida" depois
+  de recarregar; log `event=llm_child_temperature route=recepcao temperature=0.2`. O valor
+  só grava no servidor com "Salvar Camada 1", como os outros campos da camada.
 
 ### Cenário P3 — "Padrão" não muda nada
-- [ ] Card em "Padrão"
-- [ ] Log mostra a chamada da Filha sem `temperature`
+- [x] Card em "Padrão" (grava `null`)
+- [x] Log mostra a chamada da Filha sem `temperature`
+- **Validado em:** 25/10/2026: turno "quanto custa a massagem relaxante?" (rota
+  apresentação, sem orientação estrita ativa) não gerou nenhum `llm_child_temperature`
 
 ### Cenário P4 — Orientação estrita num caminho não escolhido não vale
 - [x] Coberto por teste automatizado (`test_strict_orientation_in_unchosen_branch_not_active`)
