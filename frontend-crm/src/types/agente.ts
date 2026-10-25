@@ -91,6 +91,7 @@ export interface SalesFlowBlock {
   // actions
   content?: string;
   priority?: string;
+  strict?: boolean;               // orientacao: "Seguir à risca" — rótulo literal + temperatura 0.2 na resposta do turno em que dispara
   channel?: string;
   media_type?: string;
   media_item_id?: number;
@@ -269,6 +270,8 @@ export interface AgentConfig {
   timezone: string;
   custom_instructions: string;
   response_style: 'active' | 'passive';
+  /** Temperatura da resposta da IA: null = padrão do provedor; creative 0.9 · balanced 0.5 · strict 0.2. */
+  response_creativity: 'creative' | 'balanced' | 'strict' | null;
   /** Preço perguntado na qualificação: adiar para a apresentação (predefinido) ou responder com a tabela. */
   qualification_price_disclosure: 'after_qualification' | 'on_request';
 
@@ -388,6 +391,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   timezone: 'America/Sao_Paulo',
   custom_instructions: '',
   response_style: 'active',
+  response_creativity: null,
   qualification_price_disclosure: 'after_qualification',
 
   origin_inbound_opener: '',

@@ -19,16 +19,15 @@
 
 **Prioridade: MÉDIA**
 
-`_build_payload()` (`backend-executors/app/services/llm_service.py:154`)
-nunca envia `temperature` — fica no default do provider (tipicamente alto).
-Para as chamadas que geram JSON estruturado e precisam de consistência —
-`generate_mother_route()` (rota da IA Mãe) e `generate_child_result()`
-(resposta da Filha, incluindo extração de campo/sinais) — isso é fonte de
-variância desnecessária: mesma situação, respostas de rota/campo
-inconsistentes entre turnos.
+A Filha já tem temperatura configurável (`ai_profile.response_creativity` e
+orientação "seguir à risca", ver
+[`llm-architecture.md`](../architecture/llm-architecture.md#temperatura-da-filha)).
+Falta a Mãe: `generate_mother_route()` continua sem `temperature` (padrão do
+provider, tipicamente alto), fonte de variância desnecessária na rota
+(mesma situação, rotas diferentes entre turnos).
 
-**O que muda:** adicionar `temperature` baixa (ex.: 0.2) ao payload dessas
-duas chamadas. `generate_conflict_message()` e os geradores de texto livre
+**O que muda:** passar `temperature` baixa (ex.: 0.2) em
+`generate_mother_route()` — `_build_payload(..., temperature=)` já existe. `generate_conflict_message()` e os geradores de texto livre
 (lembrete de agendamento/título) não entram — texto solto continua se
 beneficiando de uma temperature moderada.
 

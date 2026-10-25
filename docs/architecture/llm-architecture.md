@@ -317,6 +317,30 @@ Visibilidade admin: `docs/architecture/admin-agents-contract.md` documenta o bad
 "OpenRouter" exibido em `frontend-admin/src/pages/AdminAgents.tsx` quando um usuário está
 fora do padrão.
 
+### Temperatura da Filha
+
+Só a chamada da Filha (`generate_child_result`) envia `temperature`. A Mãe, o
+`field_extractor`, a mensagem de conflito e os geradores do meeting scheduler continuam sem
+o campo (padrão do provedor); temperatura fixa baixa para a Mãe é o item M1 de
+`docs/plans/motor-llm-otimizacoes.md`.
+
+`llm_service.resolve_child_temperature(ai_profile, override)` decide, por chamada:
+
+| Origem | Temperatura |
+|---|---|
+| `override` (orientação "seguir à risca" ativa no turno, ver [`sales-flow.md`](sales-flow.md)) | `STRICT_ORIENTATION_TEMPERATURE` = 0.2 |
+| `ai_profile.response_creativity = "creative"` / `"balanced"` / `"strict"` | 0.9 / 0.5 / 0.2 |
+| ausente / `null` / valor desconhecido ("Padrão") | não envia `temperature` |
+
+`_build_payload(..., temperature=)` põe o campo na raiz do payload nos dois provedores
+(Responses API e Chat Completions) só quando não é `None`. Cada chamada com temperatura
+gera o log `event=llm_child_temperature route=<rota> temperature=<valor>`.
+
+`response_creativity` é campo do AI Profile (`backend-core`: coluna nullable, enum
+`ResponseCreativity`), editado no card "Criatividade das respostas" da Camada Identidade
+(`CamadaIdentidade.tsx`, `ModalCriatividade`). Chega ao executor dentro de
+`context["ai_profile"]` sem passar por `enrich_context_bundle()`, como `llm_provider`.
+
 ---
 
 ## Retry com backoff nas chamadas à LLM

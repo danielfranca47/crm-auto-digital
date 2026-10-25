@@ -106,6 +106,7 @@ _SYSTEM_DEFAULTS: Dict[str, Any] = {
     "qualification_price_disclosure": "after_qualification",
     "followup_max_attempts": None,
     "llm_provider": "openai",
+    "response_creativity": None,
 }
 
 
@@ -240,6 +241,7 @@ async def admin_agents_users(
             "cold_outreach_channel": p.get("cold_outreach_channel"),
             "llm_provider": p.get("llm_provider"),
             "llm_provider_model": p.get("llm_provider_model"),
+            "response_creativity": p.get("response_creativity"),
             "qualification_score_threshold": p.get("qualification_score_threshold"),
             "qualification_required_fields": p.get("qualification_required_fields"),
             "qualification_fields": p.get("qualification_fields"),
@@ -307,6 +309,7 @@ async def admin_agents_user_detail(
             "cold_outreach_channel": profile.get("cold_outreach_channel"),
             "llm_provider": profile.get("llm_provider"),
             "llm_provider_model": profile.get("llm_provider_model"),
+            "response_creativity": profile.get("response_creativity"),
             "qualification_score_threshold": profile.get("qualification_score_threshold"),
             "qualification_required_fields": profile.get("qualification_required_fields"),
             "qualification_fields": profile.get("qualification_fields"),
