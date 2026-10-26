@@ -1,6 +1,6 @@
 ---
 name: documentacao-projeto
-description: Documentação do projeto — três casos. (1) Escrever ou editar um documento que um agente lê: uma skill, o CLAUDE.md, um doc apontado por eles. (2) Registar o porquê de uma decisão de arquitetura ou de produto. (3) Auditar o CLAUDE.md (nota, problemas, alterações propostas).
+description: Skill de escrita de skills e docs deste projeto — carregar logo, antes de fazer perguntas ao utilizador, em três casos. (1) Criar, escrever ou editar uma skill, um comando slash, o CLAUDE.md ou um doc que eles apontam. (2) Registar o porquê de uma decisão de arquitetura ou de produto. (3) Auditar ou rever o CLAUDE.md (nota, problemas, alterações propostas).
 ---
 
 # Documentação do projeto

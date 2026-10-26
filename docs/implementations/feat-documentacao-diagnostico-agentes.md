@@ -190,6 +190,13 @@ o código atual e com a tabela "prometido na página vs. código".
 **Objetivo:** guia em `docs/ops/`, 2 linhas no CLAUDE.md, skills de agente a apontar para os docs (ficam
 só critérios e cenários) e descrições das 4 skills encurtadas.
 
+### Fase 7 — Descrição da `documentacao-projeto` dispara com "estou a escrever uma skill"
+
+**Objetivo:** o teste P3 mostrou que "estou a escrever uma skill nova" não carregava a skill (0 de 1 na
+primeira ronda, 1 de 3 com um gatilho mais explícito): o modelo fazia logo perguntas e a
+`anthropic-skills:skill-creator` concorre pelo mesmo pedido. A descrição passa a começar por "Skill de
+escrita de skills e docs deste projeto — carregar logo, antes de fazer perguntas ao utilizador".
+
 ---
 
 ## Checks de Validação
@@ -207,10 +214,13 @@ só critérios e cenários) e descrições das 4 skills encurtadas.
   da empresa Sensi Vitae aparece como exemplo (já presente noutros docs versionados)
 
 ### Cenário P3 — `documentacao-projeto` abre a parte certa
-- [ ] "regista esta decisão" → registar-decisoes
-- [ ] "audita o CLAUDE.md" → auditar-claude-md
-- [ ] "estou a escrever uma skill" → escrever-para-agentes
-- [ ] As 3 skills de terceiros já não aparecem na lista
+- [x] "regista esta decisão" → registar-decisoes
+- [x] "audita o CLAUDE.md" → auditar-claude-md
+- [ ] "estou a escrever uma skill" → escrever-para-agentes (3 conversas novas, as 3 têm de carregar)
+- [x] As 3 skills de terceiros já não aparecem na lista
+- **Validado em:** 26/10/2026 — `claude -p --permission-mode plan` na worktree, 2 rondas: frases 1 e 2 abriram a
+  referência certa nas duas (a auditoria também lê escrever-para-agentes, como o router manda); frase 3 falhou →
+  Fase 7. A ronda da Fase 7 parou no limite de uso (429), por correr às 21:20
 
 ### Cenário P4 — Docs dos agentes
 - [x] `git grep` sem "campos mínimos" e sem "consultivo" fora de contexto
@@ -226,6 +236,9 @@ só critérios e cenários) e descrições das 4 skills encurtadas.
 - [ ] Conversa nova com "o agente da conta X não atende como nestas conversas…" aciona
       `diagnosticar-agente`, que encaminha para a skill do agente, e esta aponta para
       `docs/architecture/agentes/…`
+- 26/10/2026, parcial: a frase com conta e número fictícios carregou `diagnosticar-agente`, que parou a pedir os
+  dados reais (correto). Os elos seguintes (passo 4 da `diagnosticar-agente` → skill do agente → link para
+  `docs/architecture/agentes/`) só foram conferidos no texto; falta correr com uma conta e um número reais
 
 ### Cenário P6 — Portão da fila
 - [x] `python scripts/fila/categorias_que_sobem.py` → `seguranca_agente` + `instrucoes_ia` (o prompt do
