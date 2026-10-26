@@ -66,7 +66,7 @@ def _weekday_key(raw: str) -> Optional[int]:
     return _WEEKDAY_BY_KEY.get(norm)
 
 
-def local_today(tz_name: Optional[str], now_utc: Optional[datetime] = None) -> date:
+def local_now(tz_name: Optional[str], now_utc: Optional[datetime] = None) -> datetime:
     now = now_utc or datetime.now(timezone.utc)
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
@@ -74,7 +74,11 @@ def local_today(tz_name: Optional[str], now_utc: Optional[datetime] = None) -> d
         tz = ZoneInfo(str(tz_name)) if tz_name else timezone.utc
     except Exception:
         tz = timezone.utc
-    return now.astimezone(tz).date()
+    return now.astimezone(tz)
+
+
+def local_today(tz_name: Optional[str], now_utc: Optional[datetime] = None) -> date:
+    return local_now(tz_name, now_utc).date()
 
 
 def _infer_year(day: int, month: int, today: date) -> Optional[date]:
