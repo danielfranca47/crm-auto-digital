@@ -152,6 +152,11 @@ google_events = list_events(user_id, start, end)   # None → sem Google, nada a
                                                     # GoogleCalendarError → propaga, nada apagado
 
 for event in google_events:
+    # marcação do CRM enviada por gcal_push (user_id NULL, dono via leads.user_id):
+    # não é reimportada; uma cópia source='google' antiga com o mesmo id é apagada
+    if SELECT a JOIN leads l WHERE a.google_event_id=? AND l.user_id=?:
+        DELETE WHERE source='google' AND user_id=? AND google_event_id=?
+        continue
     existing = SELECT WHERE google_event_id=? AND user_id=?
     if existing:
         UPDATE title, start_at, end_at, description WHERE id=existing.id

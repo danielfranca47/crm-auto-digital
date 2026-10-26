@@ -57,6 +57,21 @@ def sync_user_google_events(user_id: int, start: str, end: str, timeout: float =
                 continue
             synced_ids.append(gid)
 
+            # Marcação do CRM que o próprio CRM enviou para o Google (gcal_push): fica com
+            # user_id NULL (o dono vem do lead), por isso a procura abaixo não a encontrava e
+            # importava uma cópia sem lead — que contava como ocupado contra o próprio cliente.
+            crm_owned = cur.execute(
+                "SELECT a.id FROM appointments a JOIN leads l ON a.lead_id = l.id"
+                " WHERE a.google_event_id = ? AND l.user_id = ?",
+                (gid, user_id),
+            ).fetchone()
+            if crm_owned:
+                cur.execute(
+                    "DELETE FROM appointments WHERE source = 'google' AND user_id = ? AND google_event_id = ?",
+                    (user_id, gid),
+                )
+                continue
+
             start_dt = _to_utc_iso(event.get("start", {}).get("dateTime")) or event.get("start", {}).get("date") or ""
             end_dt = _to_utc_iso(event.get("end", {}).get("dateTime")) or event.get("end", {}).get("date") or start_dt
             title = event.get("summary") or "Evento Google"
