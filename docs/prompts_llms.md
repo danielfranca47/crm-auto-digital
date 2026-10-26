@@ -368,6 +368,7 @@ DESEJÁVEIS — capturar se surgir oportunidade natural:
     "handoff_requested": false,
     "meeting_proposed": false,
     "meeting_datetime_candidate": null,
+    "meeting_day_reference": null,
     "offer_presented": false,
     "checkout_sent": false,
     "presentation_variant": "sales|scheduler",
@@ -401,6 +402,7 @@ DESEJÁVEIS — capturar se surgir oportunidade natural:
 | `warming_injection` (scheduler) | `template_key=hybrid_scheduler` + qualificação recém-aprovada + `presentation_variant=scheduler` | Pós-qualificação para serviços presenciais: confirmar disponibilidade e valor |
 | `commercial_injection` | `template_key=hybrid_scheduler` + qualificação recém-aprovada + `appointment_mode=commercial` | Modo comercial: apresentar serviços, tratar objeções, fechar compromisso ANTES de agendar (veja 1.4.2) |
 | `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | "Modo recibo": emite resumo estruturado da reserva usando `extracted_fields` |
+| `MARCAÇÃO JÁ GRAVADA NESTE TURNO` | `meeting_scheduled=True` + `presentation_variant≠scheduler` | Confirmação final no formato das instruções da conta, sem voltar a pedir confirmação (ver 1.4.4) |
 | `standard_knowledge_block` | quando NÃO há `commercial_injection` + knowledge não vazio | Injeção dos itens de knowledge com instruções de uso por categoria |
 | `_media_intro_note_apres` | `knowledge_media` não vazio | Suprime descrição — mídia enviada automaticamente |
 
@@ -413,7 +415,7 @@ DESEJÁVEIS — capturar se surgir oportunidade natural:
 - Se `media_url` presente em offer_pack: mídia já foi enviada — NÃO mencionar "veja a imagem/vídeo"
 
 **Regras do modo `scheduler`:**
-- Sempre preencher `meeting_proposed` e `meeting_datetime_candidate`
+- Sempre preencher `meeting_proposed` e `meeting_datetime_candidate` (+ `meeting_day_reference`, ver 1.4.4)
 - ISO naive no timezone de `ai_profile.timezone`
 - Confirmação final inclui `meeting_scheduled` nos signals
 
@@ -490,6 +492,33 @@ preços e objeções vêm do bloco único "BASE DE CONHECIMENTO DO NEGÓCIO"
 | Nota de mídia por categoria de referência | categoria em `knowledge_media` | "Conteúdo disponível em mídia — escreva só uma frase curta de introdução"; o texto sai do bloco de referência |
 
 ---
+
+#### 1.4.4 Datas da marcação — `tabela_de_dias`, `meeting_day_reference` e confirmação final
+
+Vale para as Filhas que propõem/gravam horário: apresentação, agendamento
+(`_build_child_prompt_agendamento`) e gestão pós-marcação (`_build_child_prompt_meeting_management`);
+a pré-agendamento recebe só a tabela.
+
+- **`tabela_de_dias`** (`_calendar_lookup_table_pt(tz_name=ai_profile.timezone)`): hoje + 14 dias
+  no fuso do perfil, uma linha por dia no formato `sexta-feira, 30/10 → 2026-10-30`, com
+  `[hoje]` / `[amanhã]` / `[depois de amanhã]` nas três primeiras. Começa pelo dia da semana e
+  traz o `dd/mm` pronto porque é a ordem em que a LLM escreve a data na mensagem.
+- **`meeting_day_reference`** (`_MEETING_DAY_REFERENCE_RULE`): junto de `meeting_datetime_candidate`,
+  a Filha copia as palavras da conversa que identificam o dia ("amanhã", "sexta-feira", "30/10").
+  Não muda o comportamento da LLM — serve ao guardrail de código abaixo.
+- **Guardrail depois da Filha** (`_apply_meeting_date_guard` → `meeting_date_guard.reconcile_meeting_date`):
+  converte a referência em data (dia da semana → a data do candidato se já cair nesse dia, senão a
+  próxima ocorrência; "amanhã" → hoje+1) e, se não bater com o candidato, corrige o candidato
+  (mantém a hora) e a data/dia escritos em `message_text`. Sem o sinal, usa o dia da semana escrito
+  junto da data na mensagem. Um `dd/mm` no sinal só vale se o lead o escreveu; no turno de
+  confirmação, um dia nunca falado na conversa é trocado pelo último dia falado. Rasto em
+  `decision_trace.meeting_date_guard`; log `event=meeting_date_corrected`.
+- **`MARCAÇÃO JÁ GRAVADA NESTE TURNO`** (`_build_meeting_already_booked_block`): com
+  `meeting_scheduled=True` e o lead já dentro da fase (não `_compute_is_phase_entry`), entra no
+  fim do prompt de agendamento e no da apresentação (quando não é `scheduler`, que tem o "modo
+  recibo"): a marcação é gravada neste turno, por isso a Filha envia a confirmação final no
+  formato das instruções da conta, sem voltar a pedir confirmação. Na entrada da fase não entra
+  (o `meeting_scheduler` adia a criação — gate M3).
 
 ### 1.5 `_build_child_prompt_follow_up()` — Filha Follow-up
 
@@ -858,6 +887,7 @@ Blocos que só aparecem no prompt quando certas condições são atendidas:
 | `WARMING scheduler` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `presentation_variant=scheduler` | apresentation |
 | `COMMERCIAL INJECTION` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `appointment_mode=commercial` | apresentation |
 | `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | apresentation |
+| `MARCAÇÃO JÁ GRAVADA NESTE TURNO` (`_build_meeting_already_booked_block`) | `meeting_scheduled=True` (na apresentação, só quando `presentation_variant≠scheduler`) | apresentation, agendamento |
 | `standard_knowledge_block` | narrativas com conteúdo novo, nota de pagamento do modo comercial ou categoria de referência com mídia | apresentation |
 | `followup_knowledge_block` | `social_proof` ainda não mostrada | followup |
 | `_build_knowledge_reference_block` ("BASE DE CONHECIMENTO DO NEGÓCIO" + "COMO USAR") | `context["knowledge_reference"]` não vazio (menos as categorias excluídas pela fase — ver `knowledge-base.md`) | qualification (sem preço/oferta), apresentation (sem categorias com mídia), followup, closing, pre-agendamento, agendamento (sem a tabela, já em "SERVIÇOS E DURAÇÕES") — sempre ao lado de `business_info` |
