@@ -15,7 +15,7 @@
 | # | Problema | Onde está a causa | Destino |
 |---|---|---|---|
 | A | Sessão que começa quando outra acaba = "conflito"; 409 não tratado → 502 no Playground e queda do worker no WhatsApp real | Código: comparação de datas como texto em 6 sítios do backend-crm; `handle_meeting_scheduled` sem tratamento do 409 | ✅ Feito e graduado em 26/10/2026 (`fix-conflito-horario-comparado-como-texto`) — ver `docs/architecture/agenda.md` |
-| A2 | Margem entre sessões (preparar a sala) | Não existe | [`feat-margem-entre-sessoes.md`](../implementations/feat-margem-entre-sessoes.md) — depois de A |
+| A2 | Margem entre sessões (preparar a sala) | Não existe | ✅ Feito e graduado em 26/10/2026 (`feat-margem-entre-sessoes`) — ver `docs/architecture/agenda.md`, "Intervalo entre sessões". Sensi Vitae em produção com 30 min. Sobras em `agentes-agenda-melhorias-futuras.md` M18–M19 |
 | B | Na confirmação grava uma proposta antiga | Código: a Filha escolhe o horário sozinha; nada guarda a última proposta; a proteção de datas só confere "dia já falado" | ✅ Feito e graduado em 26/10/2026 (`fix-confirmacao-grava-proposta-antiga`) — ver `docs/architecture/agenda.md`, "Turno da confirmação". Entrou antes de W1 (decisão do utilizador): W1 resolve o conflito em `_build_child_prompt_agendamento` ao juntar. Sobras em `agentes-agenda-melhorias-futuras.md` M11–M13 |
 | C | Assume o tipo de massagem, "relaxante só 60 min", ignora perguntas múltiplas | Metade configuração (c14, abaixo); metade código: pré-agendamento/agendamento não leem o Fluxo de Venda (M14) e o roteiro fixo do pré-agendamento compete com as instruções | c14 + [`fix-agendamento-le-fluxo-de-venda.md`](../implementations/fix-agendamento-le-fluxo-de-venda.md) |
 | D | "Boa tarde" às 10h55 | Código: nenhum prompt recebe a hora local; os exemplos fixos da receção dizem todos "Boa tarde!" | ✅ Feito e graduado em 26/10/2026 (`fix-saudacao-hora-local`) — ver `docs/architecture/llm-architecture.md`, "Filha Recepção". Sobras em `agentes-agenda-melhorias-futuras.md` M16–M17. O paliativo da c14 deixa de ser necessário |
@@ -177,7 +177,7 @@ p-micas, p-varias-perguntas, p-ruben; regressão p-ricardo, p-cedo-tarde, pos-ma
 Toca instruções da IA: só se junta a main com o meu "sim".
 ```
 
-### P5 — A2: margem entre sessões
+### P5 — A2: margem entre sessões (✅ feito em 26/10/2026 — prompt mantido só como registo)
 ```
 Lê CLAUDE.md, docs/implementations/_guia-documentar-implementacao.md e
 docs/implementations/feat-margem-entre-sessoes.md. Depende de:
