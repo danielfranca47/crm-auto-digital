@@ -113,7 +113,7 @@ Fora do repositório: remover as 3 skills globais de terceiros.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(este commit)_ | skill `documentacao-projeto` (router + 3 referências + créditos) |
+| 1 | `fad3b6f` | skill `documentacao-projeto` (router + 3 referências + créditos) |
 
 **Detalhes:**
 - `SKILL.md` — router de 3 casos; uma única descrição sempre carregada em vez de 3
@@ -142,7 +142,7 @@ projeto.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(este commit)_ | os 3 docs movidos para `docs/architecture/agentes/`; Agente 01 reescrito |
+| 1 | `e20f793` | os 3 docs movidos para `docs/architecture/agentes/`; Agente 01 reescrito |
 
 **Detalhes:**
 - `git mv` de `docs/agente-1/2/3-*.md` para `docs/architecture/agentes/agente-01-sdr-alto-ticket.md`,
@@ -163,7 +163,7 @@ Hash da Fase 3: `e20f793`.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(este commit)_ | Agente 02 reescrito; `pipeline-phases.md` corrigido (Filha de closing) |
+| 1 | `96e9dd1` | Agente 02 reescrito; `pipeline-phases.md` corrigido (Filha de closing) |
 
 **Detalhes:**
 - Agente 02: de 452 para ~90 linhas. Corrigido face ao doc antigo: o bot **continua ativo** em closing
@@ -228,8 +228,16 @@ só critérios e cenários) e descrições das 4 skills encurtadas.
       `docs/architecture/agentes/…`
 
 ### Cenário P6 — Portão da fila
-- [ ] `python scripts/fila/categorias_que_sobem.py` → `seguranca_agente` + `instrucoes_ia` (o prompt do
+- [x] `python scripts/fila/categorias_que_sobem.py` → `seguranca_agente` + `instrucoes_ia` (o prompt do
       cliente simulado em `simular.py`) — ambas esperadas → merge com o "sim"
+- **Validado em:** 26/10/2026 — "SOBE — 2 categoria(s) tocada(s) em 50 ficheiro(s)", só as duas esperadas
+
+### Antes do merge (pasta principal)
+
+A pasta principal tem cópias locais não versionadas de `.claude/skills/` (as 4 skills de diagnóstico) e
+`.claude/commands/`. O `git merge` recusa escrever ficheiros versionados por cima de ficheiros não rastreados:
+mover essas cópias para uma pasta de backup fora do repositório antes do merge (o conteúdo está na branch) e
+apagá-la depois de confirmar o merge.
 
 ---
 
@@ -239,7 +247,7 @@ Hash da Fase 4: `96e9dd1`.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(este commit)_ | Agente 03 reescrito; `docs/architecture/agentes/README.md` (índice + comparação) |
+| 1 | `dface8e` | Agente 03 reescrito; `docs/architecture/agentes/README.md` (índice + comparação) |
 
 **Detalhes:**
 - Agente 03: de 529 para ~110 linhas; secção "Agenda" com o que o código decide (horário livre, expediente,
@@ -254,7 +262,7 @@ Hash da Fase 5: `dface8e`.
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(este commit)_ | guia do time, CLAUDE.md, skills ligadas aos docs |
+| 1 | `b101791` | guia do time, CLAUDE.md, skills ligadas aos docs |
 
 **Detalhes:**
 - `docs/ops/diagnostico-agentes.md` (novo) — guia não técnico + secção "Porquê está assim"; linha em `docs/ops/README.md`
