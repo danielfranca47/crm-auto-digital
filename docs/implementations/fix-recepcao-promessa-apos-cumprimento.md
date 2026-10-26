@@ -1,7 +1,7 @@
 # Receção acrescenta uma promessa depois do cumprimento ("Vou passar as informações…")
 
 **Branch:** `worktree-fix+recepcao-promessa-apos-cumprimento`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (26/10/2026)
 **Autonomia:** manual
 **Origem:** testes de produção de `fix-saudacao-hora-local` (26/10/2026, 21h40–22h00, conta Sensi Vitae).
 
@@ -126,10 +126,13 @@ sozinho continua a receber "Como posso ajudar?". As instruções da IA não muda
   Visto de passagem, fora deste item: em p-micas a 2.ª decisão abriu com "Bom dia!" às 22h.
 
 ### Cenário P1 — Playground de produção (só depois do "sim" para o merge e do deploy)
-- [ ] 1.º turno 3x em paralelo com "Gostaria de mais informações sobre as Massagens": nenhuma promessa depois do
+- [x] 1.º turno 3x em paralelo com "Gostaria de mais informações sobre as Massagens": nenhuma promessa depois do
   cumprimento
-- [ ] 1.º turno 3x em paralelo com "Olá, queria saber os preços": nenhuma promessa depois do cumprimento
-- [ ] 1.º turno 3x em paralelo com "Olá": continua "Como posso ajudar?"
+- [x] 1.º turno 3x em paralelo com "Olá, queria saber os preços": nenhuma promessa depois do cumprimento
+- [x] 1.º turno 3x em paralelo com "Olá": continua "Como posso ajudar?"
+- **Validado em:** 26/10/2026, 22h35, depois do deploy de `4eed6a6`. 6/6 com pedido: "Boa noite! Sou a Lara, do
+  Sensi Vitae." (uma vez com "Estou aqui para ajudar."), seguido da 2.ª decisão "Posso enviar a nossa tabela de
+  preços?". Nenhuma promessa e nenhuma pergunta antecipada pela receção. 3/3 "Olá" → "…Como posso ajudar?".
 
 ---
 
