@@ -208,19 +208,32 @@ campo "dados exigidos" no AI profile ficam fora (ver Ajustes Possíveis).
 - **Validado em:** 26/10/2026 — local, worktree
 
 ### Cenário P2 — bancada local: aceita a 2.ª proposta (Fase 1)
-- [ ] Setup: bancada `.claude/agentes/sensi-vitae` com o código desta branch no backend-executors
-- [ ] `python simular.py p-aceita-2a B1` → gravado o horário da 2.ª proposta
-- [ ] `python simular.py p-cedo-tarde B1` → gravado sexta 11h com a Val
+- [x] Setup: bancada `.claude/agentes/sensi-vitae` com o código desta branch no backend-executors
+- [x] `python simular.py p-aceita-2a B1` → gravado o horário da 2.ª proposta
+- **Validado em:** 26/10/2026 — `tentativas/20261026-1425-B1-p-aceita-2a.md`: 1.ª proposta quinta
+  18h30 recusada, 2.ª sexta 18h30 com o Daniel aceite com "Pode ser sim, marca aí!" → gravado sexta
+  30/10 18h30 (rota apresentação).
+- [x] `python simular.py p-cedo-tarde B1` → gravado sexta 11h com a Val
+- **Validado em:** 26/10/2026 — `tentativas/20261026-1428-B1-p-cedo-tarde.md`: quinta 18h30
+  recusada, sexta 11h com a Val aceite → gravado sexta 30/10 11h.
 
 ### Cenário P3 — bancada local: confirmação em pré-agendamento grava (Fase 1)
-- [ ] `python simular.py p-val-17h B1` → evento agenda `created` no turno da confirmação; nunca
+- [x] `python simular.py p-val-17h B1` → evento agenda `created` no turno da confirmação; nunca
   "Experiência Agendada" sem evento
+- **Validado em:** 26/10/2026 — `tentativas/20261026-1432-B1-p-val-17h.md`: "Pode ser às 16h, sim"
+  em pré-agendamento → gravado quinta 29/10 16h (antes: nada gravado). A mensagem final saiu como
+  resumo ("Fica então quinta-feira, 29/10, às 16h… com a Val") em vez do formato "Experiência
+  Agendada" — marcação certa, formato da conta não seguido nesta rota.
 
 ### Cenário P4 — bancada local: dados em falta (Fase 2)
 - [ ] `python simular.py p-fora-horario B2` → pergunta tipo/duração antes de gravar
 
 ### Cenário P5 — regressão
-- [ ] `python simular.py p-micas B1` e `python simular.py p-ricardo B1` → gravam no turno certo
+- [x] `python simular.py p-micas B1` e `python simular.py p-ricardo B1` → gravam no turno certo
+- **Validado em:** 26/10/2026 — `20261026-1453-B1-p-micas.md` (quarta 28/10 15h, 90 min, Val) e
+  `20261026-1455-B1-p-ricardo.md` (sábado 31/10 11h, Val), ambos gravados no turno do nome.
+  Nenhum `event=meeting_confirmation_corrected/blocked` no log nas 5 corridas: a Filha seguiu o
+  horário aceite dado no bloco.
 
 ### Cenário C1 — produção (`--prod`)
 - [ ] Antes: confirmar no Railway que o deploy do backend-executors **e** do worker passou
