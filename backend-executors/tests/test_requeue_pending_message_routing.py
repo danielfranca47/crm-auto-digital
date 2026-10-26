@@ -142,3 +142,62 @@ def test_recepcao_question_text_does_not_replace_greeting(monkeypatch):
     assert decision.system_actions == [
         {"type": "requeue_pending_message", "message_text": "quanto custa a massagem relaxante de 1h?"}
     ]
+
+
+def test_recepcao_promise_after_greeting_is_dropped_when_request_is_pending(monkeypatch):
+    """Lead fez um pedido sem cumprimentar: a Filha anunciou "Vou passar as informações…". O
+    pedido segue para a 2.ª decisão, por isso a promessa sai e fica só o cumprimento."""
+    decision = _decide_with_child(
+        monkeypatch,
+        '{"lead_already_answered":null,"message_text":"Boa noite! Sou a Lara, do Sensi Vitae. '
+        'Vou passar as informações sobre as massagens para você.","confidence":0.95,'
+        '"pending_commercial_text":"Gostaria de mais informações sobre as Massagens"}',
+        "Gostaria de mais informações sobre as Massagens",
+    )
+    assert decision.message_text == "Boa noite! Sou a Lara, do Sensi Vitae."
+    assert (decision.decision_trace or {}).get("recepcao_promise_stripped") is True
+    assert decision.system_actions == [
+        {"type": "requeue_pending_message", "message_text": "Gostaria de mais informações sobre as Massagens"}
+    ]
+
+
+def test_recepcao_without_pending_request_keeps_message(monkeypatch):
+    decision = _decide_with_child(
+        monkeypatch,
+        '{"lead_already_answered":null,"message_text":"Boa noite! Sou a Lara, do Sensi Vitae. Como posso ajudar?",'
+        '"confidence":0.95,"pending_commercial_text":null}',
+        "Olá",
+    )
+    assert decision.message_text == "Boa noite! Sou a Lara, do Sensi Vitae. Como posso ajudar?"
+    assert "recepcao_promise_stripped" not in (decision.decision_trace or {})
+
+
+def test_recepcao_only_promise_falls_back_to_greeting(monkeypatch):
+    decision = _decide_with_child(
+        monkeypatch,
+        '{"lead_already_answered":null,"message_text":"Vou enviar a nossa tabela de preços.",'
+        '"confidence":0.95,"pending_commercial_text":"queria saber os preços"}',
+        "queria saber os preços",
+    )
+    assert decision.message_text in ("Bom dia!", "Boa tarde!", "Boa noite!")
+
+
+def test_recepcao_owner_question_survives_promise_guardrail(monkeypatch):
+    """A pergunta pedida pelas instruções da Fase 0 não é promessa: fica."""
+    decision = _decide_with_child(
+        monkeypatch,
+        '{"lead_already_answered":null,"message_text":"Olá! Sou a Lara.\\nJá lhe envio os detalhes.\\n'
+        'Qual terapeuta prefere, Val ou Daniel?","confidence":0.95,'
+        '"pending_commercial_text":"queria marcar uma massagem"}',
+        "olá, queria marcar uma massagem",
+    )
+    assert decision.message_text == "Olá! Sou a Lara.\nQual terapeuta prefere, Val ou Daniel?"
+
+
+def test_drop_promise_sentences_variants():
+    f = decision_engine._drop_promise_sentences
+    assert f("Boa noite! Vou ajudar com as informações que precisa.") == "Boa noite!"
+    assert f("Bom dia! Estou aqui para ajudar.") == "Bom dia! Estou aqui para ajudar."
+    assert f("¡Hola! Te paso la información enseguida.") == "¡Hola!"
+    assert f("Hi! I'll send you our price list.") == "Hi!"
+    assert f("Vou já ajudar.") == ""

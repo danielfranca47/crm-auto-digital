@@ -1054,6 +1054,34 @@ def _drop_trailing_question(text: str) -> str:
     return stripped or text
 
 
+# Frase que começa por um compromisso na 1.ª pessoa ("Vou passar as informações…", "Já lhe
+# envio…", "Let me check…"). Português, espanhol e inglês: as contas não são todas pt.
+_PROMISE_SENTENCE_RE = re.compile(
+    r"^(?:eu\s+|yo\s+|i\s+)?(?:vou|irei|iremos|vamos|j[áa]\s+(?:lhe|te|vos)|deix[ae][- ]me|deixa\s+eu|"
+    r"aguarde|um\s+momento|em\s+breve|voy|te\s+paso|le\s+paso|d[ée]jame|enseguida|"
+    r"i'll|i\s+will|let\s+me|we'll|we\s+will)\b",
+    re.IGNORECASE,
+)
+_SENTENCE_SPLIT_RE = re.compile(r"((?<=[.!?])[ \t]+|\n+)")
+
+
+def _drop_promise_sentences(text: str) -> str:
+    """Remove as frases de promessa da mensagem da Recepção. Usada quando há
+    `pending_commercial_text`: o pedido do lead é respondido pela mensagem seguinte (2.ª
+    decisão), e um "Vou passar as informações…" aqui fica uma promessa que essa mensagem
+    contradiz. Mantém os separadores originais; devolve "" se só houver promessas."""
+    parts = _SENTENCE_SPLIT_RE.split(text or "")
+    kept: list[str] = []
+    for i in range(0, len(parts), 2):
+        sentence = parts[i]
+        if not sentence.strip() or _PROMISE_SENTENCE_RE.match(sentence.strip()):
+            continue
+        if kept:
+            kept.append(parts[i - 1])
+        kept.append(sentence)
+    return "".join(kept).strip()
+
+
 def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
     """Converte as prompt_injections do sistema de fases num bloco de texto para o prompt LLM."""
     injections = phases_result.get("prompt_injections") or []
@@ -6078,6 +6106,13 @@ def compose_decision_output(
             decision.message_text = _drop_trailing_question(decision.message_text)
         _pending_text = str(getattr(child_result, "pending_commercial_text", None) or "").strip()
         if _pending_text:
+            # Guardrail: a regra "não prometer" do prompt falha com frequência (o modelo anuncia
+            # o que a 2.ª decisão vai fazer). A promessa é cortada aqui; fica o cumprimento.
+            _without_promise = _drop_promise_sentences(decision.message_text)
+            if _without_promise != (decision.message_text or "").strip():
+                decision.message_text = _without_promise or f"{_local_greeting(ai_profile)}!"
+                if isinstance(decision.decision_trace, dict):
+                    decision.decision_trace["recepcao_promise_stripped"] = True
             _sys = list(decision.system_actions or [])
             _sys.append({"type": "requeue_pending_message", "message_text": _pending_text})
             decision.system_actions = _sys
