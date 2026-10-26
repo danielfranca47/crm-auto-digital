@@ -126,3 +126,19 @@ def test_drop_trailing_question_keeps_text_when_only_question():
     assert decision_engine._drop_trailing_question("Val ou Daniel?") == "Val ou Daniel?"
     assert decision_engine._drop_trailing_question("Olá! Sou a Ana.\nRita ou Paulo?") == "Olá! Sou a Ana."
     assert decision_engine._drop_trailing_question("Olá! Sou a Ana.") == "Olá! Sou a Ana."
+
+
+def test_recepcao_question_text_does_not_replace_greeting(monkeypatch):
+    """A Filha Recepção pôs uma pergunta do roteiro em question_text (should_ask=true): a
+    resposta continua a ser o cumprimento de message_text, e o pedido segue reenfileirado."""
+    decision = _decide_with_child(
+        monkeypatch,
+        '{"lead_already_answered":null,"message_text":"Bom dia! Sou a Lara, do Sensi Vitae.",'
+        '"should_ask":true,"question_text":"Posso enviar a nossa tabela de preços?","confidence":0.95,'
+        '"pending_commercial_text":"quanto custa a massagem relaxante de 1h?"}',
+        "Bom dia, quanto custa a massagem relaxante de 1h?",
+    )
+    assert decision.message_text == "Bom dia! Sou a Lara, do Sensi Vitae."
+    assert decision.system_actions == [
+        {"type": "requeue_pending_message", "message_text": "quanto custa a massagem relaxante de 1h?"}
+    ]

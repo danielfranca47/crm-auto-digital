@@ -5761,6 +5761,11 @@ def compose_decision_output(
         highlight = None
     next_action = "ask_qualification" if effective_route_to == "qualification" else "reply"
     question_text = str(child_result.question_text or child_result.message_text or "").strip()
+    if effective_route_to == "recepcao":
+        # A Recepção não tem pergunta de qualificação (o prompt pede question_text vazio).
+        # Quando o modelo arruma ali uma pergunta do roteiro (ex.: "Posso enviar a tabela?"),
+        # ela substituía o cumprimento; o pedido do lead já segue em pending_commercial_text.
+        question_text = str(child_result.message_text or child_result.question_text or "").strip()
     message_text = question_text
     message_field_used: Optional[str] = None
     # Fix P7: passive mode reply-first override.
