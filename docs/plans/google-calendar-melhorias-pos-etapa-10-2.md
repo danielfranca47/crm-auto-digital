@@ -105,6 +105,45 @@ Necessário para eliminar o aviso e ultrapassar o limite de ~100 utilizadores.
 
 ---
 
+### M5 — Verificar de uma vez as contas ligadas sem permissão do calendário
+
+**Prioridade: BAIXA**
+
+Origem: "Ajuste possível" na graduação de `feat-google-calendar-permissao-e-sync-automatica.md`
+(26/10/2026).
+
+O callback passou a recusar ligações sem `calendar.events`, mas contas ligadas **antes** disso
+com um token só de login só ficam sinalizadas (`users.google_last_error`, aviso em Minha Conta)
+depois do primeiro erro — uma sync, a Agenda aberta ou uma mensagem do agente de agenda.
+
+**Comportamento desejado:** uma verificação única (script ou job) que, para cada utilizador com
+`google_access_token`, consulta o scope concedido (`https://oauth2.googleapis.com/tokeninfo`) e
+grava `missing_calendar_scope` onde faltar `calendar.events`.
+
+**Área:** `backend-core` (tem os tokens e o endpoint de erro).
+
+---
+
+### M6 — Guardar as datas dos eventos do Google em UTC
+
+**Prioridade: BAIXA**
+
+Origem: "Ajuste possível" na graduação de `feat-google-calendar-permissao-e-sync-automatica.md`
+(26/10/2026).
+
+`services/google_calendar_sync.py` guarda `start_at`/`end_at` como a Google os devolve: com o
+offset do calendário (`Z`, `+00:00`, `+01:00`) ou só a data nos eventos de dia inteiro. A limpeza
+de eventos removidos compara esse texto com datas ISO em UTC, por isso, perto das bordas da
+janela sincronizada, um evento pode ser apagado e reimportado na sync seguinte. Com a sync
+automática antes do agente isto corre muito mais vezes.
+
+**Comportamento desejado:** normalizar para ISO UTC ao importar (e decidir como representar o
+dia inteiro na timezone do perfil), sem perder a regra de "Disponível" (`google_transparency`).
+
+**Área:** `backend-crm/services/google_calendar_sync.py`; ver `docs/architecture/google-calendar.md`.
+
+---
+
 ## Dependências entre os itens
 
 - **M2 e a sync automática:** a sync que corre antes do agente e ao abrir a Agenda usa

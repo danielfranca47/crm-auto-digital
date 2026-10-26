@@ -16,7 +16,7 @@ implementação.
 | `plano-sprint-YYYY-MM-DD.md` | Sprint plan gerado após análise (criado sob demanda) |
 | `kiwify-checkout-melhorias-*.md` | Melhorias identificadas após a etapa de checkout |
 | `pipeline-configurable-fields.md` | Campos configuráveis do AI Profile ainda a implementar (Etapa J/J2: campos que o ecrã grava em `offer_pack` mas o motor lê da coluna de topo) |
-| `google-calendar-melhorias-pos-etapa-10-2.md` | Google Calendar: M1 (ALTA desde 25/10/2026 — sync automática, o agente não vê eventos do Google sem clique manual), seleção de calendário, publicação OAuth, M4 (ALTA — ligação aceite sem a permissão do calendário; falhas escondidas) |
+| `google-calendar-melhorias-pos-etapa-10-2.md` | Google Calendar: M2 seleção de calendário, M3 publicação OAuth, M5 (BAIXA — verificar contas antigas sem permissão do calendário), M6 (BAIXA — datas dos eventos do Google em UTC) |
 | `plans-subscriptions.md` | Modelo de planos e assinaturas — decisões pendentes |
 | `scale-enterprise-roadmap.md` | Roadmap dos planos Scale e Enterprise |
 | `ai-profile-instrucoes-por-fase.md` | Instruções de IA por fase — a implementar |
