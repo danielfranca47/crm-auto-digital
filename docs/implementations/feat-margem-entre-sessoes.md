@@ -5,7 +5,7 @@
 **Autonomia:** manual
 **Origem:** investigação do bug A da bateria PROD07 do agente Sensi Vitae (26/10/2026) — pedido do
 utilizador para avaliar uma margem entre sessões (ex.: 15 min para a terapeuta preparar a sala).
-**Depende de:** [`fix-conflito-horario-comparado-como-texto.md`](fix-conflito-horario-comparado-como-texto.md) (mesmas funções de conflito)
+**Depende de:** `fix-conflito-horario-comparado-como-texto` (mesmas funções de conflito) — ✅ em `main` desde 26/10/2026; as consultas de ocupados já comparam com `datetime()` (ver `docs/architecture/agenda.md`)
 **Plano de execução:** [`docs/plans/plano-sprint-2026-10-26-agenda-sensi-vitae.md`](../plans/plano-sprint-2026-10-26-agenda-sensi-vitae.md) — P5
 
 ---
