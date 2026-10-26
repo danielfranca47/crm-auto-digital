@@ -89,7 +89,7 @@ no slot. **Fora de propósito:** `_check_conflict` do CRM (gravação manual pod
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | Campo `session_buffer_minutes`, aplicação em `enrich_context_bundle`, ecrãs CRM e admin, testes e docs |
+| 1 | `71df8ee` | Campo `session_buffer_minutes`, aplicação em `enrich_context_bundle`, ecrãs CRM e admin, testes e docs |
 
 ### Relatório da Fase 1 — o que mudou na prática
 
