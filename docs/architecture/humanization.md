@@ -14,7 +14,8 @@ O sistema simula o ritmo humano de conversação em três dimensões: **tempo de
 | `compute_typing_ms(text)` | Retorna duração do "Digitando…" em ms: 40ms/char, mínimo 1000ms, máximo 8000ms |
 | `split_by_punctuation(text, min_chars=15)` | Divide texto em partes por `. ! ? …`; parágrafos duplos sempre criam quebra; frases curtas (< 15 chars) são fundidas com a próxima |
 | `next_available_at(ai_profile, now_utc)` | Calcula o próximo instante dentro da janela de horário do agente; retorna `None` se já estiver dentro da janela |
-| `compute_scheduled_at(ai_profile, is_first_message)` | Ponto de entrada principal: combina delay de humanização + janela de horário em um único `datetime` (ou `None` se imediato) |
+| `apply_availability_window(ai_profile, when_utc)` | Devolve `when_utc` ou, se cair fora da janela, a próxima abertura |
+| `compute_scheduled_at(ai_profile, is_first_message)` | Ponto de entrada sem buffer: combina delay de humanização + janela de horário em um único `datetime` (ou `None` se imediato) |
 
 ---
 
@@ -36,9 +37,13 @@ Quando `min == max == 0`, não há delay (comportamento padrão).
 ```
 inbound_handler.py
   → conta mensagens do lead para detectar is_first_message
-  → compute_scheduled_at(ai_profile, is_first_message)
-      ├─ compute_reply_delay()   # sorteia int entre min e max
-      └─ next_available_at()     # desloca para fora da janela se necessário
+  → buffer desligado (multi_message_buffer_seconds = 0):
+      compute_scheduled_at(ai_profile, is_first_message)
+        ├─ compute_reply_delay()          # sorteia int entre min e max
+        └─ apply_availability_window()    # adia para a abertura se cair fora da janela
+  → buffer ligado: o delay de resposta não se aplica
+      _buffered_scheduled_at(ai_profile, buffer_secs)
+        └─ apply_availability_window(agora + buffer)
   → create_job(scheduled_at=resultado)
       └─ worker respeita scheduled_at: job só é executado quando scheduled_at <= now
 ```
@@ -96,19 +101,26 @@ for i, part in enumerate(parts):
 
 ## Janela de Horário (Disponibilidade)
 
-### Campo do AI Profile
+### Campos do AI Profile
 
-| Campo | Enum | Default |
+| Campo | Valores | Default |
 |---|---|---|
 | `availability_mode` | `"24h"` \| `"business_hours"` \| `"custom"` | `"24h"` |
+| `availability_schedule` | JSON por dia da semana — `{"mon":"09:00-18:00", …, "sat":"", "sun":""}` (dia vazio = fechado) | `null` |
 
 - **`24h`**: sem restrição de horário
 - **`business_hours`**: Seg–Sex, 09h00–18h00 no timezone do AI Profile (`timezone`)
-- **`custom`**: grade de dias e horários configurada manualmente na UI
+- **`custom`**: grade de dias e horários de `availability_schedule`, configurada em Pipeline → "Janela de horário" (`DrawerHorarioTrabalho`, `CamadaPipeline.tsx`). `custom` sem grade legível não bloqueia nada.
+
+`availability_schedule` é **só** a grade desta janela (quando o agente responde). Os
+horários em que o profissional atende — usados para propor horários de sessão — vivem
+noutro campo, `professional_availability` (ver [`agenda.md`](agenda.md)).
 
 ### Comportamento
 
-`next_available_at()` retorna `None` se o momento atual já estiver dentro da janela (sem deslocamento). Se estiver fora, retorna o próximo instante de abertura — combinado com o delay de humanização em `compute_scheduled_at()`.
+`next_available_at()` retorna `None` se o momento atual já estiver dentro da janela (sem deslocamento). Se estiver fora, retorna o próximo instante de abertura: a de hoje, se ainda não chegou; senão a do próximo dia com janela (até 7 dias à frente).
+
+A janela aplica-se a toda mensagem recebida, com ou sem buffer de absorção: `inbound_handler` passa o instante previsto de resposta por `apply_availability_window()` — via `compute_scheduled_at()` (buffer desligado, depois do delay de humanização) ou `_buffered_scheduled_at()` (buffer ligado, ver [`webhooks.md`](webhooks.md), "Multi-message buffer").
 
 O campo `followup_allowed_hours` (legado) existe no AI Profile mas não é utilizado pelo `inbound_handler`. O controle de horário é feito via `availability_mode`.
 

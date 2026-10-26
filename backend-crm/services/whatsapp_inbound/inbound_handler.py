@@ -20,7 +20,12 @@ from services.jobs_service import (
     find_pending_inbound_job,
     update_inbound_job_accumulation,
 )
-from services.humanization import compute_reply_delay, compute_scheduled_at, scheduled_at_from_delay
+from services.humanization import (
+    apply_availability_window,
+    compute_reply_delay,
+    compute_scheduled_at,
+    scheduled_at_from_delay,
+)
 from services.ai_orchestrator import (
     InboundEvent,
     build_context_bundle_from_inbound,
@@ -255,6 +260,16 @@ def _apply_media_fallback(
             _conn.commit()
 
     return {"status": "ok", "reason": f"media_fallback_{behavior}"}
+
+
+def _buffered_scheduled_at(ai_profile: Optional[Dict[str, Any]], buffer_secs: int) -> datetime:
+    """Fim do buffer de absorção, adiado para a próxima abertura se cair fora da janela de horário."""
+    base = datetime.utcnow() + timedelta(seconds=buffer_secs)
+    try:
+        return apply_availability_window(ai_profile or {}, base)
+    except Exception as exc:  # fail-safe: não bloquear webhook
+        logger.debug("humanization buffered scheduled_at error (fallback buffer): %s", exc)
+        return base
 
 
 def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -547,7 +562,7 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
                 import json as _json
                 old_payload = _json.loads(existing_job["payload"])
                 accumulated_text = old_payload.get("message_text", "") + "\n" + message_text
-                new_scheduled_at = datetime.utcnow() + timedelta(seconds=_buffer_secs)
+                new_scheduled_at = _buffered_scheduled_at(_ai_profile_for_delay, _buffer_secs)
                 update_inbound_job_accumulation(_conn_buf, existing_job["id"], accumulated_text, new_scheduled_at)
                 _conn_buf.commit()
                 logger.info(
@@ -556,7 +571,7 @@ def handle_inbound(payload: Dict[str, Any]) -> Dict[str, Any]:
                 )
                 return {"status": "buffered", "lead_id": lead_id, "job_id": existing_job["id"]}
 
-        _scheduled_at = datetime.utcnow() + timedelta(seconds=_buffer_secs)
+        _scheduled_at = _buffered_scheduled_at(_ai_profile_for_delay, _buffer_secs)
     else:
         _scheduled_at = None
         if _ai_profile_for_delay:

@@ -238,6 +238,7 @@ class AIProfileBase(BaseModel):
     session_buffer_minutes: Optional[int] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = "24h"
+    professional_availability: Optional[str] = None
     meeting_management_enabled: bool = True
     response_style: Optional[ResponseStyle] = ResponseStyle.active
     response_creativity: Optional[ResponseCreativity] = None
@@ -323,6 +324,7 @@ class AIProfileUpdate(BaseModel):
     session_buffer_minutes: Optional[int] = None
     availability_schedule: Optional[str] = None
     availability_mode: Optional[str] = None
+    professional_availability: Optional[str] = None
     meeting_management_enabled: Optional[bool] = None
     response_style: Optional[ResponseStyle] = None
     response_creativity: Optional[ResponseCreativity] = None

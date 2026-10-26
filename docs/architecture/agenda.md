@@ -313,11 +313,11 @@ directamente, sem checagem de JWT; as rotas públicas continuam exigindo
 
 ## `calendar_busy_slots` — a IA consulta disponibilidade real antes de propor/confirmar horário
 
-Antes desta funcionalidade, a Filha de agendamento (`decision_engine.py::_build_child_prompt_agendamento`)
-só recebia o campo de texto livre `ai_profile.availability_schedule` como dica
-geral — não tinha nenhum dado real do que já estava ocupado, e podia inventar
-disponibilidade. A criação do appointment também não checava conflito com
-outros leads do mesmo profissional.
+A Filha de agendamento (`decision_engine.py::_build_child_prompt_agendamento`)
+recebe duas fontes complementares: os horários de atendimento declarados pelo
+profissional (`ai_profile.professional_availability`, ver secção abaixo) e os
+compromissos reais já marcados (`calendar_busy_slots`). A criação do appointment
+checa conflito com outros leads do mesmo profissional.
 
 ```
 backend-crm (orchestrator.py)
@@ -329,7 +329,7 @@ backend-crm (orchestrator.py)
         ↓ (mesmo ContextBundle — paridade automática Playground + WhatsApp real)
 backend-executors (decision_engine.py)
   _build_child_prompt_agendamento injeta bloco "HORÁRIOS JÁ OCUPADOS"
-  (convertido para a timezone do perfil) antes do availability_schedule
+  (convertido para a timezone do perfil) antes de "DISPONIBILIDADE DO PROFISSIONAL"
         ↓ (via runners/whatsapp.py no fluxo real, ou via playground_internal.py
            no Playground — ambos chamam handle_meeting_scheduled; ver secção
            "Playground cria appointments reais" abaixo)
@@ -438,6 +438,28 @@ Vale nas três rotas onde a confirmação cai: apresentação, agendamento e **p
 `_enforce_scheduling_agent_no_closing`). No pré-agendamento o bloco e os campos
 `meeting_datetime_candidate` / `meeting_day_reference` / `meeting_duration_minutes` só entram
 quando há horário proposto; sem isso o prompt fica igual (fluxo de check-in).
+
+### Horários de atendimento do profissional (`professional_availability`)
+
+Texto livre do AI Profile (ex.: `"Seg a Sex: 14h, 16h, 18h\nSábado: 10h, 12h"`),
+editado em "Configurar Agente → Apresentação → Horários de atendimento do
+profissional". `_build_child_prompt_agendamento` injeta-o no bloco
+"DISPONIBILIDADE DO PROFISSIONAL", seguido da instrução de `scheduling_offer_style`
+(ver [`agents.md`](agents.md)). Vazio → "DISPONIBILIDADE: não configurada" e a IA
+pergunta ao lead que horário prefere.
+
+É um campo distinto da janela em que o agente **responde** mensagens
+(`availability_mode` + `availability_schedule`, ver
+[`humanization.md`](humanization.md#janela-de-horário-disponibilidade)). Perfis
+criados quando os dois sentidos partilhavam `availability_schedule` são separados
+no arranque do backend-core por `ensure_professional_availability_backfill()`
+(`backend-core/app/db.py`): grade JSON da janela → mantida, com cópia em texto
+legível para `professional_availability`; texto livre → movido para
+`professional_availability`.
+
+Se o `ai_profile` recebido não trouxer a chave `professional_availability`
+(backend-core ainda sem a coluna, durante um deploy), a filha de agendamento usa
+`availability_schedule` como recuo.
 
 ### Mensagem de correcção de conflito (gerada via LLM)
 

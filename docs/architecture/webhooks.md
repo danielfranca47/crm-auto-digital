@@ -268,6 +268,8 @@ Configurado em `offer_pack.multi_message_buffer_seconds` (ou `multi_message_buff
 
 Quando `> 0`, o primeiro job inbound é criado com `scheduled_at = agora + buffer_seconds`. Mensagens subsequentes que chegam antes de `scheduled_at` são absorvidas e concatenadas no payload do mesmo job (a mensagem anterior é actualizada). O resultado é que o LLM recebe o contexto combinado de todas as mensagens do "lote real" de uma só vez.
 
+Se `agora + buffer_seconds` cair fora da Janela de horário do agente, `scheduled_at` passa a ser a próxima abertura (`_buffered_scheduled_at()` em `inbound_handler.py`, ver [`humanization.md`](humanization.md)). Vale para o primeiro job e para cada mensagem absorvida — as mensagens recebidas com a janela fechada acumulam-se no mesmo job e são respondidas de uma vez na abertura.
+
 ---
 
 ## Webhook de Pagamento

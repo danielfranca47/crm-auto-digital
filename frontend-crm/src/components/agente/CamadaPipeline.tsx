@@ -442,7 +442,7 @@ export function CamadaPipeline({ config, onUpdate, phoneNumber }: CamadaPipeline
           label="Janela de horário" sub="Período em que o agente responde"
           value={availabilityLabel}
           onClick={() => setDrawer('horario_trabalho')} status="ok"
-          help="Controla quando o agente está disponível para responder. Mensagens recebidas fora do horário são agendadas para a próxima abertura da janela (não são descartadas)."
+          help="Controla quando o agente está disponível para responder. Mensagens recebidas fora do horário são agendadas para a próxima abertura da janela (não são descartadas). Não são os horários de atendimento do profissional — esses ficam em Apresentação."
         />
       </div>
 

@@ -476,3 +476,31 @@ reais + `buffer_minutes`) e aplicar a margem dentro de `_has_conflict`, mostrand
 **O que construir:** medir cada um na bancada (`.claude/agentes/sensi-vitae/`, 5x por cenário) antes de decidir;
 para (1), passar à Filha de gestão pós-marcação o horário gravado como facto; para (3), avaliar um guardrail
 que reconheça "remarcar/mudar para <dia> às <hora>" quando há marcação futura.
+
+---
+
+## M20 — Buffer desligado + janela fechada: uma resposta por mensagem na abertura
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `fix-disponibilidade-campo-duplo-sentido.md` (graduado em 26/10/2026).
+
+**Problema:** com o buffer de mensagens desligado (`multi_message_buffer_seconds = 0`), cada mensagem recebida
+com a janela de horário fechada cria o seu próprio job, e na abertura a IA responde a cada uma em separado.
+Com o buffer ligado (valor de fábrica) as mensagens juntam-se numa só resposta.
+
+**O que construir:** com a janela fechada, juntar as mensagens do mesmo lead no job já agendado para a
+abertura, mesmo sem buffer (`backend-crm/services/whatsapp_inbound/inbound_handler.py`).
+
+---
+
+## M21 — Remover o recuo para `availability_schedule` no prompt de agendamento
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `fix-disponibilidade-campo-duplo-sentido.md` (graduado em 26/10/2026).
+
+**O que construir:** em `backend-executors/app/services/decision_engine.py::_build_child_prompt_agendamento`,
+o perfil sem a chave `professional_availability` cai no campo antigo — só serve a janela de deploy. Remover
+depois de o backend-core em produção já servir `professional_availability` (e o teste de recuo em
+`backend-executors/tests/test_scheduling_offer_style.py`).
