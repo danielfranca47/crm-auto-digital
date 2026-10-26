@@ -1,7 +1,7 @@
 # Na confirmação, a marcação grava uma proposta antiga (e não a última aceite)
 
 **Branch:** `worktree-fix+confirmacao-grava-proposta-antiga` (worktree `.claude/worktrees/fix+confirmacao-grava-proposta-antiga`)
-**Status:** Em andamento — Fases 1 e 2 validadas na bancada local (26/10/2026); pendente: "sim" do utilizador para juntar a `main`, depois C1 (produção)
+**Status:** Todos os cenários validados (26/10/2026) — juntado a `main` com o "sim" do utilizador; pendente: graduação
 **Sobe ao utilizador:** sim — toca instruções da IA; só junta a `main` com o "sim" do utilizador
 **Autonomia:** manual
 **Origem:** bateria PROD07 do agente Sensi Vitae (26/10/2026), cenário `p-cedo-tarde` — investigação em
@@ -274,8 +274,18 @@ responder. Contas com uma só duração (ou sem tabela) não mudam.
   horário aceite dado no bloco.
 
 ### Cenário C1 — produção (`--prod`)
-- [ ] Antes: confirmar no Railway que o deploy do backend-executors **e** do worker passou
-- [ ] Os cenários P2–P5 com `--prod`
+- [x] Antes: confirmar no Railway que o deploy do backend-executors **e** do worker passou
+- **Validado em:** 26/10/2026 — merge `118ff79` em `main`; deploys `d4950cff` (backend-executors) e
+  `21cb0b19` (worker backend-executors) em SUCCESS.
+- [x] Os cenários P2–P5 com `--prod`
+- **Validado em:** 26/10/2026 — Playground de produção da conta Sensi Vitae (`tentativas/20261026-155*-PROD-B-*.md`):
+  `p-aceita-2a` (escolheu sexta 18h30 entre duas opções → gravado sexta 30/10 18h30 com o Daniel),
+  `p-cedo-tarde` (aceitou à 1.ª → quinta 18h30), `p-val-17h` (quinta 16h), `p-fora-horario` (o
+  cliente simulado já disse "terapêutica de 1h" → segunda 02/11 11h), `p-micas` (escolheu 15h entre
+  15h e 15h30 → quarta 15h, 90 min), `p-ricardo` (sábado 11h). Todos gravados no turno da
+  confirmação, recibo no formato da conta, sem `event=meeting_confirmation_*` nem erros no log do
+  `backend-executors`. Os clientes simulados não passaram pela 2.ª proposta isolada nem pela
+  duração em falta nesta corrida — esses caminhos ficaram validados só na bancada local (P2, P4).
 
 ---
 
