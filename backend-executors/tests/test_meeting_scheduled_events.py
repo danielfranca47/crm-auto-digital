@@ -107,3 +107,59 @@ def test_handle_meeting_scheduled_no_candidate_creates_nothing():
     assert result is None
     assert client.created == []
     assert client.logged == [(99, 10, 123, "missing_start_at")]
+
+
+class _CRMError(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"status={status_code}")
+        self.status_code = status_code
+
+
+class RejectingCRMClient(FakeCRMClient):
+    def __init__(self, status_code):
+        super().__init__()
+        self.status_code = status_code
+
+    def create_lead_appointment(self, **kwargs):
+        raise _CRMError(self.status_code)
+
+
+def test_create_conflict_409_returns_conflict_message_without_disabling_bot(monkeypatch):
+    """O CRM recusa com 409 um horário que os busy_slots davam como livre: o cliente recebe a
+    mensagem de conflito (antes: exceção → 502 no Playground / worker terminado no WhatsApp)."""
+    monkeypatch.setattr(meeting_scheduler, "_generate_conflict_message", lambda ai_profile, logger=None: None)
+    client = RejectingCRMClient(409)
+    context, candidate = _context("2099-03-05T17:00:00")
+    events = []
+
+    message = meeting_scheduler.handle_meeting_scheduled(
+        context,
+        _decision(candidate),
+        client=client,
+        now_utc=datetime(2099, 3, 1, tzinfo=timezone.utc),
+        is_playground=True,
+        events=events,
+    )
+
+    assert message == meeting_scheduler.MEETING_CONFLICT_MESSAGE
+    assert client.bot_disabled_calls == []
+    assert events == []
+    assert [entry[3] for entry in client.logged] == ["conflict_on_create"]
+
+
+def test_create_other_failure_propagates_without_disabling_bot():
+    """Falha que não é conflito: a marcação não ficou gravada — sobe para o runner reagendar o job."""
+    import pytest
+
+    client = RejectingCRMClient(500)
+    context, candidate = _context("2099-03-05T17:00:00")
+
+    with pytest.raises(_CRMError):
+        meeting_scheduler.handle_meeting_scheduled(
+            context,
+            _decision(candidate),
+            client=client,
+            now_utc=datetime(2099, 3, 1, tzinfo=timezone.utc),
+            is_playground=True,
+        )
+    assert client.bot_disabled_calls == []

@@ -740,8 +740,8 @@ def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SL
              WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?)
                AND a.status = 'pending'
                AND (a.google_transparency IS NULL OR a.google_transparency != 'transparent')
-               AND a.end_at >= ?
-               AND a.start_at <= ?
+               AND datetime(a.end_at) >= datetime(?)
+               AND datetime(a.start_at) <= datetime(?)
             """,
             (user_id, user_id, now.isoformat(), window_end.isoformat()),
         )

@@ -206,6 +206,97 @@ class SyncUserGoogleEventsTest(unittest.TestCase):
             conn.close()
         self.assertEqual(transparency, {"g-new": None, "g-bday": "transparent"})
 
+    def test_event_times_saved_in_utc_like_crm(self):
+        """`Z` e `+01:00` da Google ficam gravados como `+00:00`; dia inteiro fica só com a data."""
+        events = [{
+            "id": "g-z",
+            "start": {"dateTime": "2026-11-12T15:00:00Z"},
+            "end": {"dateTime": "2026-11-12T16:00:00Z"},
+        }, {
+            "id": "g-summer",
+            "start": {"dateTime": "2026-11-13T16:00:00+01:00"},
+            "end": {"dateTime": "2026-11-13T17:00:00+01:00"},
+        }, {
+            "id": "g-day",
+            "start": {"date": "2026-11-15"},
+            "end": {"date": "2026-11-16"},
+        }]
+        with patch("services.google_calendar_sync.get_connection", side_effect=self._open), \
+             patch("services.google_calendar_sync.list_events", return_value=events):
+            sync_user_google_events(4, START, END)
+        conn = self._open()
+        try:
+            rows = {r["google_event_id"]: (r["start_at"], r["end_at"]) for r in conn.execute(
+                "SELECT google_event_id, start_at, end_at FROM appointments WHERE source = 'google'"
+            )}
+        finally:
+            conn.close()
+        self.assertEqual(rows["g-z"], ("2026-11-12T15:00:00+00:00", "2026-11-12T16:00:00+00:00"))
+        self.assertEqual(rows["g-summer"], ("2026-11-13T15:00:00+00:00", "2026-11-13T16:00:00+00:00"))
+        self.assertEqual(rows["g-day"], ("2026-11-15", "2026-11-16"))
+
+    def test_all_day_event_on_first_day_removed_when_gone(self):
+        """`2026-11-01` < `2026-11-01T00:00…` como texto — o evento nunca era apagado."""
+        conn = self._open()
+        conn.execute(
+            "INSERT INTO appointments (user_id, lead_id, title, start_at, end_at, source, google_event_id)"
+            " VALUES (4, NULL, 'Feriado', '2026-11-01', '2026-11-02', 'google', 'g-first-day')"
+        )
+        conn.commit()
+        conn.close()
+        with patch("services.google_calendar_sync.get_connection", side_effect=self._open), \
+             patch("services.google_calendar_sync.list_events", return_value=[]):
+            sync_user_google_events(4, START, END)
+        self.assertEqual(self._google_ids(), [])
+
+    def test_crm_appointment_pushed_to_google_is_not_imported_again(self):
+        """Marcação do CRM (user_id NULL, dono pelo lead) com google_event_id: sem cópia do Google."""
+        conn = self._open()
+        conn.execute("INSERT INTO leads (id, user_id, companyName) VALUES (50, 4, 'Cliente')")
+        conn.execute(
+            "INSERT INTO appointments (user_id, lead_id, title, start_at, end_at, source, google_event_id)"
+            " VALUES (NULL, 50, 'Sessão Tiago', '2026-11-12T16:00:00+00:00', '2026-11-12T17:00:00+00:00', 'crm', 'g-crm')"
+        )
+        # cópia antiga já importada por uma sincronização anterior
+        conn.execute(
+            "INSERT INTO appointments (user_id, lead_id, title, start_at, end_at, source, google_event_id)"
+            " VALUES (4, NULL, 'Sessão Tiago', '2026-11-12T16:00:00Z', '2026-11-12T17:00:00Z', 'google', 'g-crm')"
+        )
+        conn.commit()
+        conn.close()
+        events = [{
+            "id": "g-crm",
+            "summary": "Sessão Tiago",
+            "start": {"dateTime": "2026-11-12T16:00:00Z"},
+            "end": {"dateTime": "2026-11-12T17:00:00Z"},
+        }]
+        with patch("services.google_calendar_sync.get_connection", side_effect=self._open), \
+             patch("services.google_calendar_sync.list_events", return_value=events):
+            sync_user_google_events(4, START, END)
+        conn = self._open()
+        try:
+            rows = conn.execute(
+                "SELECT source, lead_id FROM appointments WHERE google_event_id = 'g-crm'"
+            ).fetchall()
+        finally:
+            conn.close()
+        self.assertEqual([(r["source"], r["lead_id"]) for r in rows], [("crm", 50)])
+
+    def test_google_event_of_other_users_lead_is_still_imported(self):
+        conn = self._open()
+        conn.execute("INSERT INTO leads (id, user_id, companyName) VALUES (51, 9, 'Outro')")
+        conn.execute(
+            "INSERT INTO appointments (user_id, lead_id, title, start_at, end_at, source, google_event_id)"
+            " VALUES (NULL, 51, 'Sessão', '2026-11-12T16:00:00+00:00', '2026-11-12T17:00:00+00:00', 'crm', 'g-shared')"
+        )
+        conn.commit()
+        conn.close()
+        events = [{"id": "g-shared", "start": {"dateTime": "2026-11-12T16:00:00Z"}, "end": {"dateTime": "2026-11-12T17:00:00Z"}}]
+        with patch("services.google_calendar_sync.get_connection", side_effect=self._open), \
+             patch("services.google_calendar_sync.list_events", return_value=events):
+            sync_user_google_events(4, START, END)
+        self.assertEqual(self._google_ids(), ["g-shared"])
+
     def test_empty_google_removes_period_events(self):
         with patch("services.google_calendar_sync.get_connection", side_effect=self._open), \
              patch("services.google_calendar_sync.list_events", return_value=[]):

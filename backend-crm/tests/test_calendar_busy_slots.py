@@ -159,6 +159,18 @@ class LoadCalendarBusySlotsTest(unittest.TestCase):
             slots = _load_calendar_busy_slots(user_id=1)
         self.assertEqual(slots, [])
 
+    def test_window_compared_as_dates_not_text(self):
+        """Evento que já acabou (há 30 min) mas gravado com +01:00: como texto parecia futuro."""
+        lisbon_summer = timezone(timedelta(hours=1))
+        self._insert_appointment(
+            lead_id=None, user_id=1,
+            start_at=(self.now - timedelta(minutes=90)).astimezone(lisbon_summer),
+            end_at=(self.now - timedelta(minutes=30)).astimezone(lisbon_summer),
+        )
+        with patch("services.ai_orchestrator.orchestrator.get_connection", return_value=self.conn):
+            slots = _load_calendar_busy_slots(user_id=1)
+        self.assertEqual(slots, [])
+
     def test_outside_window_excluded(self):
         lead_id = self._insert_lead(user_id=1)
         self._insert_appointment(

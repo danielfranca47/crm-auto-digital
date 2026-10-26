@@ -78,7 +78,7 @@ def _check_conflict(
         "SELECT 1 FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id "
         "WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?) "
         "AND (a.google_transparency IS NULL OR a.google_transparency != 'transparent') "
-        "AND a.start_at < ? AND a.end_at > ?"
+        "AND datetime(a.start_at) < datetime(?) AND datetime(a.end_at) > datetime(?)"
     )
     if exclude_id is not None:
         query += " AND a.id != ?"
@@ -118,10 +118,10 @@ def list_appointments(
         params.extend([current_user.id, current_user.id])
 
         if start:
-            clauses.append("a.end_at >= ?")
+            clauses.append("datetime(a.end_at) >= datetime(?)")
             params.append(start.isoformat())
         if end:
-            clauses.append("a.start_at <= ?")
+            clauses.append("datetime(a.start_at) <= datetime(?)")
             params.append(end.isoformat())
         if lead_id is not None:
             clauses.append("a.lead_id = ?")
@@ -134,7 +134,7 @@ def list_appointments(
             "SELECT a.*, l.companyName AS lead_company, l.contactName AS lead_contact "
             "FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id"
             f" WHERE {where}"
-            " ORDER BY a.start_at ASC"
+            " ORDER BY datetime(a.start_at) ASC"
         )
         cur.execute(query, params)
         rows = cur.fetchall()
@@ -162,8 +162,8 @@ def google_sync(
             "SELECT a.*, l.companyName AS lead_company, l.contactName AS lead_contact"
             " FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id"
             " WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?)"
-            " AND a.end_at >= ? AND a.start_at <= ?"
-            " ORDER BY a.start_at ASC",
+            " AND datetime(a.end_at) >= datetime(?) AND datetime(a.start_at) <= datetime(?)"
+            " ORDER BY datetime(a.start_at) ASC",
             (current_user.id, current_user.id, start, end),
         )
         rows = cur.fetchall()
