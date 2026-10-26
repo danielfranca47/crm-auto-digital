@@ -1,7 +1,8 @@
 # Na confirmação, a marcação grava uma proposta antiga (e não a última aceite)
 
-**Branch:** (a criar)
-**Status:** Aguardando Plan Mode
+**Branch:** `worktree-fix+confirmacao-grava-proposta-antiga` (worktree `.claude/worktrees/fix+confirmacao-grava-proposta-antiga`)
+**Status:** Em andamento — Fases 1 e 2 validadas na bancada local (26/10/2026); pendente: "sim" do utilizador para juntar a `main`, depois C1 (produção)
+**Sobe ao utilizador:** sim — toca instruções da IA; só junta a `main` com o "sim" do utilizador
 **Autonomia:** manual
 **Origem:** bateria PROD07 do agente Sensi Vitae (26/10/2026), cenário `p-cedo-tarde` — investigação em
 `.claude/agentes/sensi-vitae/README.md`, secção "PROD07" (bug B).
@@ -113,4 +114,179 @@ o cliente fica a achar que tem marcação.
 Mesmo turno e mesmo bloco ("MARCAÇÃO JÁ GRAVADA" / candidato da Filha) que este item já vai reescrever —
 incluir no Plan Mode um check: "confirmação com `meeting_scheduled=true` sem candidato nunca responde
 'Experiência Agendada'".
+
+---
+
+## Problemas Identificados (estado anterior)
+
+1. **A Filha escolhia sozinha o horário a gravar:** `_build_meeting_already_booked_block()`
+   (`decision_engine.py`) dizia "preencha com o dia e a hora aceites" sem dizer quais.
+2. **Nada lia "a última proposta":** o candidato de cada turno só ficava no `decision_trace` desse
+   turno.
+3. **A conferência de datas não via a hora:** `meeting_date_guard.reconcile_meeting_date` só
+   confere o dia, e aceita qualquer dia já falado.
+4. **Pré-agendamento sem candidato:** a confirmação cai em pré-agendamento quando a Mãe diz
+   "closing" (`_enforce_scheduling_agent_no_closing` devolve a rota à categoria atual); o prompt
+   dessa fase não tinha o bloco nem `meeting_datetime_candidate` no schema → "Experiência
+   Agendada" sem nada gravado (`source=none_child_no_candidate`, `missing_start_at`).
+5. **Grava com dados inventados** (p-fora-horario) — Fase 2.
+
+---
+
+## Abordagem
+
+Opção 1 da tabela acima: ler a última proposta do histórico, dá-la à Filha como facto, e conferir
+o candidato em código depois da resposta.
+
+```
+history + mensagem atual
+  → meeting_proposal.last_proposal()   opções da última mensagem do agente com horas
+                                        (ou a hora que o lead disse)
+  → meeting_proposal.accepted_slot()   single_option | matched_option | ambiguous |
+                                        lead_stated | none
+  → prompt (apresentação / agendamento / pré-agendamento):
+        bloco "MARCAÇÃO JÁ GRAVADA" com o horário aceite e o candidato exato
+        (ambíguo → "pergunte qual das opções")
+  → _apply_meeting_confirmation_guard (depois da Filha, antes do meeting_scheduler)
+        aceite único ≠ candidato / candidato em falta → corrige candidato + texto
+        ambíguo e candidato fora das opções → não grava, pergunta "prefere X ou Y?"
+        lead_stated / none → sem alteração
+```
+
+`meeting_proposal.py` foi desenhado para o item E (`fix-remarcacao-grava-contraproposta.md`):
+`last_proposal` + `accepted_slot` respondem "o candidato da Filha é uma contraproposta que o
+cliente ainda não aceitou?" sem alteração ao módulo.
+
+---
+
+## Plano de Implementação
+
+### Fase 1 — Última proposta como facto + conferência nas 3 rotas
+
+**Objetivo:** no turno da confirmação, gravar sempre o horário que o cliente aceitou — ou
+perguntar, quando há várias opções e ele não escolheu.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/meeting_proposal.py` (novo) | `last_proposal`, `accepted_slot`, `options_in_text`, `reconcile_confirmation`, `describe`, `candidate_iso`, `ask_which_text` |
+| `backend-executors/app/services/decision_engine.py` | `_confirmation_fact`, `_professional_names`; `_build_meeting_already_booked_block(accepted)` com o facto / variante ambígua; pré-agendamento ganha bloco + "SINAIS DA MARCAÇÃO" quando há horário proposto; `_apply_meeting_confirmation_guard` chamado logo após `decision_trace["is_phase_entry"]` |
+| `backend-executors/tests/test_meeting_proposal.py` (novo) | leitura da proposta com as conversas reais PROD07 |
+| `backend-executors/tests/test_meeting_confirmation_guard.py` (novo) | conferência, integração com o decision_engine, prompts |
+| `docs/architecture/agenda.md` | secção "Turno da confirmação" |
+| `docs/prompts_llms.md` | bloco "MARCAÇÃO JÁ GRAVADA" (facto, pré-agendamento, variante ambígua) |
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `27b1aa9` | Leitura da última proposta, facto no bloco das 3 rotas, conferência do candidato |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando o cliente dizia "pode marcar", a IA escolhia sozinha que horário gravar — e às
+vezes gravava uma proposta que ele já tinha recusado. Se a conversa estivesse na fase de
+pré-agendamento, a IA dizia "Experiência Agendada" mas nada ficava na agenda.
+**Agora:** o sistema lê da conversa qual foi o último horário proposto e qual o cliente aceitou,
+diz isso à IA, e confere a resposta antes de gravar: se a IA trocar o horário, o sistema corrige a
+marcação e a mensagem; se houver duas opções e o cliente não disse qual, pergunta "prefere X ou
+Y?" em vez de gravar. Funciona também na fase de pré-agendamento.
+**Para validar:** Cenários P2, P3 e P5 (bancada local) e, depois do deploy, C1.
+
+### Fase 2 — Não gravar sem duração/serviço
+
+**Objetivo:** com `meeting_scheduled=true` e a duração por saber (não dita pelo lead, não na
+proposta aceite, não única na tabela de serviços), perguntar em vez de gravar. Nome do cliente e
+campo "dados exigidos" no AI profile ficam fora (ver Ajustes Possíveis). Inclui o ajuste visto no
+Cenário P3: a variante normal do bloco passa a dizer que a confirmação final é a mensagem que as
+instruções da conta mandam enviar depois de o lead confirmar (o recibo), não o resumo de antes.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/meeting_proposal.py` | `offered_durations`, `missing_duration`, `durations_text`, `ask_duration_text`; `AcceptedSlot.proposal_text`; `reconcile_confirmation(missing_durations=…)` → `blocked_duration` (texto só é trocado se a Filha confirmou mesmo assim) |
+| `backend-executors/app/services/decision_engine.py` | `_missing_booking_duration`, `_confirmation_block` (usado nas 3 rotas); variante "FALTA SABER O SERVIÇO E A DURAÇÃO"; frase do recibo na variante normal; guard passa as durações e marca `meeting_scheduled_blocked` |
+| `backend-executors/tests/test_meeting_confirmation_guard.py` | casos da duração por saber (tabela no formato renderizado pelo CRM, "— 60min") |
+| `docs/architecture/agenda.md`, `docs/prompts_llms.md` | regra da duração e nova variante do bloco |
+
+A tabela real da conta está guardada como `structured_v1` (JSON), mas o CRM entrega-a ao executor
+já em texto ("Massagem … — 60min: 75 €", `orchestrator._render_service_pricing_block`) — é isso
+que `offered_durations` lê.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `fd3e4b4` | Duração por saber → pergunta em vez de gravar; recibo como confirmação final |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** se o cliente aceitava um horário sem dizer que massagem e quanto tempo queria, a IA
+confirmava na mesma e inventava o serviço no recibo (ex.: "Massagem Relaxante - 60 min").
+**Agora:** quando a tabela de serviços tem várias durações e ninguém disse qual, o sistema não grava
+e pergunta "que serviço e que duração prefere", mantendo o horário combinado; grava quando o cliente
+responder. Contas com uma só duração (ou sem tabela) não mudam.
+**Para validar:** Cenário P4 (feito na bancada local) e C1 depois do deploy.
+
+---
+
+## Checks de Validação
+
+### Cenário P1 — testes unitários
+- [x] `pytest tests/test_meeting_proposal.py tests/test_meeting_confirmation_guard.py` — 29 passam
+- [x] suite completa do backend-executors — 434 passam
+- **Validado em:** 26/10/2026 — local, worktree
+
+### Cenário P2 — bancada local: aceita a 2.ª proposta (Fase 1)
+- [x] Setup: bancada `.claude/agentes/sensi-vitae` com o código desta branch no backend-executors
+- [x] `python simular.py p-aceita-2a B1` → gravado o horário da 2.ª proposta
+- **Validado em:** 26/10/2026 — `tentativas/20261026-1425-B1-p-aceita-2a.md`: 1.ª proposta quinta
+  18h30 recusada, 2.ª sexta 18h30 com o Daniel aceite com "Pode ser sim, marca aí!" → gravado sexta
+  30/10 18h30 (rota apresentação).
+- [x] `python simular.py p-cedo-tarde B1` → gravado sexta 11h com a Val
+- **Validado em:** 26/10/2026 — `tentativas/20261026-1428-B1-p-cedo-tarde.md`: quinta 18h30
+  recusada, sexta 11h com a Val aceite → gravado sexta 30/10 11h.
+
+### Cenário P3 — bancada local: confirmação em pré-agendamento grava (Fase 1)
+- [x] `python simular.py p-val-17h B1` → evento agenda `created` no turno da confirmação; nunca
+  "Experiência Agendada" sem evento
+- **Validado em:** 26/10/2026 — `tentativas/20261026-1432-B1-p-val-17h.md`: "Pode ser às 16h, sim"
+  em pré-agendamento → gravado quinta 29/10 16h (antes: nada gravado). A mensagem final saiu como
+  resumo ("Fica então quinta-feira, 29/10, às 16h… com a Val") em vez do formato "Experiência
+  Agendada" — marcação certa, formato da conta não seguido nesta rota.
+
+### Cenário P4 — bancada local: dados em falta (Fase 2)
+- [x] `python simular.py p-fora-horario B2` → pergunta tipo/duração antes de gravar
+- **Validado em:** 26/10/2026 — `tentativas/20261026-1512-B2-p-fora-horario.md`: "Sim, pode ser
+  segunda às 11h com a Val!" sem serviço nem duração → nada gravado, resposta "Para fechar a
+  marcação de segunda-feira, 02/11, às 11h com Val: que serviço e que duração prefere (20, 30, 45,
+  60 ou 90 min)?" (`event=meeting_confirmation_blocked`, a Filha tinha escrito uma confirmação);
+  depois de "terapêutica de 1h" + "Sim, pode confirmar!" → recibo "Massagem Terapêutica - 60 min"
+  e gravado segunda 02/11 11h–12h.
+- [x] Regressão com o código da Fase 2: `p-val-17h B2` (quinta 16h, recibo no formato da conta),
+  `p-micas B2` (quarta 15h, 90 min), `p-ricardo B2` (sábado 11h) — todos gravados no turno certo.
+  Nesta corrida o `p-val-17h` passou pela fase agendamento, não pré-agendamento: o ajuste do formato
+  do recibo no pré-agendamento fica por observar em P3/C1.
+
+### Cenário P5 — regressão
+- [x] `python simular.py p-micas B1` e `python simular.py p-ricardo B1` → gravam no turno certo
+- **Validado em:** 26/10/2026 — `20261026-1453-B1-p-micas.md` (quarta 28/10 15h, 90 min, Val) e
+  `20261026-1455-B1-p-ricardo.md` (sábado 31/10 11h, Val), ambos gravados no turno do nome.
+  Nenhum `event=meeting_confirmation_corrected/blocked` no log nas 5 corridas: a Filha seguiu o
+  horário aceite dado no bloco.
+
+### Cenário C1 — produção (`--prod`)
+- [ ] Antes: confirmar no Railway que o deploy do backend-executors **e** do worker passou
+- [ ] Os cenários P2–P5 com `--prod`
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+- Leitura de horas em texto livre: formatos raros ("ao meio-dia", "às onze") não são lidos — sem
+  leitura, o guard não mexe (comportamento anterior).
+- Os textos "Só para confirmar: prefere X ou Y?" e "Para fechar a marcação de X: que serviço e que
+  duração prefere (…)?" são fixos em português, sem o tom da conta, e com o nome do profissional
+  sem artigo ("com Val"). Com tabelas grandes a lista de durações fica longa (5 na Sensi Vitae).
+- Depois da pergunta da duração, a IA pode voltar a pedir "Posso confirmar?" antes do recibo (visto
+  em p-fora-horario B2) — um passo a mais, sem dano.
+- Nome do cliente e "dados exigidos" configuráveis no AI profile (Fase 2 só trata duração/serviço).
 

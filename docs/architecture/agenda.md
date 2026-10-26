@@ -376,6 +376,47 @@ tentativas falhadas e utilizadores sem Google ligado. Qualquer erro (Google, red
 log `busy_slots_google_sync_failed`/`_error` — o agente segue com o que já está na tabela. Como
 corre dentro de `enrich_context_bundle`, vale igual para Playground e WhatsApp real.
 
+## Turno da confirmação — grava-se o horário que o lead aceitou
+
+Quando a Mãe dá `meeting_scheduled=true` e o lead já estava na fase (não é entrada — gate M3),
+o horário a gravar é decidido pelo código, não pela Filha sozinha
+(`backend-executors/app/services/meeting_proposal.py`):
+
+```
+history + mensagem atual
+  → last_proposal(): último horário em cima da mesa — as opções (dia + hora + profissional)
+    da mensagem mais recente do agente que tenha horas, ou a hora que o próprio lead disse.
+    Ignora horas em frases negativas ("às 9h está fora…") e intervalos de atendimento
+    ("das 11h às 17h", "até às 19h30"); dd/mm com dia da semana colado que não bate vale
+    pelo dia da semana.
+  → accepted_slot(): single_option | matched_option (lead nomeia hora/dia/profissional de uma)
+    | ambiguous (várias, nenhuma escolhida) | lead_stated (hora nova — não é aceitação) | none
+  → prompt: _build_meeting_already_booked_block(accepted) diz à Filha o horário aceite e o
+    candidato a devolver; ambíguo → manda perguntar qual
+  → duração por saber? missing_duration(): a tabela de serviços (service_pricing_table, já
+    renderizada pelo CRM como "— 60min") tem mais de uma duração e nem o lead nem a proposta
+    aceite a disseram → o bloco passa a "FALTA SABER O SERVIÇO E A DURAÇÃO" (perguntar,
+    candidato null)
+  → depois da resposta: _apply_meeting_confirmation_guard (decision_engine.py, logo após o
+    trace ganhar is_phase_entry, antes do meeting_scheduler)
+      duração por saber → sem candidato, meeting_scheduled=false
+        (meeting_scheduled_blocked="missing_duration"); se a Filha confirmou mesmo assim, texto
+        = "Para fechar a marcação de X: que serviço e que duração prefere (60 ou 90 min)?"
+      aceite único ≠ candidato (ou candidato em falta) → candidato = aceite; dia, hora e
+        profissional errados no texto são reescritos   (event=meeting_confirmation_corrected)
+      ambíguo e candidato fora das opções → sem candidato, meeting_scheduled=false, texto =
+        "Só para confirmar: prefere X ou Y?"            (event=meeting_confirmation_blocked,
+                                                          meeting_scheduled_blocked="ambiguous_options")
+      lead_stated / none → sem alteração
+    rasto em decision_trace.meeting_confirmation_guard
+```
+
+Vale nas três rotas onde a confirmação cai: apresentação, agendamento e **pré-agendamento**
+(num agente de agendamento, "closing" da Mãe volta à categoria atual —
+`_enforce_scheduling_agent_no_closing`). No pré-agendamento o bloco e os campos
+`meeting_datetime_candidate` / `meeting_day_reference` / `meeting_duration_minutes` só entram
+quando há horário proposto; sem isso o prompt fica igual (fluxo de check-in).
+
 ### Mensagem de correcção de conflito (gerada via LLM)
 
 `_generate_conflict_message(ai_profile, *, logger=None)` em `meeting_scheduler.py` monta um prompt curto em PT usando `tone_of_voice`/`brand_name`/`identity_mode` do AI Profile e chama `llm_service.generate_conflict_message()` (reaproveita o `_post_with_retry()` partilhado — ver `llm-architecture.md`). `handle_meeting_scheduled()` usa `_generate_conflict_message(...) or MEETING_CONFLICT_MESSAGE` — se a geração falhar por qualquer motivo (sem `LLM_API_KEY`, erro de rede, timeout, resposta vazia), cai no texto fixo `MEETING_CONFLICT_MESSAGE` ("Peço desculpa, esse horário acabou de ficar indisponível...") definido em `meeting_scheduler.py`.

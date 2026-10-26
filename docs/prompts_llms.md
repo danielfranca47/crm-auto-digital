@@ -402,7 +402,7 @@ DESEJÁVEIS — capturar se surgir oportunidade natural:
 | `warming_injection` (scheduler) | `template_key=hybrid_scheduler` + qualificação recém-aprovada + `presentation_variant=scheduler` | Pós-qualificação para serviços presenciais: confirmar disponibilidade e valor |
 | `commercial_injection` | `template_key=hybrid_scheduler` + qualificação recém-aprovada + `appointment_mode=commercial` | Modo comercial: apresentar serviços, tratar objeções, fechar compromisso ANTES de agendar (veja 1.4.2) |
 | `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | "Modo recibo": emite resumo estruturado da reserva usando `extracted_fields` |
-| `MARCAÇÃO JÁ GRAVADA NESTE TURNO` | `meeting_scheduled=True` + `presentation_variant≠scheduler` | Confirmação final no formato das instruções da conta, sem voltar a pedir confirmação (ver 1.4.4) |
+| `MARCAÇÃO JÁ GRAVADA NESTE TURNO` | `meeting_scheduled=True` + `presentation_variant≠scheduler` | Confirmação final do horário aceite (lido do histórico) no formato das instruções da conta, sem voltar a pedir confirmação (ver 1.4.4) |
 | `standard_knowledge_block` | quando NÃO há `commercial_injection` + knowledge não vazio | Injeção dos itens de knowledge com instruções de uso por categoria |
 | `_media_intro_note_apres` | `knowledge_media` não vazio | Suprime descrição — mídia enviada automaticamente |
 
@@ -513,12 +513,24 @@ a pré-agendamento recebe só a tabela.
   junto da data na mensagem. Um `dd/mm` no sinal só vale se o lead o escreveu; no turno de
   confirmação, um dia nunca falado na conversa é trocado pelo último dia falado. Rasto em
   `decision_trace.meeting_date_guard`; log `event=meeting_date_corrected`.
-- **`MARCAÇÃO JÁ GRAVADA NESTE TURNO`** (`_build_meeting_already_booked_block`): com
+- **`MARCAÇÃO JÁ GRAVADA NESTE TURNO`** (`_build_meeting_already_booked_block(accepted)`): com
   `meeting_scheduled=True` e o lead já dentro da fase (não `_compute_is_phase_entry`), entra no
-  fim do prompt de agendamento e no da apresentação (quando não é `scheduler`, que tem o "modo
-  recibo"): a marcação é gravada neste turno, por isso a Filha envia a confirmação final no
-  formato das instruções da conta, sem voltar a pedir confirmação. Na entrada da fase não entra
-  (o `meeting_scheduler` adia a criação — gate M3).
+  fim do prompt de agendamento, no da apresentação (quando não é `scheduler`, que tem o "modo
+  recibo") e no de pré-agendamento (só quando há horário proposto, junto com os campos
+  `meeting_datetime_candidate`/`meeting_day_reference`/`meeting_duration_minutes` — bloco
+  "SINAIS DA MARCAÇÃO"): a marcação é gravada neste turno, por isso a Filha envia a confirmação
+  final no formato das instruções da conta, sem voltar a pedir confirmação. `accepted`
+  (`_confirmation_fact` → `meeting_proposal.py`) dá o facto: "O lead aceitou o horário da
+  última proposta: sexta-feira, 30/10, às 11h com Val" + o candidato exato a devolver. Com
+  várias opções em aberto e nenhuma escolhida, o bloco passa a "O LEAD CONFIRMOU, MAS HÁ MAIS
+  DE UMA OPÇÃO EM ABERTO" e manda perguntar qual; com a duração por saber (tabela de serviços com
+  várias durações e nenhuma dita), passa a "FALTA SABER O SERVIÇO E A DURAÇÃO" e manda perguntar
+  serviço e duração mantendo o horário. A variante normal especifica que a confirmação final é a
+  mensagem que as instruções da conta mandam enviar depois de o lead confirmar (o recibo), não o
+  resumo de antes. Sem proposta lida, fica o texto genérico. O
+  candidato devolvido é conferido em código por `_apply_meeting_confirmation_guard` (ver
+  `docs/architecture/agenda.md`, "Turno da confirmação"). Na entrada da fase não entra (o
+  `meeting_scheduler` adia a criação — gate M3).
 
 #### 1.4.5 `VERIFICAÇÃO DO HORÁRIO PEDIDO` — veredicto da agenda e do horário de atendimento
 
@@ -904,7 +916,7 @@ Blocos que só aparecem no prompt quando certas condições são atendidas:
 | `WARMING scheduler` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `presentation_variant=scheduler` | apresentation |
 | `COMMERCIAL INJECTION` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `appointment_mode=commercial` | apresentation |
 | `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | apresentation |
-| `MARCAÇÃO JÁ GRAVADA NESTE TURNO` (`_build_meeting_already_booked_block`) | `meeting_scheduled=True` (na apresentação, só quando `presentation_variant≠scheduler`) | apresentation, agendamento |
+| `MARCAÇÃO JÁ GRAVADA NESTE TURNO` (`_build_meeting_already_booked_block`) | `meeting_scheduled=True` (na apresentação, só quando `presentation_variant≠scheduler`; no pré-agendamento, só com horário proposto) | apresentation, pre-agendamento, agendamento |
 | `VERIFICAÇÃO DO HORÁRIO PEDIDO` (`_build_agenda_fact_block`) | mensagem do lead com uma hora inequívoca + dia reconhecível, no futuro | pre-agendamento, agendamento, meeting_management (fim do prompt) |
 | `standard_knowledge_block` | narrativas com conteúdo novo, nota de pagamento do modo comercial ou categoria de referência com mídia | apresentation |
 | `followup_knowledge_block` | `social_proof` ainda não mostrada | followup |
