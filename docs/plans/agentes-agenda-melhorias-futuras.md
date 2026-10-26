@@ -407,3 +407,32 @@ recebe "Experiência Agendada" e logo a seguir "o horário ficou indisponível".
 **O que construir:** como em `handle_meeting_cancel_or_reschedule`, substituir `decision.message_text`
 pela mensagem de conflito e devolver `None` — ver `docs/architecture/agenda.md`, "Conflito de horário
 no reagendamento".
+
+---
+
+## M16 — Hora local também nos turnos que não cumprimentam
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `fix-saudacao-hora-local.md` (graduado em 26/10/2026) por minimalismo.
+
+**Estado actual:** a linha "AGORA (hora local do negócio)" (`_local_time_fact_line` em `decision_engine.py`)
+só entra na receção e nos prompts que mandam cumprimentar. Nos outros turnos a Filha só tem a tabela de dias
+(sem horas), por isso não sabe se "ainda hoje" ou "amanhã de manhã" fazem sentido à hora a que responde.
+
+**O que construir:** injetar a mesma linha (sem a instrução de cumprimento) nos prompts de apresentação,
+pré-agendamento, agendamento e gestão pós-marcação; medir antes e depois na bancada (ex.: "ainda hoje" às 19h55).
+
+---
+
+## M17 — Abertura do dono com o período escrito à mão
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `fix-saudacao-hora-local.md` (graduado em 26/10/2026).
+
+**Estado actual:** a abertura (`origin_inbound_opener`) é texto livre. Se o dono escrever literalmente
+"Boa tarde!", a IA pode copiá-lo mesmo de manhã, apesar da linha AGORA que lhe diz o período certo.
+
+**O que construir:** opções a avaliar — variável `{{saudacao}}` na abertura, substituída pelo cumprimento
+calculado; ou um aviso no ecrã do AI Profile quando a abertura contém um período fixo.
