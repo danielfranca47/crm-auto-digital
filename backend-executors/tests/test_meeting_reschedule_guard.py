@@ -145,3 +145,42 @@ def test_announces_reschedule():
     assert mp.announces_reschedule("Remarquei para quinta")
     assert mp.announces_reschedule("A sessão fica marcada para quinta às 16h")
     assert not mp.announces_reschedule("Podemos marcar a sessão para quinta às 16h? Que acha?")
+
+
+MANTEM = f"A sua sessão de {mdg.WEEKDAY_NAMES_PT[ORIGINAL_DAY.weekday()]} às 14h mantém-se até me dizer."
+PROPOSTA_E_MANTEM = [
+    {"model": "inbound", "body": PEDE_15H},
+    {"model": "outbound", "body": f"{DAY_WORD} às 15h já está ocupado."},
+    {"model": "outbound", "body": "Pode ser às 16h com a Val?"},
+    {"model": "outbound", "body": MANTEM},
+]
+
+
+def test_aceita_a_hora_proposta_e_o_dia_e_o_da_proposta_nao_o_da_sessao_antiga():
+    # a Filha juntou "16h" ao dia da sessão antiga; o lead aceitou a proposta de DAY às 16h
+    decision, signals, trace = _run(
+        "Pode ser às 16h", _iso(ORIGINAL_DAY, 16), "Fica então para as 16h. Posso confirmar?", PROPOSTA_E_MANTEM
+    )
+    assert trace["corrected_to"] == _iso(DAY, 16)
+    assert trace["origin"] == "accepted"
+    assert trace["blocked"] is None
+    assert signals["meeting_reschedule_requested"] is True
+    assert signals["meeting_datetime_candidate"] == _iso(DAY, 16)
+    assert decision.message_text == mp.reschedule_done_text(
+        mp.ProposedOption(start=_at(DAY, 16), professional="Val")
+    )
+
+
+def test_pode_ser_sozinho_nao_fica_ambiguo_com_a_sessao_que_se_mantem():
+    _decision_, signals, trace = _run("Pode ser", _iso(DAY, 16), "Remarcado!", PROPOSTA_E_MANTEM)
+    assert trace["origin"] == "accepted"
+    assert trace["blocked"] is None
+    assert signals["meeting_datetime_candidate"] == _iso(DAY, 16)
+
+
+def test_remarcacao_que_segue_com_texto_a_pedir_confirmacao_passa_a_feita():
+    decision, signals, _trace = _run(
+        f"Pode ser {DAY_WORD} às 12h?", _iso(DAY, 12), "Fica então às 12h. Posso confirmar?"
+    )
+    assert signals["meeting_reschedule_requested"] is True
+    assert decision.message_text.startswith("Combinado! A sua sessão fica remarcada para ")

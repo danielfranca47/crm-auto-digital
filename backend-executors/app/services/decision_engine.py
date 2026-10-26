@@ -2260,6 +2260,34 @@ def _current_meeting(context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return min(slots, key=lambda slot: str(slot.get("start_at") or "")) if slots else None
 
 
+def _meeting_start(meeting: Optional[Dict[str, Any]], tz_name: Optional[str]) -> Optional[datetime]:
+    """Início do compromisso no fuso do perfil (sem fuso = UTC, como em _has_conflict)."""
+    if meeting is None:
+        return None
+    try:
+        start = _ensure_aware(datetime.fromisoformat(str(meeting.get("start_at"))), "UTC")
+    except (TypeError, ValueError):
+        return None
+    return start.astimezone(meeting_proposal._tz(tz_name))
+
+
+def _reschedule_fact(
+    context: Dict[str, Any], current_start: Optional[datetime]
+) -> meeting_proposal.AcceptedSlot:
+    """Como _confirmation_fact, mas sem a sessão já marcada entre as opções: "a sua sessão de
+    terça às 14h mantém-se" não é uma proposta, e com ela um "Pode ser" ficava ambíguo."""
+    ai_profile = context.get("ai_profile") or {}
+    tz_name = ai_profile.get("timezone")
+    inbound_now = _extract_message_text(context)
+    names = _professional_names(ai_profile)
+    proposal = meeting_proposal.last_proposal(
+        context.get("history") or [], inbound_now, tz_name=tz_name, professionals=names
+    )
+    if current_start is not None:
+        proposal.options = [o for o in proposal.options if o.start != current_start]
+    return meeting_proposal.accepted_slot(inbound_now, proposal, tz_name=tz_name, professionals=names)
+
+
 def _apply_meeting_reschedule_guard(
     decision: DecisionOutput, context: Dict[str, Any], logger: Optional[logging.Logger] = None
 ) -> None:
@@ -2268,7 +2296,8 @@ def _apply_meeting_reschedule_guard(
 
     Corre depois de _apply_meeting_date_guard e antes do meeting_scheduler. Em teste real a
     marcação foi mudada para a contraproposta da Lara (fora do horário da terapeuta) no mesmo
-    turno em que ela a propôs. Ver meeting_proposal.reschedule_origin."""
+    turno em que ela a propôs; e, com o lead a aceitar "quinta às 16h" ("Pode ser às 16h"), a
+    Filha remarcou para terça às 16h (o dia da sessão antiga). Ver meeting_proposal.reschedule_origin."""
     trace = decision.decision_trace or {}
     signals = trace.get("child_signals_structured")
     if not isinstance(signals, dict) or not signals.get("meeting_reschedule_requested"):
@@ -2279,13 +2308,31 @@ def _apply_meeting_reschedule_guard(
     ai_profile = context.get("ai_profile") or {}
     tz_name = ai_profile.get("timezone")
     inbound_now, lead_messages, _earlier = _recent_conversation(context)
-    origin = meeting_proposal.reschedule_origin(
-        candidate, inbound_now, _confirmation_fact(context), tz_name=tz_name
-    )
-    guard_trace: Dict[str, Any] = {"candidate": candidate, "origin": origin}
+    current = _current_meeting(context)
+    original_start = _meeting_start(current, tz_name)
+    original = meeting_proposal.ProposedOption(start=original_start) if original_start else None
+    accepted = _reschedule_fact(context, original_start)
+    guard_trace: Dict[str, Any] = {"candidate": candidate}
+
+    if accepted.option is not None:
+        # o lead aceitou uma opção da proposta: é essa que se grava (e o texto diz essa)
+        check = meeting_proposal.reconcile_confirmation(
+            candidate,
+            decision.message_text or "",
+            accepted,
+            tz_name=tz_name,
+            professionals=_professional_names(ai_profile),
+        )
+        if check.trace.get("action") == "corrected":
+            guard_trace["corrected_to"] = check.candidate
+            candidate = check.candidate
+            signals = {**signals, "meeting_datetime_candidate": candidate}
+            trace["child_signals_structured"] = signals
+            decision.message_text = check.message_text
+    origin = meeting_proposal.reschedule_origin(candidate, inbound_now, accepted, tz_name=tz_name)
+    guard_trace["origin"] = origin
 
     start = meeting_proposal._local(candidate, tz_name)
-    current = _current_meeting(context)
     unavailable = None
     if start is not None:
         end = start + timedelta(
@@ -2306,7 +2353,21 @@ def _apply_meeting_reschedule_guard(
     guard_trace["blocked"] = reason
     trace["meeting_reschedule_guard"] = guard_trace
     decision.decision_trace = trace
+    log = logger or logging.getLogger(__name__)
+
     if reason is None:
+        if start is not None and not meeting_proposal.announces_reschedule(decision.message_text or ""):
+            # remarcação gravada neste turno, mas a resposta não a dá como feita ("Posso confirmar?")
+            option = accepted.option if origin == "accepted" else meeting_proposal.ProposedOption(start=start)
+            decision.message_text = meeting_proposal.reschedule_done_text(option)
+            guard_trace["text_changed"] = True
+        if guard_trace.get("corrected_to") or guard_trace.get("text_changed"):
+            log.warning(
+                "event=meeting_reschedule_corrected from=%s to=%s text_changed=%s",
+                guard_trace["candidate"],
+                candidate,
+                guard_trace.get("text_changed", False),
+            )
         return
 
     trace["child_signals_structured"] = {
@@ -2315,14 +2376,6 @@ def _apply_meeting_reschedule_guard(
         "meeting_datetime_candidate": None,
     }
     if meeting_proposal.announces_reschedule(decision.message_text or ""):
-        original = None
-        if current is not None:
-            try:
-                # sem fuso = UTC, como em _has_conflict
-                original_start = _ensure_aware(datetime.fromisoformat(str(current.get("start_at"))), "UTC")
-                original = meeting_proposal.ProposedOption(start=original_start.astimezone(meeting_proposal._tz(tz_name)))
-            except (TypeError, ValueError):
-                original = None
         if unavailable is None and start is not None:
             # a contraproposta cabe: o texto deixa de a dar como feita e pergunta se serve
             decision.message_text = meeting_proposal.reschedule_confirm_text(
@@ -2331,7 +2384,7 @@ def _apply_meeting_reschedule_guard(
         else:
             decision.message_text = meeting_proposal.reschedule_unavailable_text(original)
         guard_trace["text_changed"] = True
-    (logger or logging.getLogger(__name__)).warning(
+    log.warning(
         "event=meeting_reschedule_blocked reason=%s candidate=%s text_changed=%s",
         reason,
         candidate,
@@ -4908,7 +4961,9 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         "acima) — preencha signals_structured.meeting_reschedule_requested=true e "
         "meeting_datetime_candidate combinando a DATA da reunião já confirmada com o NOVO horário "
         "mencionado. NÃO responda como se fosse uma nova confirmação nem peça o dia de novo — o dia "
-        "já é conhecido (está no bloco acima).\n"
+        "já é conhecido (está no bloco acima). Exceção: se essa hora é a de um horário que você "
+        "propôs na sua mensagem anterior (ex.: você propôs 'quinta às 16h' e o lead respondeu 'pode "
+        "ser às 16h'), o lead está a aceitar a sua proposta — use o dia dessa proposta.\n"
         "- Se o lead pedir para reagendar mas NÃO disser um horário novo (ex.: só 'posso "
         "remarcar?'): pergunte qual horário prefere e deixe meeting_reschedule_requested=false "
         "até ele responder com um horário.\n"

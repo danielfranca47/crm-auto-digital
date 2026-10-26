@@ -553,7 +553,10 @@ da regra "CONFIRME DIRETAMENTE"): com a verificação a dizer ocupado/fora do ho
 isso, propõe como pergunta o horário indicado, diz que a sessão marcada se mantém e deixa
 `meeting_reschedule_requested=false` / `meeting_datetime_candidate=null` (exemplo ✅ no prompt);
 quando o lead aceita um horário que ela propôs ("pode ser", "sim, às 16h"), confirma já com
-`meeting_reschedule_requested=true` e o candidato. O guardrail de código
+`meeting_reschedule_requested=true` e o candidato. A regra "só hora, sem dia → mesmo dia da sessão
+marcada" tem a exceção "se essa hora é de um horário que você propôs na mensagem anterior, use o dia
+dessa proposta" — na bancada a Filha ainda a ignora às vezes, e é o guardrail que corrige. O
+guardrail de código
 `_apply_meeting_reschedule_guard` garante o mesmo independentemente do que a Filha devolva (ver
 `docs/architecture/agenda.md`, "Cancelamento e reagendamento via IA").
 

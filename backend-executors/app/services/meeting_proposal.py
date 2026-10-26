@@ -453,19 +453,20 @@ def reschedule_origin(
 ) -> str:
     """De quem é o horário que a Filha quer gravar na remarcação.
 
-    - `lead_stated`: a hora que o cliente escreveu nesta mensagem (o dia confere o date guard);
     - `accepted`: a opção da última proposta que o cliente aceitou ("pode ser", "sim, às 16h");
+    - `lead_stated`: a hora que o cliente escreveu nesta mensagem, sem ser uma opção aceite (o dia
+      confere o date guard);
     - `counter_proposal`: um horário que só o agente pôs na mesa — em teste real a marcação foi
       mudada para a contraproposta da Lara antes de o cliente responder;
     - `none`: sem candidato."""
     current = _local(candidate, tz_name)
     if current is None:
         return "none"
+    if accepted.option is not None and accepted.option.start.replace(tzinfo=None) == current.replace(tzinfo=None):
+        return "accepted"
     wanted = requested_slot.requested_time(inbound_now)
     if wanted is not None and current.time().replace(second=0, microsecond=0) == wanted:
         return "lead_stated"
-    if accepted.option is not None and accepted.option.start.replace(tzinfo=None) == current.replace(tzinfo=None):
-        return "accepted"
     return "counter_proposal"
 
 
@@ -475,6 +476,10 @@ def _kept_text(original: Optional[ProposedOption]) -> str:
 
 def reschedule_unavailable_text(original: Optional[ProposedOption]) -> str:
     return f"Peço desculpa, esse horário já não está disponível.{_kept_text(original)} Que outro horário prefere?"
+
+
+def reschedule_done_text(option: ProposedOption) -> str:
+    return f"Combinado! A sua sessão fica remarcada para {describe(option)}."
 
 
 def reschedule_confirm_text(option: ProposedOption, original: Optional[ProposedOption]) -> str:
