@@ -219,8 +219,9 @@ Os "Posso confirmar?" restantes na F3d (2) são turnos de entrada de fase, em qu
 - **Validado em:** 26/10/2026 — F3c e F3d: todas as remarcações gravadas a 29/10 (quinta)
 
 ### Cenário C1 — Playground de produção depois do merge
-- [ ] `python simular.py <cenário> <rótulo> --prod` nos mesmos cenários, com o código já em produção
-- [ ] Confirmar: 0 marcações no dia errado (antes: 6 de 15)
+- [x] `python simular.py <cenário> <rótulo> --prod` nos mesmos cenários, com o código já em produção
+- [x] Confirmar: 0 marcações no dia errado (antes: 6 de 15)
+- **Validado em:** 26/10/2026 — rodada PROD04 (9 conversas, código `1966761` confirmado nos serviços `backend-executors` e `worker backend-executors`): 9 marcações + 1 remarcação, todas no dia pedido e com a data escrita = data gravada; 0 falhas de validação da IA. Fora do âmbito deste fix (configuração da conta): uma sessão da Val marcada às 17h (acaba depois das 17h) e "horário indisponível" inventado em 3 conversas.
 
 ---
 
