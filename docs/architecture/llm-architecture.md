@@ -412,6 +412,13 @@ lead, seguindo a política configurada (`keep_active_notify` notifica o time; `d
 pausa o bot para aquele lead). Não existe caminho de falha da Mãe que devolva resposta vazia
 sem handoff — nem mesmo nos primeiros turnos de uma conversa nova.
 
+**Exceção — tentativa do job que ainda vai ser repetida (worker):** antes do `decide()`, o
+runner (`runners/whatsapp.py`) põe `context["llm_failure_final"] = not _llm_failure_will_retry(attempt)`.
+Com `False`, o `except` devolve o `FALLBACK_DECISION` cru (sem `handoff_policy.apply`) — nada de
+desligar o bot nem `log_handoff_requested` — e o runner reagenda o job (`event=llm_failure_retry`).
+Só a última tentativa (`attempt >= JOB_MAX_ATTEMPTS`) aplica o handoff. Sem a chave (Playground,
+pré-geração de follow-up) o handoff é imediato.
+
 ---
 
 ## Arquivos críticos

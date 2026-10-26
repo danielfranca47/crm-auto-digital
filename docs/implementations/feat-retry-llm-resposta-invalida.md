@@ -111,6 +111,18 @@ de ser um erro.
 | `backend-executors/app/runners/whatsapp.py` | antes do `decide()`, marca no contexto `llm_failure_final = attempt >= JOB_MAX_ATTEMPTS` |
 | `backend-executors/app/services/decision_engine.py` | no `except`, só chama `handoff_policy.apply` se `llm_failure_final` não for `False` |
 | `backend-executors/tests/test_llm_failure_fallback_handoff.py` | tentativa não final → sem `set_lead_bot_disabled`/`log_handoff_requested`; final → igual a hoje |
+| `docs/architecture/llm-architecture.md` | "Fallback final": exceção da tentativa de job não final |
+
+Detalhe: a regra "vai repetir?" passou para `_llm_failure_will_retry(attempt)` no runner, usada tanto para
+marcar o contexto como para reagendar, para as duas não poderem divergir.
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** no WhatsApp real, com a política "desligar bot", uma falha da IA desligava o bot para esse lead logo
+na 1.ª tentativa, mesmo que a nova tentativa automática do job (1 min e 3 min depois) acabasse por responder bem.
+**Agora:** enquanto o job ainda vai ser repetido, não se desliga nada nem se regista handoff. Só se a última
+tentativa também falhar é que o cliente recebe a mensagem de handoff e o bot é desligado. No Playground, nada muda.
+**Para validar:** Cenário T3 (feito) e C1, depois do deploy.
 
 ---
 
@@ -130,8 +142,10 @@ de ser um erro.
 - **Validado em:** 26/10/2026 — 513 passam, 2 falham (as mesmas de `main` antes da mudança: 493 passam, 2 falham)
 
 ### Cenário T3 — Fase 2: tentativa de job não final não desliga o bot (automático)
-- [ ] Teste do runner/decide: `llm_failure_final=False` → nenhuma chamada a `set_lead_bot_disabled`/`log_handoff_requested`
-- [ ] `llm_failure_final=True` (ou ausente, como no Playground) → handoff como hoje
+- [x] Teste do runner/decide: `llm_failure_final=False` → nenhuma chamada a `set_lead_bot_disabled`/`log_handoff_requested`
+- [x] `llm_failure_final=True` (ou ausente, como no Playground) → handoff como hoje
+- **Validado em:** 26/10/2026 — 4 testes novos em `test_llm_failure_fallback_handoff.py`; suíte completa com 517 a passar
+  e as mesmas 2 falhas antigas de `main`
 
 ### Cenário C1 — Produção depois do deploy (observação)
 - [ ] `railway logs -s backend-executors --lines 5000 --filter llm_stage_retry` (e `llm_stage_exhausted`,

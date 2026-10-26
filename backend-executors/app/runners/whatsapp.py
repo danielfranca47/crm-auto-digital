@@ -448,6 +448,10 @@ def _build_failure_details(exc: ExecutionError) -> Dict[str, Any]:
     return details
 
 
+def _llm_failure_will_retry(attempt: Optional[int]) -> bool:
+    return attempt is None or attempt < JOB_MAX_ATTEMPTS
+
+
 def _fail_job(job_id: str, logger: logging.LoggerAdapter, exc: ExecutionError, attempt: Optional[int]) -> int:
     details = _build_failure_details(exc)
     retryable = bool(details.get("retryable"))
@@ -763,6 +767,9 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         extra={"phase": "context"},
     )
 
+    # Só a última tentativa do job aplica o handoff por llm_failure (desliga o bot / regista);
+    # nas anteriores o job é reagendado abaixo sem efeitos colaterais no lead.
+    context["llm_failure_final"] = not _llm_failure_will_retry(attempt)
     decision = decision_engine.decide(context, logger=ctx_logger)
     ctx_logger.info(
         "event=decision_made next_action=%s reason=%s",
@@ -773,7 +780,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
 
     # Retry automático em caso de falha LLM — evita handoff imediato
     # Usa o mecanismo de retry existente (max 3 tentativas, backoff 60s/180s)
-    if decision.reason == "llm_failure" and (attempt is None or attempt < JOB_MAX_ATTEMPTS):
+    if decision.reason == "llm_failure" and _llm_failure_will_retry(attempt):
         ctx_logger.info(
             "event=llm_failure_retry attempt=%s max=%s — agendando retry em vez de handoff",
             attempt, JOB_MAX_ATTEMPTS,

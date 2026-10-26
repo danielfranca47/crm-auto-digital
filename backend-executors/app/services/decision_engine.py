@@ -6806,4 +6806,10 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 FALLBACK_DECISION.next_action,
                 FALLBACK_DECISION.reason,
             )
+        # O worker marca False quando o job ainda vai ser repetido: o handoff (desligar o bot,
+        # registar) fica para a última tentativa. Ausente (Playground) = handoff já.
+        if context.get("llm_failure_final") is False:
+            if logger:
+                logger.info("decision llm_failure handoff_deferred=job_retry")
+            return FALLBACK_DECISION.model_copy(deep=True)
         return handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)
