@@ -122,7 +122,34 @@ não anuncia remarcação antes de o cliente aceitar.
 | `backend-executors/app/services/professional_hours.py` | início livre mais próximo que cabe (agenda + horário), passos de 15 min |
 | `backend-executors/app/services/requested_slot.py` / `decision_engine.py` | facto "ocupado" com a sugestão calculada (marcação nova e remarcação) |
 | `backend-executors/app/services/decision_engine.py` | frase na regra de REAGENDAMENTO de `_build_child_prompt_meeting_management` |
-| `docs/prompts_llms.md`, `docs/architecture/agenda.md` | refletir o estado novo |
+| `docs/prompts_llms.md`, `docs/architecture/pipeline-phases.md` | refletir o estado novo (`agenda.md` já foi na Fase 1) |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `52f6a93` | Alternativa livre calculada em código (agenda + horário) e regras de remarcação no prompt |
+
+**Detalhes do commit `52f6a93`:**
+- `professional_hours.py` — `nearest_free_start` (mesmo dia, inícios de 15 em 15 min + o último
+  possível, livre na agenda, dentro do horário; empate → o mais tarde)
+- `requested_slot.py` — `build_agenda_fact_block(..., alternative=, hours_known=)`: facto "ocupado"
+  com "proponha <hora> com <profissional> … proponha exatamente este" ou "proponha outro dia"
+- `decision_engine.py` — `_build_agenda_fact_block` usa a alternativa em "ocupado" e em "fora do
+  horário" (antes, a sugestão de "fora" ignorava a agenda); prompt de gestão pós-marcação: duas regras
+  novas (ocupado/fora → propor sem remarcar, com exemplo ✅; lead aceita a proposta → remarcar)
+- `docs/prompts_llms.md` (1.4.5 + regras de remarcação), `docs/architecture/pipeline-phases.md`
+- Testes: 453 passam (5 novos em `test_professional_hours.py`)
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** quando o horário pedido estava ocupado, era a IA que escolhia a alternativa a propor, e
+podia escolher uma que não cabia no horário da terapeuta (16h15 com a Val).
+**Agora:** o sistema calcula o horário livre mais próximo que cabe na agenda e no horário da
+terapeuta, e a Lara propõe exatamente esse. Se nesse dia não houver nenhum, pede outro dia. Na
+remarcação, a Lara propõe sem mudar nada e diz que a sessão antiga se mantém. Quando o cliente
+responde "pode ser", remarca. Isto vale também para marcações novas com o horário ocupado.
+**Para validar:** Cenários P1, P2, P3 e C1, abaixo.
 
 ---
 
