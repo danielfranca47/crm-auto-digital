@@ -124,11 +124,19 @@ no `ai_profile` do ContextBundle.
 | `backend-executors/tests/test_saudacao_hora_local.py` | Testes com relógio fixo (Lisboa manhã/tarde/noite, limites 05h/12h/20h, São Paulo, fuso inválido, prompts) |
 | `docs/prompts_llms.md`, `docs/architecture/llm-architecture.md` | Linha AGORA documentada |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f1f14e5` | Hora local do negócio nos prompts que cumprimentam + testes com relógio fixo + docs |
+
+**Relatório da fase (linguagem simples):** a Lara passa a saber que horas são no fuso da conta antes de cumprimentar. De manhã diz "Bom dia", de tarde "Boa tarde" e à noite "Boa noite". Se o cliente já cumprimentou com um período, ela responde com o mesmo. Os exemplos do prompt deixaram de ensinar sempre "Boa tarde"/"Boa noite". Os testes automáticos passam; falta ver a Lara a responder na bancada, de manhã e à noite.
+
 ## Checks de Validação
 
 ### Cenário T1 — Testes automáticos
-- [ ] `pytest backend-executors/tests/test_saudacao_hora_local.py` passa (12 testes)
-- [ ] Suite completa sem falhas novas (2 falhas em `test_recepcao_sales_flow_pending.py` já existiam em `main`)
+- [x] `pytest backend-executors/tests/test_saudacao_hora_local.py` passa (12 testes) — 26/10/2026
+- [x] Suite completa sem falhas novas: 488 passam — 26/10/2026 (2 falhas em `test_recepcao_sales_flow_pending.py` já existiam em `main`)
 
 ### Cenário P1 — Bancada local `.claude/agentes/sensi-vitae`
 - [ ] `python simular.py p-manha D1` antes das 12h de Lisboa → "Bom dia"
