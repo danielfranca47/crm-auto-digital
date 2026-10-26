@@ -1811,16 +1811,21 @@ def _calendar_lookup_table_pt(days_ahead: int = 14, tz_name: Optional[str] = Non
 _MEETING_DAY_REFERENCE_RULE = (
     "  * meeting_day_reference: sempre que preencher meeting_datetime_candidate, escreva aqui as "
     "palavras que identificam o dia escolhido, tal como foram ditas na conversa: 'hoje', 'amanhã', "
-    "'depois de amanhã', o nome do dia da semana (ex.: 'sexta-feira') ou a data escrita (ex.: "
-    "'30/10'). Se o lead aceitou uma opção que você propôs, use o dia dessa opção. O sistema usa "
-    "este campo para conferir a data — copie as palavras da conversa, não a data calculada.\n"
+    "'depois de amanhã' ou o nome do dia da semana (ex.: 'sexta-feira'); uma data (ex.: '30/10') "
+    "só se o próprio lead a escreveu. Se o lead aceitou uma opção que você propôs, use o dia da "
+    "semana dessa opção. O sistema usa este campo para conferir a data — copie as palavras da "
+    "conversa, nunca a data que você calculou.\n"
 )
 
 
 def _build_meeting_already_booked_block() -> str:
     """Quando a Mãe dá meeting_scheduled=true, a marcação é gravada neste turno — a Filha tem
     de enviar a confirmação final, não o resumo + "Posso confirmar?" que as instruções da
-    conta pedem antes de o lead aceitar (em teste real o lead ficava sem a confirmação)."""
+    conta pedem antes de o lead aceitar (em teste real o lead ficava sem a confirmação).
+
+    Só entra quando o lead NÃO está a entrar na fase neste turno: na entrada,
+    meeting_scheduler.handle_meeting_scheduled adia a criação (gate M3) e uma confirmação
+    final aqui anunciaria uma marcação que não existe."""
     return (
         "\nMARCAÇÃO JÁ GRAVADA NESTE TURNO (prevalece sobre o passo de pedir confirmação das "
         "instruções personalizadas):\n"
@@ -2024,11 +2029,22 @@ def _apply_meeting_date_guard(
     signals = trace.get("child_signals_structured")
     if not isinstance(signals, dict) or not signals.get("meeting_datetime_candidate"):
         return
+    inbound_now = _extract_message_text(context)
+    recent = list(reversed(context.get("history") or []))[:10]
+    lead_messages = [inbound_now] + [
+        str(item.get("body") or item.get("text") or "")
+        for item in recent
+        if str(item.get("model") or "").lower() == "inbound"
+    ][:5]
+    earlier_messages = [inbound_now] + [str(item.get("body") or item.get("text") or "") for item in recent]
     result = meeting_date_guard.reconcile_meeting_date(
         signals.get("meeting_datetime_candidate"),
         decision.message_text or "",
         day_reference=signals.get("meeting_day_reference"),
         tz_name=(context.get("ai_profile") or {}).get("timezone"),
+        lead_messages=lead_messages,
+        earlier_messages=earlier_messages,
+        is_confirmation=trace.get("meeting_scheduled") is True,
     )
     trace["meeting_date_guard"] = result.trace
     if not result.trace.get("applied"):
@@ -3558,8 +3574,15 @@ def _build_child_prompt_apresentation(
             "NÃO substituas o recibo por texto verbal solto. O recibo É a resposta principal.\n"
             f"extracted_fields disponíveis: {json.dumps(_extracted_fields_apres, ensure_ascii=False)}\n"
         )
-    elif _apres_meeting_scheduled:
-        _booking_confirmation_block = _build_meeting_already_booked_block()
+    # Fora do modo recibo, o bloco "marcação já gravada" vai no FIM do prompt (ver abaixo):
+    # no meio, a regra sales "peça confirmação" e as instruções da conta vinham depois e venciam.
+    _already_booked_block = (
+        _build_meeting_already_booked_block()
+        if _apres_meeting_scheduled
+        and not _booking_confirmation_block
+        and not _compute_is_phase_entry(context, "apresentation")
+        else ""
+    )
 
     # Bloco de seleção contextual de mídias — a filha declara explicitamente quais
     # mídias do knowledge devem ser anexadas neste turno. O decision_engine usa essa
@@ -3765,6 +3788,7 @@ def _build_child_prompt_apresentation(
     )
     _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
     _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "apresentation", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
+    _apres_prompt += _already_booked_block
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
@@ -4516,7 +4540,12 @@ def _build_child_prompt_agendamento(
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
         + _build_knowledge_reference_block(context, exclude_categories=("service_pricing_table",))
-        + (_build_meeting_already_booked_block() if _extract_meeting_scheduled_signal(mother_decision) else "")
+        + (
+            _build_meeting_already_booked_block()
+            if _extract_meeting_scheduled_signal(mother_decision)
+            and not _compute_is_phase_entry(context, "agendamento")
+            else ""
+        )
     )
     return _sched_prompt
 

@@ -210,6 +210,54 @@ def _reference_from_text(text: str, current: date, today: date) -> Optional[str]
     return None
 
 
+def _written_by_lead(reference: str, lead_messages: List[str]) -> bool:
+    match = _NUMERIC_DATE_RE.search(reference)
+    if not match:
+        return True
+    wanted = (int(match.group(1)), int(match.group(2)))
+    return any(
+        (int(m.group(1)), int(m.group(2))) == wanted
+        for text in lead_messages
+        for m in _NUMERIC_DATE_RE.finditer(text or "")
+    )
+
+
+def _day_mentioned(reference: str, messages: List[str], today: date) -> bool:
+    """O dia da referência (dia da semana ou hoje/amanhã) aparece em alguma das mensagens —
+    pelo nome, por "amanhã"/"hoje" que caia nesse dia, ou por uma data dd/mm desse dia."""
+    target = _resolve_reference(reference, today, today + timedelta(days=-1))
+    if target is None:
+        return True
+    for text in messages:
+        text = text or ""
+        for m in _WEEKDAY_RE.finditer(text):
+            if _weekday_key(m.group(0)) == target.weekday():
+                return True
+        for m in _RELATIVE_RE.finditer(text):
+            if _resolve_reference(m.group(0), today, today) == target:
+                return True
+        if any(written == target for _s, _e, written, _k in _find_dates(text, today)):
+            return True
+    return False
+
+
+def _latest_lead_day_word(lead_messages: List[str]) -> Optional[str]:
+    """Última palavra de dia nas mensagens (da mais recente para a mais antiga); dentro de
+    uma mensagem, a última ocorrência."""
+    for text in lead_messages:
+        text = text or ""
+        hits = [(m.start(), m.group(0)) for m in _RELATIVE_RE.finditer(text)]
+        hits += [
+            (m.start(), m.group(0))
+            for m in _WEEKDAY_RE.finditer(text)
+            if not m.group(0).lower().startswith("segunda") or "feira" in m.group(0).lower()
+        ]
+        hits += [(m.start(), m.group(0)) for m in _NUMERIC_DATE_RE.finditer(text)]
+        if hits:
+            return max(hits)[1]
+    return None
+
+
 def reconcile_meeting_date(
     candidate: Optional[str],
     message_text: str,
@@ -217,7 +265,18 @@ def reconcile_meeting_date(
     day_reference: Optional[str],
     tz_name: Optional[str],
     now_utc: Optional[datetime] = None,
+    lead_messages: Optional[List[str]] = None,
+    earlier_messages: Optional[List[str]] = None,
+    is_confirmation: bool = False,
 ) -> DateGuardResult:
+    """`lead_messages`: textos do lead, do mais recente para o mais antigo. Quando vem, um
+    `dd/mm` em `day_reference` só vale se o lead o escreveu — senão é a data que o LLM
+    calculou (a que queremos conferir), e vale a última palavra de dia dita pelo lead.
+
+    `earlier_messages` + `is_confirmation`: no turno em que o lead confirma, o dia tem de já
+    ter sido falado na conversa (lead ou agente, antes desta resposta). Em teste real o LLM
+    confirmou "quarta-feira" depois de propor só horários de terça; nesse caso vale o último
+    dia falado."""
     text = message_text or ""
     if not candidate or not isinstance(candidate, str):
         return DateGuardResult(candidate, text)
@@ -232,7 +291,21 @@ def reconcile_meeting_date(
     today = local_today(tz_name, now_utc)
     source = "signal"
     reference = str(day_reference).strip() if isinstance(day_reference, str) and day_reference.strip() else None
-    resolved = _resolve_reference(reference, today, current) if reference else None
+    if reference and lead_messages is not None and not _written_by_lead(reference, lead_messages):
+        source = "lead_messages"
+        reference = _latest_lead_day_word(lead_messages)
+    if (
+        reference
+        and is_confirmation
+        and earlier_messages
+        and not _NUMERIC_DATE_RE.search(reference)
+        and not _day_mentioned(reference, earlier_messages, today)
+    ):
+        fallback = _latest_lead_day_word(earlier_messages)
+        if fallback:
+            source = "earlier_messages"
+            reference = fallback
+    resolved =_resolve_reference(reference, today, current) if reference else None
     if resolved is None:
         source = "message_text"
         reference = _reference_from_text(text, current, today)

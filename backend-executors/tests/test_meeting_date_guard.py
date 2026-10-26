@@ -81,6 +81,27 @@ def test_data_escrita_explicita_vence():
     assert result.candidate == "2026-10-30T11:00:00"
 
 
+def test_data_do_lead_vale_como_referencia():
+    result = reconcile_meeting_date(
+        "2026-10-28T11:00:00", "Fica dia 30/10 às 11h.", day_reference="30/10",
+        tz_name=TZ, now_utc=NOW, lead_messages=["Pode ser dia 30/10 às 11h?"],
+    )
+    assert result.candidate == "2026-10-30T11:00:00"
+
+
+def test_data_calculada_pela_ia_nao_conta_como_referencia():
+    # Bancada F3b1: o lead disse "amanhã às 11h" → "pode ser às 11h30"; a IA escreveu
+    # "terça-feira, 27/10" e pôs meeting_day_reference="27/10" (a data que ela calculou).
+    result = reconcile_meeting_date(
+        "2026-10-27T11:30:00", "Para a terça-feira, 27/10, tenho um horário às 11h30.",
+        day_reference="27/10", tz_name=TZ, now_utc=NOW,
+        lead_messages=["Pode ser às 11h30 então.", "Quero marcar para amanhã às 11h."],
+    )
+    assert result.candidate == "2026-10-26T11:30:00"
+    assert result.message_text == "Para a segunda-feira, 26/10, tenho um horário às 11h30."
+    assert result.trace["reference_source"] == "lead_messages"
+
+
 def test_sem_referencia_nao_mexe():
     text = "Fica marcado às 11h. Até amanhã!"
     result = _run("2026-10-28T11:00:00", text)
@@ -108,6 +129,46 @@ def test_sem_candidato_nao_mexe():
 def test_data_por_extenso():
     result = _run("2026-10-28T11:00:00", "Fica sexta-feira, 28 de outubro, às 11h.", "sexta")
     assert result.message_text == "Fica sexta-feira, 30 de outubro, às 11h."
+
+
+def test_confirmacao_de_dia_nunca_falado_usa_o_ultimo_dia_da_conversa():
+    # Bancada F3c3 pos-marcacao: a Lara propôs "terça às 11h, 12h ou 15h", o lead disse
+    # "Sim, confirmo" e a IA confirmou "Dia: 28/10 (quarta-feira)" com referência "quarta-feira".
+    anteriores = [
+        "Sim, confirmo",
+        "A Val não está disponível para terça às 14h. Posso sugerir: terça às 11h, 12h ou 15h.",
+        "Olá, queria marcar uma massagem relaxante de 60 minutos para terça às 14h",
+    ]
+    result = reconcile_meeting_date(
+        "2026-10-28T15:00:00", CONFIRMACAO.format(dia="28/10 (quarta-feira)"),
+        day_reference="quarta-feira", tz_name=TZ, now_utc=NOW,
+        lead_messages=[anteriores[0], anteriores[2]], earlier_messages=anteriores, is_confirmation=True,
+    )
+    assert result.candidate == "2026-10-27T15:00:00"
+    assert "Dia: 27/10 (terça-feira)" in result.message_text
+    assert result.trace["reference_source"] == "earlier_messages"
+
+
+def test_proposta_de_dia_novo_nao_e_corrigida():
+    # Fora da confirmação, a IA pode propor um dia ainda não falado (o pedido estava cheio).
+    anteriores = ["Queria quinta às 21h", "Olá! Sou a Lara."]
+    result = reconcile_meeting_date(
+        "2026-10-30T11:00:00", "Quinta às 21h não dá. Pode ser sexta-feira, 30/10, às 11h?",
+        day_reference="sexta-feira", tz_name=TZ, now_utc=NOW,
+        lead_messages=[anteriores[0]], earlier_messages=anteriores, is_confirmation=False,
+    )
+    assert result.candidate == "2026-10-30T11:00:00"
+
+
+def test_confirmacao_de_dia_ja_falado_mantem():
+    anteriores = ["Sim, a primeira", "Posso sugerir sexta às 11h ou sábado às 15h.", "Queria quinta às 21h"]
+    result = reconcile_meeting_date(
+        "2026-10-30T11:00:00", CONFIRMACAO.format(dia="30/10 (sexta-feira)"),
+        day_reference="sexta-feira", tz_name=TZ, now_utc=NOW,
+        lead_messages=[anteriores[0], anteriores[2]], earlier_messages=anteriores, is_confirmation=True,
+    )
+    assert result.candidate == "2026-10-30T11:00:00"
+    assert result.trace["applied"] is False
 
 
 def test_decision_engine_corrige_o_que_o_meeting_scheduler_le(monkeypatch):

@@ -81,8 +81,21 @@ def test_agendamento_prompt_has_already_booked_block_only_when_meeting_scheduled
     assert "MARCAÇÃO JÁ GRAVADA NESTE TURNO" not in _build_child_prompt_agendamento(_base_context(), "Sexta?", not_booked)
 
 
+def test_no_already_booked_block_on_phase_entry():
+    # Entrada na fase: o meeting_scheduler adia a criação (gate M3) — anunciar "já marcado"
+    # deixava o lead com uma confirmação de uma marcação que não existe.
+    context = _base_context()
+    context["lead"]["category"] = "pre-agendamento"
+    booked = MotherDecision(
+        route_to="agendamento", perceived_category="agendamento", confidence=0.9, reason="ok",
+        signals={"meeting_scheduled": True},
+    )
+    assert "MARCAÇÃO JÁ GRAVADA NESTE TURNO" not in _build_child_prompt_agendamento(context, "Amanhã às 11h", booked)
+
+
 def test_apresentation_sales_variant_gets_already_booked_block_when_meeting_scheduled():
     context = _base_context()
+    context["lead"]["category"] = "apresentation"
     context["ai_profile"]["presentation_variant"] = "sales"
     booked = MotherDecision(
         route_to="apresentation", perceived_category="apresentation", confidence=0.9, reason="ok",
@@ -90,6 +103,8 @@ def test_apresentation_sales_variant_gets_already_booked_block_when_meeting_sche
     )
     prompt = _build_child_prompt_apresentation(context, "Sim, pode confirmar", booked)
     assert "MARCAÇÃO JÁ GRAVADA NESTE TURNO" in prompt
+    # no fim do prompt, depois da regra sales "peça confirmação" e das instruções da conta
+    assert prompt.rindex("MARCAÇÃO JÁ GRAVADA NESTE TURNO") > prompt.rindex("UM TURNO = UMA AÇÃO")
 
 
 def test_pre_agendamento_prompt_uses_calendar_table_not_self_calc():

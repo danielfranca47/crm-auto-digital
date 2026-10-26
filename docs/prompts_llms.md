@@ -510,12 +510,15 @@ a pré-agendamento recebe só a tabela.
   converte a referência em data (dia da semana → a data do candidato se já cair nesse dia, senão a
   próxima ocorrência; "amanhã" → hoje+1) e, se não bater com o candidato, corrige o candidato
   (mantém a hora) e a data/dia escritos em `message_text`. Sem o sinal, usa o dia da semana escrito
-  junto da data na mensagem. Rasto em `decision_trace.meeting_date_guard`; log
-  `event=meeting_date_corrected`.
+  junto da data na mensagem. Um `dd/mm` no sinal só vale se o lead o escreveu; no turno de
+  confirmação, um dia nunca falado na conversa é trocado pelo último dia falado. Rasto em
+  `decision_trace.meeting_date_guard`; log `event=meeting_date_corrected`.
 - **`MARCAÇÃO JÁ GRAVADA NESTE TURNO`** (`_build_meeting_already_booked_block`): com
-  `meeting_scheduled=True`, entra no fim do prompt de agendamento e no da apresentação (quando
-  não é `scheduler`, que tem o "modo recibo"): a marcação é gravada neste turno, por isso a Filha
-  envia a confirmação final no formato das instruções da conta, sem voltar a pedir confirmação.
+  `meeting_scheduled=True` e o lead já dentro da fase (não `_compute_is_phase_entry`), entra no
+  fim do prompt de agendamento e no da apresentação (quando não é `scheduler`, que tem o "modo
+  recibo"): a marcação é gravada neste turno, por isso a Filha envia a confirmação final no
+  formato das instruções da conta, sem voltar a pedir confirmação. Na entrada da fase não entra
+  (o `meeting_scheduler` adia a criação — gate M3).
 
 ### 1.5 `_build_child_prompt_follow_up()` — Filha Follow-up
 
