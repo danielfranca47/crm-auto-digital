@@ -1,0 +1,2 @@
+# Scripts de shell correm no bash (Git Bash / Linux): com CRLF o bash falha em cada linha ($'\r').
+*.sh text eol=lf

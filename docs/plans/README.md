@@ -105,10 +105,8 @@ Após a tua aprovação, é criado `docs/plans/plano-sprint-YYYY-MM-DD.md`.
 > **Atalho em 3 comandos:** `/statusplans` (inventário + prioridade, sem ler
 > código) → `/statusplans-verificar` (audita até 6 itens no código: já feito,
 > obsoleto, parcial ou faltando) → `/statusplans-avancar` (limpa os
-> confirmados de `plans/*` e gera o sprint plan). São comandos locais (não
-> versionados); ver [`docs/ops/local-dev.md`](../ops/local-dev.md), seção
-> "Comandos slash locais", para o conteúdo exacto e como recriá-los noutro
-> dispositivo caso não apareçam.
+> confirmados de `plans/*` e gera o sprint plan). Os comandos estão em
+> [`.claude/commands/`](../../.claude/commands/).
 
 ---
 

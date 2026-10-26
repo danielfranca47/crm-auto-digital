@@ -34,7 +34,7 @@ momento — todos os anteriores já foram graduados (ver `docs/architecture/`).
 > **Status `Aguardando Plan Mode`:** um arquivo pode aparecer aqui já criado mas sem
 > Plan Mode ter rodado ainda, com só a secção "Motivação" preenchida — normalmente
 > gerado pelo comando `/statusplans-avancar` (ver
-> [`docs/ops/local-dev.md`](../ops/local-dev.md), seção "Comandos slash locais", e
+> [`.claude/commands/statusplans-avancar.md`](../../.claude/commands/statusplans-avancar.md) e
 > [`docs/plans/_guia-analise-planos.md`](../plans/_guia-analise-planos.md)) para não
 > gastar tokens investigando código em vários itens de um sprint de uma vez. Para
 > retomar um desses, basta pedir para continuar aquele arquivo — o Passo 0 roda nesse
@@ -104,10 +104,8 @@ um resumo: o que está completo, o que está em andamento, o que falta.
 ```
 
 > **Atalho:** o comando `/statusdev` faz exactamente isto — tabela com impacto,
-> % concluído, worktree activa e prioridade recomendada. É um comando local
-> (não versionado no git); ver [`docs/ops/local-dev.md`](../ops/local-dev.md),
-> seção "Comandos slash locais", para o conteúdo exacto e como recriá-lo
-> noutro dispositivo caso não apareça.
+> % concluído, worktree activa e prioridade recomendada — ver
+> [`.claude/commands/statusdev.md`](../../.claude/commands/statusdev.md).
 
 ### Quero graduar um arquivo que está completo
 
