@@ -175,6 +175,23 @@ perguntar, quando há várias opções e ele não escolheu.
 | `docs/architecture/agenda.md` | secção "Turno da confirmação" |
 | `docs/prompts_llms.md` | bloco "MARCAÇÃO JÁ GRAVADA" (facto, pré-agendamento, variante ambígua) |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `27b1aa9` | Leitura da última proposta, facto no bloco das 3 rotas, conferência do candidato |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando o cliente dizia "pode marcar", a IA escolhia sozinha que horário gravar — e às
+vezes gravava uma proposta que ele já tinha recusado. Se a conversa estivesse na fase de
+pré-agendamento, a IA dizia "Experiência Agendada" mas nada ficava na agenda.
+**Agora:** o sistema lê da conversa qual foi o último horário proposto e qual o cliente aceitou,
+diz isso à IA, e confere a resposta antes de gravar: se a IA trocar o horário, o sistema corrige a
+marcação e a mensagem; se houver duas opções e o cliente não disse qual, pergunta "prefere X ou
+Y?" em vez de gravar. Funciona também na fase de pré-agendamento.
+**Para validar:** Cenários P2, P3 e P5 (bancada local) e, depois do deploy, C1.
+
 ### Fase 2 — Não gravar sem duração/serviço
 
 **Objetivo:** com `meeting_scheduled=true` e a duração por saber (não dita pelo lead, não na
