@@ -311,3 +311,27 @@ nenhuma outra conta.
 **Decisão:** não corrigir agora — aguardando decisão do utilizador sobre prioridade. Revisitar
 antes de qualquer venda real do agente demo "Lara" (`agente-demo.md`), já que o próprio doc de
 marketing assume que os guardrails de saúde/handoff cobrem o maior risco de reputação do nicho.
+
+---
+
+## M12 — A IA diz que um horário livre "não está disponível"
+
+**Prioridade: ALTA** (perde clientes e contradiz a agenda real)
+
+**Contexto:** testes do agente Sensi Vitae no Playground de produção (26/10/2026), com a agenda da
+conta vazia a partir dessa data e `scheduling_offer_style=confirm_exact`.
+
+**Estado atual:** quando o cliente pede serviço + dia + hora na mesma mensagem (ex.: "Lomi Lomi de
+60 min, sábado às 11h"), a Filha de agendamento responde em ~metade dos casos "infelizmente esse
+horário não está disponível" e propõe outro — sem nenhum compromisso em `calendar_busy_slots` e
+dentro do horário do terapeuta. Três formulações diferentes no `custom_instructions` (aceitar o
+pedido livre; nomear "HORÁRIOS JÁ OCUPADOS" como única fonte; explicar o custo de perder o
+cliente) baixaram mas não eliminaram o comportamento (3 em 6 conversas na última rodada).
+`confirm_exact` também não o elimina.
+
+**O que construir:** decidir em código se o horário pedido está livre (já existe tudo: candidato
+estruturado, `calendar_busy_slots`, horários do profissional) e passar isso à Filha como facto
+("o horário pedido está LIVRE — confirme-o"), em vez de deixar a IA concluir sozinha; ou, no
+mínimo, detetar a recusa de um horário livre e reescrever a resposta. Depende de
+`fix-disponibilidade-campo-duplo-sentido` (horários do profissional num campo próprio) para a
+parte "dentro do horário do terapeuta".
