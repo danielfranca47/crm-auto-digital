@@ -6,6 +6,7 @@ import { WeekView } from "@/components/WeekView";
 import { DayView } from "@/components/DayView";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
+import type { ApiError } from "@/lib/api-client";
 import { appointmentsKeys } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 
@@ -40,12 +41,15 @@ const Agenda = () => {
       await api.googleCalendar.sync(start, end);
       queryClient.invalidateQueries({ queryKey: appointmentsKeys.all });
       toast({ title: "Agenda sincronizada com Google Calendar" });
-    } catch {
+    } catch (err) {
+      // 409 do backend: detail = { code, message } com o motivo real (ex.: sem permissão do calendário)
+      const detail = (err as ApiError)?.data as { detail?: { message?: string } } | undefined;
       toast({
         title: "Erro ao sincronizar",
-        description: "Não foi possível importar eventos do Google Calendar.",
+        description: detail?.detail?.message || "Não foi possível importar eventos do Google Calendar.",
         variant: "destructive",
       });
+      queryClient.invalidateQueries({ queryKey: ["googleCalendarStatus"] });
     } finally {
       setIsSyncing(false);
     }

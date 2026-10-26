@@ -15,6 +15,14 @@ export type CoreProduct = {
   name?: string;
 };
 
+/** Códigos em `last_error`: missing_calendar_scope | token_revoked (ver docs/architecture/google-calendar.md) */
+export type GoogleCalendarStatus = {
+  connected: boolean;
+  email: string | null;
+  last_error?: string | null;
+  last_error_at?: string | null;
+};
+
 export type CoreUser = {
   id?: number;
   email?: string | null;
@@ -1873,7 +1881,7 @@ export const api = {
   // -------- GOOGLE CALENDAR --------
   googleCalendar: {
     getStatus: () =>
-      coreClient.get<{ connected: boolean; email: string | null }>("/auth/google/calendar/status"),
+      coreClient.get<GoogleCalendarStatus>("/auth/google/calendar/status"),
     disconnect: () =>
       coreClient.delete<{ disconnected: boolean }>("/auth/google/calendar"),
     /** URL para iniciar o fluxo OAuth — abrir directamente no browser (redirect). */

@@ -192,6 +192,19 @@ Retorna todos os appointments do período para o utilizador (CRM + Google).
 
 `frontend-crm/src/pages/MinhaConta.tsx` — secção "Google Calendar":
 
-- **Não conectado:** botão "Conectar Google Calendar" → redirect para `GET /auth/google/calendar` (com Bearer token no header via janela nova / redirect)
-- **Conectado:** texto "Conectado como [google_email]" + botão "Desconectar" → `DELETE /auth/google/calendar`
-- Estado lido via `GET /users/me` (campo `google_calendar_connected: bool` + `google_email: str | null`)
+É o **único** sítio onde a conta liga o Google. Estado lido via `GET /auth/google/calendar/status`.
+
+- **Não conectado:** botão "Conectar Google Calendar" → `GET /auth/google/calendar/url` (Bearer) → redirect para a Google
+- **Conectado:** "Conectado" + email + botão "Desconectar" → `DELETE /auth/google/calendar`
+- **Volta do callback:** `App.tsx::GoogleAuthHandler` reencaminha `/?google_connected=1` e
+  `/?google_error=<código>` para `/minha-conta`. Um erro fica num aviso fixo (não toast) com texto
+  por código (`missing_calendar_scope`, `denied`, genérico) e botão "Ligar de novo".
+- **`last_error` preenchido** (conta ligada mas a Google recusa): aviso amarelo com o motivo e
+  botão "Voltar a ligar".
+
+**Agenda** (`pages/Agenda.tsx`): erro do "Sincronizar Google" mostra `detail.message` do 409.
+
+**AI Profile → Calendário** (`components/agente/CamadaApresentacao.tsx`): a opção
+`calendar_integration = google_calendar` só fica gravada no perfil — não liga a conta. Ao escolhê-la,
+o modal mostra o estado da ligação (`/status`) e, se não estiver ligada ou tiver `last_error`, um
+link "Ligar em Minha Conta".

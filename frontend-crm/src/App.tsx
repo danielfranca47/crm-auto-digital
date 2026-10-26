@@ -55,16 +55,17 @@ import LockedShell from "./components/LockedShell";
 
 const queryClient = new QueryClient();
 
-/** Intercepts /?google_connected=1 and /?google_error=1 from OAuth callback and navigates to /minha-conta */
+/** Intercepts /?google_connected=1 and /?google_error=<código> from OAuth callback and navigates to /minha-conta */
 function GoogleAuthHandler() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
+    const googleError = searchParams.get("google_error");
     if (searchParams.get("google_connected") === "1") {
       navigate("/minha-conta?google_connected=1", { replace: true });
-    } else if (searchParams.get("google_error") === "1") {
-      navigate("/minha-conta?google_error=1", { replace: true });
+    } else if (googleError) {
+      navigate(`/minha-conta?google_error=${encodeURIComponent(googleError)}`, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
