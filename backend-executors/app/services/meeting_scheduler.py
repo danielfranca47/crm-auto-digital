@@ -859,10 +859,10 @@ def handle_meeting_cancel_or_reschedule(
 ) -> Optional[str]:
     """Aplica de verdade o cancelamento/reagendamento detectado por _decide_post_meeting_management.
 
-    Mesmo contrato de retorno de handle_meeting_scheduled: devolve uma mensagem de correção
-    (para o caller enviar ao lead) quando o reagendamento colide com outro compromisso do
-    profissional — nesse caso o appointment original NÃO é alterado. Retorna None em
-    qualquer outro caso, incluindo o caminho feliz.
+    Devolve sempre None. Quando o CRM recusa o novo horário (409), o appointment original NÃO é
+    alterado e `decision.message_text` passa a ser a mensagem "esse horário já não está
+    disponível; a sua sessão de <original> mantém-se" — substitui a resposta da Filha, que dava a
+    remarcação como feita, em vez de seguir uma 2.ª mensagem a contradizê-la.
 
     `events`, mesma semântica de handle_meeting_scheduled — só o Playground passa este
     parâmetro.
@@ -949,8 +949,18 @@ def handle_meeting_cancel_or_reschedule(
                     signal.lead_id,
                     signal.new_start_at.isoformat(),
                 )
-            ai_profile = context.get("ai_profile") or {}
-            return _generate_conflict_message(ai_profile, logger=logger) or MEETING_CONFLICT_MESSAGE
+            # A resposta da Filha dava a remarcação como certa: é substituída (em vez de seguir
+            # com uma 2.ª mensagem a contradizê-la), e diz que a sessão original se mantém.
+            from app.services import meeting_proposal
+
+            tz_name = (context.get("ai_profile") or {}).get("timezone")
+            try:
+                original_start = _ensure_aware(datetime.fromisoformat(str(original_slot.get("start_at"))), "UTC")
+                original = meeting_proposal.ProposedOption(start=original_start.astimezone(_resolve_timezone(tz_name)))
+            except (TypeError, ValueError):
+                original = None
+            decision.message_text = meeting_proposal.reschedule_unavailable_text(original)
+            return None
         if logger:
             logger.warning(
                 "event=meeting_reschedule_failed appointment_id=%s exc_type=%s exc=%s",
