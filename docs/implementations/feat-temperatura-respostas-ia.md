@@ -284,19 +284,16 @@ resposta seguinte, que trata das massagens da Val. Se o cliente não escolheu (e
 custa?"), a pergunta continua a ser feita.
 **Para validar:** P5 acima (já validado via API).
 
-### Observação de configuração (não é código)
+### Configuração da Lara (não é código)
 
-Com o Llama 3.3, a orientação da Lara tal como está ("…Pergunte qual terapeuta ele tem
-interesse. ⏎⏎ Terapeuta Val ou Daniel") gerou em 3 de 8 vezes "Qual terapeuta você tem
-interesse?", sem nomear os dois. Escrita numa só frase ("Apresente-se como Lara, Atendente
-do Sensi Vitae, e pergunte com qual terapeuta ele tem interesse: Val ou Daniel."), saiu 8 de
-8 com os nomes. A mudança é no Fluxo de Venda da conta, feita pelo utilizador.
-
----
-
-## Ajustes Possíveis Pós-Implementação
-
-- Temperatura baixa fixa para a Mãe (M1) depois de medir o efeito na Filha.
-- As outras Filhas também colam o bloco do Fluxo de Venda no fim do prompt, depois do JSON.
-  Os prompts delas não proíbem perguntas como o da Recepção, mas vale observar se alguma
-  orientação de outra fase também é ignorada.
+A orientação "Val ou Daniel" usada nos Cenários P1 e P5 vinha de uma cópia antiga do perfil. Em
+produção, desde a c13 (26/10 08:09), a Fase 0 só pede "cumprimente e apresente-se numa frase
+curta". Com esse texto, o código desta branch cumpria a apresentação, mas acabava em pergunta
+("Como posso ajudar?", "Gostaria de saber…?") mesmo com pedido na mensagem. Em 26/10 17:33 foi
+aplicada em produção a c13b (`.claude/agentes/sensi-vitae/configs/c13b-recepcao-a-risca.json`):
+"…numa única frase curta que termina em ponto final. A resposta ao pedido do cliente segue noutra
+mensagem logo a seguir." com "seguir à risca". Localmente, na conversa completa via API: "quanto
+custa…" dá "Bom dia! Sou a Lara, do Sensi Vitae." seguido do preço e da oferta da tabela, e
+"massagens da val" dá a apresentação + frase-ponte, sem pergunta. Na produção atual (código de
+`main`) a 1.ª mensagem ainda acaba em "Como posso ajudar?" (6 de 6). O efeito só aparece depois
+do merge desta branch.
