@@ -262,6 +262,12 @@ def generate_child_result(
     return _generate_json(prompt, stub=_stub_child_response, ai_profile=ai_profile, route=route)
 
 
+def generate_professional_hours(prompt: str, *, ai_profile: Optional[Dict[str, Any]] = None) -> str:
+    return _generate_json(
+        prompt, stub=lambda: json.dumps({"professionals": []}), ai_profile=ai_profile, route="professional_hours"
+    )
+
+
 def generate_conflict_message(prompt: str, *, ai_profile: Optional[Dict[str, Any]] = None) -> str:
     return _generate_text(prompt, ai_profile=ai_profile)
 

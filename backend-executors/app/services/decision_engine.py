@@ -18,7 +18,16 @@ from app.contracts.qualification_contract import (
 from app.clients import crm_client
 from app.core.config import settings
 from app.schemas.decision import DecisionOutput
-from app.services import fast_path, field_extractor, handoff_policy, llm_service, meeting_date_guard
+from app.services import (
+    fast_path,
+    field_extractor,
+    handoff_policy,
+    llm_service,
+    meeting_date_guard,
+    professional_hours,
+    requested_slot,
+)
+from app.services.meeting_scheduler import _resolve_default_duration_minutes
 from app.services.orchestrator_models import ChildResult, MotherDecision
 
 logger = logging.getLogger(__name__)
@@ -2017,6 +2026,44 @@ def _normalize_scheduler_child_signals(
     return normalized
 
 
+def _recent_conversation(context: Dict[str, Any]) -> tuple[str, List[str], List[str]]:
+    """(mensagem atual, mensagens do lead, todas as mensagens) — da mais recente para a mais
+    antiga, a começar pela mensagem atual."""
+    inbound_now = _extract_message_text(context)
+    recent = list(reversed(context.get("history") or []))[:10]
+    lead_messages = [inbound_now] + [
+        str(item.get("body") or item.get("text") or "")
+        for item in recent
+        if str(item.get("model") or "").lower() == "inbound"
+    ][:5]
+    earlier_messages = [inbound_now] + [str(item.get("body") or item.get("text") or "") for item in recent]
+    return inbound_now, lead_messages, earlier_messages
+
+
+def _build_agenda_fact_block(context: Dict[str, Any], message_text: str) -> str:
+    """Horário pedido na mensagem + resultado da verificação da agenda, como facto para a Filha.
+    Vazio quando a mensagem não traz uma hora inequívoca. Ver requested_slot.py."""
+    ai_profile = context.get("ai_profile") or {}
+    _inbound, lead_messages, earlier_messages = _recent_conversation(context)
+    slot = requested_slot.find_requested_slot(
+        message_text,
+        earlier_messages[1:],
+        tz_name=ai_profile.get("timezone"),
+        busy_slots=context.get("calendar_busy_slots") or [],
+        duration_minutes=_resolve_default_duration_minutes(ai_profile),
+        exclude_lead_id=(context.get("lead") or {}).get("id"),
+        lead_messages=lead_messages[1:],
+    )
+    verdict = None
+    if slot is not None and slot.free:
+        hours = professional_hours.get_hours(ai_profile)
+        if hours:
+            verdict = professional_hours.check(
+                hours, slot.start, slot.end, professional_hours.mentioned_professional(hours, lead_messages)
+            )
+    return requested_slot.build_agenda_fact_block(slot, verdict)
+
+
 def _apply_meeting_date_guard(
     decision: DecisionOutput, context: Dict[str, Any], logger: Optional[logging.Logger] = None
 ) -> None:
@@ -2029,14 +2076,7 @@ def _apply_meeting_date_guard(
     signals = trace.get("child_signals_structured")
     if not isinstance(signals, dict) or not signals.get("meeting_datetime_candidate"):
         return
-    inbound_now = _extract_message_text(context)
-    recent = list(reversed(context.get("history") or []))[:10]
-    lead_messages = [inbound_now] + [
-        str(item.get("body") or item.get("text") or "")
-        for item in recent
-        if str(item.get("model") or "").lower() == "inbound"
-    ][:5]
-    earlier_messages = [inbound_now] + [str(item.get("body") or item.get("text") or "") for item in recent]
+    _inbound_now, lead_messages, earlier_messages = _recent_conversation(context)
     result = meeting_date_guard.reconcile_meeting_date(
         signals.get("meeting_datetime_candidate"),
         decision.message_text or "",
@@ -4352,6 +4392,7 @@ def _build_child_prompt_pre_agendamento(
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
         + _build_knowledge_reference_block(context)
+        + _build_agenda_fact_block(context, message_text)
     )
     return _pre_prompt
 
@@ -4540,6 +4581,7 @@ def _build_child_prompt_agendamento(
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
         + _build_knowledge_reference_block(context, exclude_categories=("service_pricing_table",))
+        + _build_agenda_fact_block(context, message_text)
         + (
             _build_meeting_already_booked_block()
             if _extract_meeting_scheduled_signal(mother_decision)
@@ -4630,6 +4672,7 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
+        + _build_agenda_fact_block(context, message_text)
     )
 
 
