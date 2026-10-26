@@ -171,6 +171,16 @@ function ModalSessionDuration({ value, onSave, onClose }: { value: number; onSav
   );
 }
 
+// ─── Modal: Intervalo entre sessões ───────────────────────────
+function ModalSessionBuffer({ value, onSave, onClose }: { value: number; onSave: (v: number) => void; onClose: () => void }) {
+  const [local, setLocal] = useState(value || 0);
+  return (
+    <ModalBase title="Intervalo entre sessões" sub="Minutos livres que o agente deixa entre duas marcações" onClose={onClose} onSave={() => onSave(local)}>
+      <SliderField label="Intervalo mínimo" value={local} min={0} max={60} step={5} format={v => (v ? `${v} min` : 'Sem intervalo')} onChange={setLocal} />
+    </ModalBase>
+  );
+}
+
 // ─── Modal: Gestão pós-confirmação (cancelamento/reagendamento) ──
 function ModalMeetingManagement({ value, onSave, onClose }: { value: boolean; onSave: (v: boolean) => void; onClose: () => void }) {
   const [local, setLocal] = useState(value);
@@ -200,7 +210,7 @@ function ModalMeetingManagement({ value, onSave, onClose }: { value: boolean; on
 // ─────────────────────────────────────────────────────────────
 
 type DrawerKey = 'briefing' | null;
-type ModalKey  = 'calendario' | 'modoOperacao' | 'ofertaHorario' | 'duracaoSessao' | 'gestaoPosConfirmacao' | null;
+type ModalKey  = 'calendario' | 'modoOperacao' | 'ofertaHorario' | 'duracaoSessao' | 'intervaloSessoes' | 'gestaoPosConfirmacao' | null;
 
 const APPOINTMENT_MODE_LABELS: Record<string, string> = {
   exploratory: 'Agendamento Exploratório',
@@ -218,6 +228,7 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
   const calLabel = CALENDAR_INTEGRATION_LABELS[config.calendar_integration] || 'Sem integração';
   const offerStyleLabel = SCHEDULING_OFFER_STYLE_LABELS[config.scheduling_offer_style] || 'Sempre oferecer alternativas';
   const sessionDurationLabel = `${config.default_session_duration_minutes || 30} min`;
+  const sessionBufferLabel = config.session_buffer_minutes ? `${config.session_buffer_minutes} min` : 'Sem intervalo';
   const meetingManagementLabel = config.meeting_management_enabled !== false
     ? 'Bot continua disponível'
     : 'Desativado (handoff manual)';
@@ -306,6 +317,14 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           status="ok"
           help="Tempo padrão reservado na agenda quando a IA confirma um agendamento com o lead. Se o profissional tiver sessões de durações diferentes (ex.: 30/60/90 min), use o valor mais comum aqui — suporte a múltiplas durações por tipo de serviço está planejado."
         />
+        <EditCard
+          label="Intervalo entre sessões"
+          value={sessionBufferLabel}
+          sub="Tempo livre entre duas marcações"
+          onClick={() => setModal('intervaloSessoes')}
+          status="ok"
+          help="Minutos que o agente deixa sempre livres entre duas marcações (ex.: para preparar a sala). Com 15 min e uma sessão das 15h às 16h, o agente só propõe a seguinte a partir das 16h15 — ou uma que acabe até às 14h45. Vale também para os eventos do Google Calendar. Marcações feitas à mão na Agenda não são bloqueadas."
+        />
       </div>
 
       {/* Seção: Gestão pós-confirmação */}
@@ -374,6 +393,13 @@ export function CamadaApresentacao({ config, onUpdate }: CamadaApresentacaoProps
           value={config.default_session_duration_minutes || 30}
           onClose={() => setModal(null)}
           onSave={v => { onUpdate({ default_session_duration_minutes: v }); setModal(null); }}
+        />
+      )}
+      {modal === 'intervaloSessoes' && (
+        <ModalSessionBuffer
+          value={config.session_buffer_minutes || 0}
+          onClose={() => setModal(null)}
+          onSave={v => { onUpdate({ session_buffer_minutes: v }); setModal(null); }}
         />
       )}
       {modal === 'gestaoPosConfirmacao' && (
