@@ -139,13 +139,15 @@ no `ai_profile` do ContextBundle.
 - [x] Suite completa sem falhas novas: 488 passam — 26/10/2026 (2 falhas em `test_recepcao_sales_flow_pending.py` já existiam em `main`)
 
 ### Cenário P1 — Bancada local `.claude/agentes/sensi-vitae`
-- [ ] `python simular.py p-manha D1` antes das 12h de Lisboa → "Bom dia"
+- [x] `python simular.py p-manha D1` antes das 12h de Lisboa → "Bom dia" — 26/10/2026, relógio do executor fixo em 27/10 10h55 de Lisboa: "Bom dia! Sou a Lara, do Sensi Vitae." (`tentativas/20261026-2137-hora-local-manha-simulada-p-manha.md`)
 - [x] `python simular.py p-manha D1` depois das 20h de Lisboa → "Boa noite" — 26/10/2026 21h27: "Boa noite! Sou a Lara, do Sensi Vitae." (`tentativas/20261026-2128-hora-local-noite-p-manha.md`)
-- [ ] `python simular.py p-micas D1` de manhã (cliente não cumprimenta) → "Bom dia"
+- [x] `python simular.py p-micas D1` de manhã (cliente não cumprimenta) → "Bom dia" — 26/10/2026, mesmo relógio fixo: "Bom dia! Sou a Lara, do Sensi Vitae." + pedido na 2.ª decisão; "quarta-feira" resolvida para 28/10, coerente com o "hoje" simulado (`tentativas/20261026-2139-hora-local-manha-simulada-p-micas.md`)
 - [x] Regressão `python simular.py p-ruben D1`: a pergunta junto com o cumprimento continua a seguir para o turno seguinte — 26/10/2026 21h28: "Boa noite! Sou a Lara…" (cliente não cumprimentou) + pedido tratado na 2.ª decisão (`tentativas/20261026-2129-hora-local-noite-p-ruben.md`)
 
 > Corridas de 26/10 numa cópia isolada da bancada (código da worktree, portas 8110–8112, cópia dos bancos),
 > porque a bancada partilhada (8100–8102, `ambiente/crm.db`) estava em uso por outra sessão.
+> Os checks de manhã correram à noite com o executor arrancado por um script que fixa
+> `meeting_date_guard.local_now` em 27/10 10h55 UTC (= Lisboa); o código da implementação não muda.
 
 ### Cenário C1 — Produção (depois do "sim" e do deploy)
 - [ ] `p-manha D1 --prod` de manhã → "Bom dia"
