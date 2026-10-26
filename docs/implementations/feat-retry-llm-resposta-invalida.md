@@ -2,6 +2,7 @@
 
 **Branch:** (a criar)
 **Status:** Aguardando Plan Mode
+**Autonomia:** manual
 **Origem:** pedido do utilizador em 26/10/2026, durante `fix-saudacao-hora-local`: a mensagem de handoff
 aparece "com uma certa frequência" quando a IA falha ou não responde.
 
