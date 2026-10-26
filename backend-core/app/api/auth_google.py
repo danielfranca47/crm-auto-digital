@@ -21,8 +21,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth/google", tags=["Google Calendar"])
 
+_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+
 _SCOPES = " ".join([
-    "https://www.googleapis.com/auth/calendar.events",
+    _CALENDAR_SCOPE,
     "https://www.googleapis.com/auth/userinfo.email",
 ])
 
@@ -74,15 +76,16 @@ def _save_google_tokens(
             conn.execute(
                 text(
                     "UPDATE users SET google_access_token = :at, google_refresh_token = :rt, "
-                    "google_token_expiry = :exp, google_email = :ge WHERE id = :uid"
+                    "google_token_expiry = :exp, google_email = :ge, "
+                    "google_last_error = NULL, google_last_error_at = NULL WHERE id = :uid"
                 ),
                 {"at": access_token, "rt": refresh_token, "exp": expiry, "ge": google_email, "uid": user_id},
             )
         else:
             conn.execute(
                 text(
-                    "UPDATE users SET google_access_token = :at, "
-                    "google_token_expiry = :exp WHERE id = :uid"
+                    "UPDATE users SET google_access_token = :at, google_token_expiry = :exp, "
+                    "google_last_error = NULL, google_last_error_at = NULL WHERE id = :uid"
                 ),
                 {"at": access_token, "exp": expiry, "uid": user_id},
             )
@@ -93,7 +96,8 @@ def _clear_google_tokens(user_id: int) -> None:
         conn.execute(
             text(
                 "UPDATE users SET google_access_token = NULL, google_refresh_token = NULL, "
-                "google_token_expiry = NULL, google_calendar_id = NULL, google_email = NULL "
+                "google_token_expiry = NULL, google_calendar_id = NULL, google_email = NULL, "
+                "google_last_error = NULL, google_last_error_at = NULL "
                 "WHERE id = :uid"
             ),
             {"uid": user_id},
@@ -105,7 +109,8 @@ def _get_user_google_data(user_id: int) -> dict:
         row = conn.execute(
             text(
                 "SELECT google_access_token, google_refresh_token, google_token_expiry, "
-                "google_calendar_id, google_email FROM users WHERE id = :uid"
+                "google_calendar_id, google_email, google_last_error, google_last_error_at "
+                "FROM users WHERE id = :uid"
             ),
             {"uid": user_id},
         ).fetchone()
@@ -151,7 +156,8 @@ async def oauth_callback(
 
     if error or not code or not state:
         logger.warning("google_oauth_callback_error error=%s", error)
-        return RedirectResponse(url=f"{frontend_url}/?google_error=1")
+        reason = "denied" if error == "access_denied" else "1"
+        return RedirectResponse(url=f"{frontend_url}/?google_error={reason}")
 
     try:
         user_id = _verify_state(state)
@@ -174,7 +180,16 @@ async def oauth_callback(
             tokens = token_resp.json()
     except Exception as exc:
         logger.error("google_token_exchange_failed user_id=%s error=%s", user_id, exc)
-        return RedirectResponse(url=f"{frontend_url}/?google_error=1")
+        return RedirectResponse(url=f"{frontend_url}/?google_error=exchange_failed")
+
+    # A Google pode devolver um token só com o login (email/openid) quando a página do
+    # calendário é recusada ou fechada — sem calendar.events a ligação não serve para nada.
+    granted_scope = tokens.get("scope") or ""
+    if _CALENDAR_SCOPE not in granted_scope.split():
+        logger.warning(
+            "google_calendar_scope_missing user_id=%s scope=%s", user_id, granted_scope
+        )
+        return RedirectResponse(url=f"{frontend_url}/?google_error=missing_calendar_scope")
 
     access_token = tokens.get("access_token")
     refresh_token = tokens.get("refresh_token")
@@ -203,7 +218,9 @@ async def oauth_callback(
         expiry=expiry_iso,
         google_email=google_email,
     )
-    logger.info("google_calendar_connected user_id=%s email=%s", user_id, google_email)
+    logger.info(
+        "google_calendar_connected user_id=%s email=%s scope=%s", user_id, google_email, granted_scope
+    )
     return RedirectResponse(url=f"{frontend_url}/?google_connected=1")
 
 
@@ -215,6 +232,8 @@ async def get_calendar_status(current_user: User = Depends(get_current_user)):
     return {
         "connected": connected,
         "email": data.get("google_email") if connected else None,
+        "last_error": data.get("google_last_error") if connected else None,
+        "last_error_at": data.get("google_last_error_at") if connected else None,
     }
 
 
@@ -263,5 +282,23 @@ def update_user_token(
         conn.execute(
             text("UPDATE users SET google_access_token = :at, google_token_expiry = :exp WHERE id = :uid"),
             {"at": new_access_token, "exp": new_expiry, "uid": user_id},
+        )
+    return {"updated": True}
+
+
+@router.put("/tokens/{user_id}/error")
+def update_user_google_error(
+    user_id: int,
+    payload: dict,
+    x_service_token: Optional[str] = Header(None),
+):
+    """Service-to-service: grava (ou limpa, com error=null) o último erro do Google do utilizador."""
+    _verify_service_token(x_service_token)
+    error_code = payload.get("error") or None
+    error_at = datetime.datetime.utcnow().isoformat() if error_code else None
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE users SET google_last_error = :err, google_last_error_at = :at WHERE id = :uid"),
+            {"err": error_code, "at": error_at, "uid": user_id},
         )
     return {"updated": True}
