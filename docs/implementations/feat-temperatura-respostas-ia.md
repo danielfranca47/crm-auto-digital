@@ -148,8 +148,15 @@ para o perfil de teste. O backend-core arrancou com SMTP vazio no processo.
 ### Cenário P1 — "Seguir à risca" na Fase 0 (Playground)
 - [x] Marcar "Seguir à risca" na orientação da Fase 0 (caixa aparece, etiqueta "à risca" no bloco, `strict: true` gravado)
 - [x] Nova conversa no Playground, enviar só "olá"
-- [ ] Confirmar: a resposta apresenta a Lara e pergunta Val ou Daniel, sem frases a mais
+- [x] Confirmar: a resposta apresenta a Lara e pergunta Val ou Daniel, sem frases a mais
 - [x] Confirmar no log do executor: chamada da Filha com `temperature=0.2`
+- **Revalidado em:** 26/10/2026, depois da Fase 3, via API do Playground (3 execuções): as 3
+  respostas foram "Oi! Sou a Lara, atendente do Sensi Vitae. Qual terapeuta você tem
+  interesse: Val ou Daniel?", com `temperature=0.2`. Antes disso, o perfil de teste foi
+  alinhado com o de produção na cópia local do `core.db` (`name=Lara`,
+  `brand_name=Sensi Vitae Massages`, `identity_mode=human_agent`). Com o nome "Daniel", a
+  identidade ("Você é Daniel") brigava com "Apresente-se como Lara", e a resposta perguntava
+  Val ou Daniel sem se apresentar.
 - **Validado em:** 25/10/2026 (parcial). Com o card em "Padrão", a Recepção saiu com
   `temperature=0.2`, vinda da orientação estrita. **Falhou no conteúdo:** a resposta foi
   "Seja bem-vindo(a)! / Agradeço pelo contato. / Me conta o que você está buscando.",
@@ -223,8 +230,12 @@ orientações na Fase 0, a primeira resposta continua igual.
 **Para validar:** Cenário P1 (repetir) e Cenário P5, abaixo.
 
 ### Cenário P5 — Saudação composta com a orientação da Fase 0
-- [ ] Nova conversa no Playground: "ola, gostaria de saber mais sobre as massagens da val"
+- [x] Nova conversa no Playground: "ola, gostaria de saber mais sobre as massagens da val"
 - [ ] Confirmar: a Recepção apresenta a Lara sem perguntar de novo "Val ou Daniel?"
+- **Testado em:** 26/10/2026 via API, sem passar. Com "seguir à risca", 3 de 3 respostas
+  "Olá! Sou a Lara, atendente do Sensi Vitae. Qual terapeuta você tem interesse, a Val ou o
+  Daniel?". Sem "seguir à risca", 3 de 3 com a mesma pergunta. Ou seja, o defeito é da
+  Recepção, não do modo literal. Ver Fase 4.
 
 ---
 
