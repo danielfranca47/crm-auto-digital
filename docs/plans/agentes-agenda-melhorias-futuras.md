@@ -436,3 +436,43 @@ pré-agendamento, agendamento e gestão pós-marcação; medir antes e depois na
 
 **O que construir:** opções a avaliar — variável `{{saudacao}}` na abertura, substituída pelo cumprimento
 calculado; ou um aviso no ecrã do AI Profile quando a abertura contém um período fixo.
+
+---
+
+## M18 — IA vê os ocupados de outros já alargados pela margem
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `feat-margem-entre-sessoes.md` (graduado em 26/10/2026) — trade-off consciente.
+
+**Estado actual:** com `session_buffer_minutes > 0`, `_apply_session_buffer` (`orchestrator.py`) alarga os
+ocupados de outros leads e do Google antes de chegarem ao executor, por isso o bloco "HORÁRIOS JÁ OCUPADOS" e o
+facto do horário pedido mostram, por exemplo, "15:00 até 16:15" para uma sessão das 15h às 16h. Nos testes de
+26/10 a IA não citou esses horários ao cliente.
+
+**Gatilho:** só vale a pena se a IA começar a dizer ao cliente horários "estranhos" (ex.: "está ocupado até às 16h15").
+
+**O que construir:** mandar o horário real e a margem em campos separados no slot (ex.: `start_at`/`end_at`
+reais + `buffer_minutes`) e aplicar a margem dentro de `_has_conflict`, mostrando à IA o horário real.
+
+---
+
+## M19 — Textos da IA na agenda vistos nos testes da margem
+
+**Prioridade: BAIXA**
+
+**Contexto:** observado nos testes de `feat-margem-entre-sessoes.md` (bancada local e Playground de produção,
+26/10/2026) — não causado pela margem (repete-se com margem 0).
+
+**O que foi visto:**
+1. Na remarcação recusada, a IA escreveu "a sua sessão de terça-feira às 14h mantém-se até me dizer" quando a
+   sessão gravada era às 13h30 — usa o horário pedido em vez do gravado (parente de
+   `cancelamento-reagendamento-melhorias-futuras.md` M5).
+2. Quando o horário pedido só colide por causa da margem, a IA diz "já está ocupado" — não é falso para o
+   cliente, mas o motivo real é o intervalo de preparação.
+3. Em 1 de 5 corridas do `pos-marcacao`, a IA respondeu a "Afinal preciso de remarcar para quinta às 15h" como
+   marcação nova ("Como se chama?") e devolveu `meeting_reschedule_requested=false` — nada foi remarcado.
+
+**O que construir:** medir cada um na bancada (`.claude/agentes/sensi-vitae/`, 5x por cenário) antes de decidir;
+para (1), passar à Filha de gestão pós-marcação o horário gravado como facto; para (3), avaliar um guardrail
+que reconheça "remarcar/mudar para <dia> às <hora>" quando há marcação futura.
