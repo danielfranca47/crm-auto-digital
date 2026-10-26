@@ -355,6 +355,15 @@ backend-crm (routes/appointments.py + routes/leads.py)
   _check_conflict (ver secção acima) é a barreira final — roda na transacção
   do INSERT, cobre também a criação manual via UI e fecha a race condition
   entre o fetch do ContextBundle e a criação do appointment.
+        ↓
+backend-executors — resposta do CRM ao criar
+  409 → handle_meeting_scheduled() trata como conflito (log
+  meeting_create_conflict, reason="conflict_on_create"): mesma mensagem de
+  correcção, bot NÃO desabilitado, sem evento "created".
+  Outra falha → a exceção sobe; o runner (whatsapp.py) regista
+  meeting_persist_failure e reagenda o job (retryable) sem enviar nada —
+  o worker nunca termina por isto e o lead nunca recebe "está marcado" sem
+  marcação gravada. No Playground essa falha continua a dar 502.
 ```
 
 **Função:** `_load_calendar_busy_slots(user_id, window_days=30)` em `backend-crm/services/ai_orchestrator/orchestrator.py` — mesma cláusula de scoping de `routes/appointments.py::list_appointments`, excluindo `google_transparency='transparent'`.

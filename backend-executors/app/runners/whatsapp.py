@@ -790,10 +790,26 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
             ),
             attempt,
         )
-    _meeting_conflict_message = meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
-    _meeting_conflict_message = _meeting_conflict_message or meeting_scheduler.handle_meeting_cancel_or_reschedule(
-        context, decision, logger=ctx_logger
-    )
+    # Falha do CRM ao gravar a marcação não pode terminar o worker (todas as contas) — o job é
+    # reagendado; nada foi enviado ao cliente ainda, por isso a nova tentativa decide de novo.
+    try:
+        _meeting_conflict_message = meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
+        _meeting_conflict_message = _meeting_conflict_message or meeting_scheduler.handle_meeting_cancel_or_reschedule(
+            context, decision, logger=ctx_logger
+        )
+    except Exception as exc:
+        return _fail_job(
+            job_id, ctx_logger,
+            ExecutionError(
+                f"Falha ao gravar a marcação no CRM — retry automático: {exc}",
+                phase="meeting",
+                service="crm",
+                http_status=getattr(exc, "status_code", None),
+                retryable=True,
+                error_type="meeting_persist_failure",
+            ),
+            attempt,
+        )
     if _meeting_conflict_message:
         try:
             _delay = min(max(len(_meeting_conflict_message) * 40, 800), 6000)

@@ -222,3 +222,57 @@ def test_followup_tick_job_fail_reports_retryable(monkeypatch):
     rc = runner.execute_job("123", runner.logging.getLogger("test"))
     assert rc == 1
     assert fail_calls["details"]["retryable"] is True
+
+
+def test_meeting_persist_failure_reschedules_job_without_sending(monkeypatch):
+    """Falha do CRM ao gravar a marcação não termina o worker nem envia "está marcado"."""
+    fail_calls: Dict[str, Any] = {}
+    sent: List[Dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        runner.crm_client,
+        "claim_job",
+        lambda job_id, lease_owner, ttl_seconds: {"job": {"id": int(job_id), "attempts": 1}, "normalized": {"attempts": 1}},
+    )
+    monkeypatch.setattr(
+        runner.crm_client,
+        "get_job",
+        lambda job_id: {
+            "id": int(job_id),
+            "type": "whatsapp.followup.tick",
+            "status": "pending",
+            "payload": {"lead_id": 10, "user_id": 99, "due_at": "2026-01-01T10:00:00Z"},
+            "attempts": 1,
+        },
+    )
+    monkeypatch.setattr(
+        runner.crm_client,
+        "get_whatsapp_execution_context",
+        lambda job_id: {
+            "job": {"id": int(job_id), "payload": {"lead_id": 10, "user_id": 99}},
+            "lead": {"id": 10, "user_id": 99, "phone": "+5511999999999"},
+            "history": [],
+            "ai_profile": {},
+            "playbook": {},
+            "metadata": {"provider": "uazapi", "instance_id": "inst-1"},
+        },
+    )
+    monkeypatch.setattr(runner.decision_engine, "decide", lambda context, logger=None: _DummyDecision())
+
+    def _raise_persist(context, decision, logger=None):
+        raise crm_client.CRMClientError("Erro do CRM (status=500)", status_code=500)
+
+    monkeypatch.setattr(runner.meeting_scheduler, "handle_meeting_scheduled", _raise_persist)
+    monkeypatch.setattr(runner.crm_client, "register_whatsapp_outbound", lambda payload: sent.append(payload))
+
+    def _fail_job(job_id: str, error: str, details: Dict[str, Any] | None = None):
+        fail_calls["details"] = details
+        return {"ok": True}
+
+    monkeypatch.setattr(runner.crm_client, "fail_job", _fail_job)
+
+    rc = runner.execute_job("123", runner.logging.getLogger("test"))
+    assert rc == 1
+    assert fail_calls["details"]["retryable"] is True
+    assert fail_calls["details"]["error_type"] == "meeting_persist_failure"
+    assert sent == []

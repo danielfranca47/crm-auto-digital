@@ -802,15 +802,46 @@ def handle_meeting_scheduled(
         if is_playground
         else "Reunião confirmada pelo SDR Scheduler."
     )
-    client.create_lead_appointment(
-        lead_id=signal.lead_id,
-        title=title,
-        description=description,
-        appointment_type="meeting",
-        start_at=start_iso,
-        end_at=end_iso,
-        source="playground" if is_playground else None,
-    )
+    try:
+        client.create_lead_appointment(
+            lead_id=signal.lead_id,
+            title=title,
+            description=description,
+            appointment_type="meeting",
+            start_at=start_iso,
+            end_at=end_iso,
+            source="playground" if is_playground else None,
+        )
+    except Exception as exc:
+        # O CRM (_check_conflict) é a barreira final: pode recusar com 409 um horário que os
+        # calendar_busy_slots deste turno ainda davam como livre — tratado como conflito, igual à
+        # remarcação. Qualquer outra falha sobe: a marcação não ficou gravada, por isso a resposta
+        # "está marcado" não pode seguir; o runner reagenda o job (app/runners/whatsapp.py).
+        status_code = getattr(exc, "status_code", None)
+        if status_code == 409:
+            if logger:
+                logger.warning(
+                    "event=meeting_create_conflict lead_id=%s user_id=%s job_id=%s start_at=%s",
+                    signal.lead_id,
+                    signal.user_id,
+                    signal.job_id,
+                    signal.start_at.isoformat(),
+                )
+            client.log_meeting_scheduled(
+                lead_id=signal.lead_id,
+                user_id=signal.user_id,
+                job_id=signal.job_id,
+                reason="conflict_on_create",
+            )
+            return _generate_conflict_message(ai_profile, logger=logger) or MEETING_CONFLICT_MESSAGE
+        if logger:
+            logger.warning(
+                "event=meeting_create_failed lead_id=%s exc_type=%s exc=%s",
+                signal.lead_id,
+                type(exc).__name__,
+                exc,
+            )
+        raise
     client.set_lead_bot_disabled(signal.lead_id, True, reason="meeting_scheduled")
     if events is not None:
         events.append({"action": "created", "start_at": start_iso, "end_at": end_iso})
