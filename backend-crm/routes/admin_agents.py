@@ -107,6 +107,7 @@ _SYSTEM_DEFAULTS: Dict[str, Any] = {
     "followup_max_attempts": None,
     "llm_provider": "openai",
     "response_creativity": None,
+    "session_buffer_minutes": 0,
 }
 
 
@@ -310,6 +311,7 @@ async def admin_agents_user_detail(
             "llm_provider": profile.get("llm_provider"),
             "llm_provider_model": profile.get("llm_provider_model"),
             "response_creativity": profile.get("response_creativity"),
+            "session_buffer_minutes": profile.get("session_buffer_minutes"),
             "qualification_score_threshold": profile.get("qualification_score_threshold"),
             "qualification_required_fields": profile.get("qualification_required_fields"),
             "qualification_fields": profile.get("qualification_fields"),

@@ -483,6 +483,11 @@ export default function AdminAgents() {
                 criatividade: {({ creative: "criativa", balanced: "equilibrada", strict: "rígida" } as Record<string, string>)[String(userDetail.profile.response_creativity)] ?? String(userDetail.profile.response_creativity)}
               </Badge>
             )}
+            {Number(userDetail.profile.session_buffer_minutes) > 0 && (
+              <Badge className="bg-teal-900/40 text-teal-300 border-teal-700/40 text-xs">
+                intervalo entre sessões: {Number(userDetail.profile.session_buffer_minutes)} min
+              </Badge>
+            )}
           </div>
         )}
       </div>

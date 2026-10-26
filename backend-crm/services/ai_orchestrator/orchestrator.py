@@ -751,6 +751,46 @@ def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SL
         ]
 
 
+_SESSION_BUFFER_MAX_MINUTES = 240
+
+
+def _resolve_session_buffer_minutes(ai_profile: Dict[str, Any]) -> int:
+    """Margem entre sessões do AI profile (`session_buffer_minutes`) — inválido ou ausente = 0."""
+    try:
+        value = int(ai_profile.get("session_buffer_minutes") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return min(max(value, 0), _SESSION_BUFFER_MAX_MINUTES)
+
+
+def _apply_session_buffer(
+    busy_slots: List[Dict[str, Any]], buffer_minutes: int, own_lead_id: Any
+) -> List[Dict[str, Any]]:
+    """Alarga cada ocupado em `buffer_minutes` antes e depois, para ficarem sempre N min livres
+    entre duas marcações (ex.: 15–16h com margem 15 → 14h45–16h15).
+
+    Os ocupados do próprio lead ficam com o horário real: já não contam como conflito
+    (exclude_lead_id) e são lidos para a duração original na remarcação e para o bloco
+    "REUNIÃO/SESSÃO JÁ CONFIRMADA". Um start/end ilegível fica como está.
+    """
+    if buffer_minutes <= 0:
+        return busy_slots
+    margin = timedelta(minutes=buffer_minutes)
+    widened: List[Dict[str, Any]] = []
+    for slot in busy_slots:
+        if own_lead_id is not None and slot.get("lead_id") == own_lead_id:
+            widened.append(slot)
+            continue
+        try:
+            start = datetime.fromisoformat(str(slot.get("start_at")))
+            end = datetime.fromisoformat(str(slot.get("end_at")))
+        except (ValueError, TypeError):
+            widened.append(slot)
+            continue
+        widened.append({**slot, "start_at": (start - margin).isoformat(), "end_at": (end + margin).isoformat()})
+    return widened
+
+
 def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
     """
     Enriquece o ContextBundle com todos os campos extras necessários para o decision_engine.
@@ -785,9 +825,15 @@ def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
         lang = (bundle.lead or {}).get("detected_language") or "all"
         updates["lead_detected_language"] = lang
 
-    # B5 — calendar_busy_slots (agentes de agenda não devem inventar disponibilidade)
+    # B5 — calendar_busy_slots (agentes de agenda não devem inventar disponibilidade),
+    # já alargados com a margem entre sessões — todas as verificações de agenda do executor
+    # leem daqui, por isso a margem vale igual no Playground e no WhatsApp real
     if bundle.calendar_busy_slots is None and (bundle.ai_profile or {}).get("agent_mode") == "agenda":
-        updates["calendar_busy_slots"] = _load_calendar_busy_slots(user_id)
+        updates["calendar_busy_slots"] = _apply_session_buffer(
+            _load_calendar_busy_slots(user_id),
+            _resolve_session_buffer_minutes(bundle.ai_profile or {}),
+            (bundle.lead or {}).get("id"),
+        )
 
     # B6 — bot_disabled_reason="meeting_scheduled" (paridade Playground ↔ executor real)
     # routes/executor.py também seta isto para o fluxo real do WhatsApp, mas só para ESTE motivo

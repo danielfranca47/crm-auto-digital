@@ -376,6 +376,28 @@ tentativas falhadas e utilizadores sem Google ligado. Qualquer erro (Google, red
 log `busy_slots_google_sync_failed`/`_error` — o agente segue com o que já está na tabela. Como
 corre dentro de `enrich_context_bundle`, vale igual para Playground e WhatsApp real.
 
+### Intervalo entre sessões (`session_buffer_minutes`)
+
+Campo do AI profile (padrão `0` = sem intervalo, uma margem por conta, card "Intervalo entre
+sessões" em `CamadaApresentacao.tsx`). Garante N min livres entre quaisquer duas marcações.
+
+**Onde é aplicado — um só ponto:** `enrich_context_bundle` (B5) passa os ocupados por
+`_apply_session_buffer`, que alarga cada um em N antes e N depois (15–16h com margem 15 →
+14h45–16h15; o intervalo é semiaberto, por isso 16h15 e uma sessão que acabe às 14h45 cabem).
+Todas as verificações de agenda do executor leem `calendar_busy_slots` — marcação nova
+(`handle_meeting_scheduled`), horário pedido e alternativa (`requested_slot`,
+`professional_hours.nearest_free_start`), remarcação e o bloco "HORÁRIOS JÁ OCUPADOS" — e por
+isso respeitam a margem sem código próprio. Vale para eventos do Google (`lead_id` nulo).
+Valor inválido = 0; máximo `_SESSION_BUFFER_MAX_MINUTES = 240`.
+
+**Os ocupados do próprio lead não são alargados:** já ficam fora dos conflitos
+(`exclude_lead_id`) e são lidos para a duração original na remarcação
+(`_original_duration_minutes`), para o compromisso atual e para o bloco "REUNIÃO/SESSÃO JÁ
+CONFIRMADA" — alargá-los tornaria a sessão remarcada mais longa.
+
+**Fora de propósito:** `_check_conflict` (gravação no CRM) só trava sobreposição real — o dono
+pode marcar à mão colado; `professional_hours` (abertura/fecho do dia) não usa a margem.
+
 ## Turno da confirmação — grava-se o horário que o lead aceitou
 
 Quando a Mãe dá `meeting_scheduled=true` e o lead já estava na fase (não é entrada — gate M3),
