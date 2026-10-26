@@ -140,10 +140,16 @@ da sessão dele. Marcações feitas à mão na Agenda continuam a poder ficar co
 - **Validado em:** 26/10/2026 — 17h recusada ("fora do horário de atendimento da Val"), propôs 16h,
   gravado qui 29/10 16:00–17:00. Tentativa: `tentativas/20261026-2128-M1-p-val-17h.md`
 
-### Cenário P4 — Ecrã do agente (frontend)
-- [ ] `npm install` no `frontend-crm` da worktree e abrir o ecrã do agente (Camada Apresentação)
-- [ ] Card "Intervalo entre sessões" mostra "Sem intervalo"; mudar para 15 min e gravar
-- [ ] Recarregar: o card mostra "15 min"; no painel admin aparece o badge "intervalo entre sessões: 15 min"
+### Cenário P4 — Gravação do campo e painel admin (via API, não browser)
+- [x] `PUT/GET /ai-profiles/me` (o que o ecrã do agente usa): grava 20 e relê 20; gravar só outro campo
+  mantém 20; grava 0 ("Sem intervalo") e relê 0
+- [x] `admin_agents_user_detail` (endpoint real do CRM, perfil lido do core por service token, sem a
+  camada do JWT admin): `profile.session_buffer_minutes=15`, `diff={"default": 0, "user": 15}`,
+  `has_custom_config=true`
+- [x] Tipos: `tsc` do `frontend-admin` limpo; `frontend-crm` com erros antigos só noutros ficheiros
+  (nenhum em `CamadaApresentacao.tsx`, `agente.ts` ou `api.ts`)
+- **Validado em:** 26/10/2026 — bancada local (portas 8100/8101), margem reposta em 15 no fim.
+  O desenho do card e do badge não foi visto no browser.
 
 ### Cenário C1 — Produção (`--prod`), depois do merge e deploy
 - [ ] Com o "sim" do utilizador: merge + deploy; margem 15 na conta de produção (com confirmação)
