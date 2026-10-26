@@ -151,6 +151,12 @@ a IA lê o texto dos horários uma vez e o código decide.
 | `backend-executors/tests/test_professional_hours.py`, `test_requested_slot.py` | Tabela da Sensi Vitae, 17h/21h/9h/domingo, cache, falhas, ligação ao prompt |
 | `docs/architecture/pipeline-phases.md`, `docs/prompts_llms.md` | "Verificação do horário pedido"; 1.4.5 e mapa de injeções |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `ca4b564` | `professional_hours.py` + veredicto completo no bloco + pré-agendamento + docs |
+
 Tabela lida pela IA na bancada (texto de produção, c13): Val seg–sáb 11h–17h, Daniel seg–sex
 11h–19h30 — igual às instruções. Uma única leitura em toda a rodada M12c.
 
