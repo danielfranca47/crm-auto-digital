@@ -228,6 +228,28 @@ só critérios e cenários) e descrições das 4 skills encurtadas.
 
 ---
 
+Hash da Fase 4: `96e9dd1`.
+
+### Commits Fase 5
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(este commit)_ | Agente 03 reescrito; `docs/architecture/agentes/README.md` (índice + comparação) |
+
+**Detalhes:**
+- Agente 03: de 529 para ~110 linhas; secção "Agenda" com o que o código decide (horário livre, expediente,
+  data, ocupados); acrescentados: confirmação por e-mail não existe, o modal não tem "Fechou",
+  `professional_availability` já lido pelo código mas ainda inexistente no AI profile
+- `README.md` da pasta: índice dos 3 docs e tabela de diferenças conferida no código (substitui a tabela
+  "Diferenças-chave" do doc antigo, que tinha campos fixos por modo)
+
+### Relatório da Fase 5 — o que mudou na prática
+
+**Antes:** o guia do Agente 03 era o maior (529 linhas), com campos e cadências que já mudaram.
+**Agora:** curto e conferido, com a agenda explicada pelo que o código decide; e há uma página-índice que
+compara os 3 agentes lado a lado.
+**Para validar:** P4.
+
 ### Relatório da Fase 4 — o que mudou na prática
 
 **Antes:** o guia do Agente 02 dizia que o bot se desligava no fecho e que a recuperação de carrinho
