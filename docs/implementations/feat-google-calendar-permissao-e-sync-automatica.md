@@ -193,10 +193,18 @@ quando é aberta.
 - **Validado em:** 26/10/2026 — `backend-crm/tests/test_google_calendar_sync.py` (10 testes) + suites existentes de Google/appointments/busy slots (68 verdes)
 
 ### Cenário P3 — Minha Conta e Agenda mostram o erro (browser, local)
-- [ ] `/minha-conta?google_error=missing_calendar_scope` → aviso fixo com "Ligar de novo"
-- [ ] Conta ligada com `google_last_error` preenchido → aviso amarelo em Minha Conta
-- [ ] "Sincronizar Google" com erro → toast com a mensagem do backend
-- [ ] AI Profile → Calendário → Google Calendar mostra se a conta está ligada
+- [x] `/minha-conta?google_error=missing_calendar_scope` → aviso fixo com "Ligar de novo"
+- [x] Conta ligada com `google_last_error` preenchido → aviso amarelo em Minha Conta
+- [x] "Sincronizar Google" com erro → toast com a mensagem do backend
+- [x] AI Profile → Calendário → Google Calendar mostra se a conta está ligada
+- **Validado em:** 26/10/2026 — browser (chrome-devtools) contra core/crm/frontend locais da worktree,
+  conta de teste local com cópias das bases. `/?google_error=missing_calendar_scope` reencaminha para
+  Minha Conta com o aviso vermelho. Com tokens falsos, abrir a Agenda disparou sozinho o sync: a Google deu 401,
+  o refresh falhou, o CRM respondeu 409 `token_revoked`, o toast mostrou "O acesso ao Google Calendar foi
+  retirado ou expirou…" e o core gravou `google_last_error`. Minha Conta mostrou depois o aviso amarelo
+  (`token_revoked` e, forçado na BD, `missing_calendar_scope`). AI Profile mostrou os 3 estados:
+  ligado ("✓ … O agente consulta esta agenda"), ligado com erro e não ligado ("escolher esta opção
+  não liga a conta"), com o link para Minha Conta.
 
 ### Cenário P4 — Sync antes dos ocupados e "Disponível" (testes automáticos)
 - [x] Sync da janela antes de ler os ocupados, com timeout de 5 s; 2ª chamada dentro de 3 min não sincroniza; depois de 3 min sincroniza
