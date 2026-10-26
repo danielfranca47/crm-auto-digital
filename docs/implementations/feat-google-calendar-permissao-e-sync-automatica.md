@@ -88,6 +88,26 @@ Google, e a sync deixa de apagar eventos quando a Google falha.
 | `backend-crm/services/google_calendar_sync.py` (novo) | `sync_user_google_events` (upsert + limpeza, só com leitura bem-sucedida) |
 | `backend-crm/routes/appointments.py` | `google-sync` fino: chama o serviço; 409 em erro |
 | `backend-crm/tests/test_google_calendar_sync.py` (novo) | falha → não apaga; sucesso → upsert + limpeza; erro → 409 |
+| `backend-core/tests/test_google_oauth_scope.py` (novo) | callback sem/com `calendar.events`, recusa do utilizador |
+| `docs/architecture/google-calendar.md` | Ligação OAuth, códigos de erro, pull |
+
+Decisão: só `missing_calendar_scope` e `token_revoked` ficam gravados em `google_last_error` —
+falhas temporárias da Google (`google_unavailable`) não, para não mostrar um aviso que se resolve sozinho.
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `de6cd34` | Callback recusa ligação sem calendário; último erro do Google no core; `list_events` com exceção; sync extraída e sem apagar em falha; 409 na rota |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se a Google só desse acesso ao login, o CRM dizia "Conectado" na mesma; quando a Google
+falhava, o "Sincronizar Google" dizia que correu bem e ainda apagava da agenda os eventos já importados.
+**Agora:** uma ligação sem acesso ao calendário é recusada (o CRM não guarda nada e volta com o motivo);
+quando a Google falha, a agenda importada fica intacta e o CRM responde com o erro e uma mensagem em
+português. O erro fica guardado na conta para o ecrã o mostrar (o ecrã vem na Fase 2).
+**Para validar:** Cenários P1 e P2 (testes automáticos — validados).
 
 ### Fase 2 — Frontend: mostrar o erro ao utilizador
 
@@ -113,12 +133,14 @@ Google, e a sync deixa de apagar eventos quando a Google falha.
 ## Checks de Validação
 
 ### Cenário P1 — Ligação sem calendário é recusada (testes automáticos)
-- [ ] Callback com `scope` sem `calendar.events` → redirect `google_error=missing_calendar_scope`, tokens não gravados
-- [ ] Callback com `calendar.events` → tokens gravados e `google_last_error` limpo
+- [x] Callback com `scope` sem `calendar.events` → redirect `google_error=missing_calendar_scope`, tokens não gravados
+- [x] Callback com `calendar.events` → tokens gravados e `google_last_error` limpo
+- **Validado em:** 26/10/2026 — `backend-core/tests/test_google_oauth_scope.py` (3 testes) verde
 
 ### Cenário P2 — Sync com erro não apaga a agenda (testes automáticos)
-- [ ] `list_events` com 403 de scope → `google-sync` responde 409 `missing_calendar_scope`, eventos `source='google'` intactos
-- [ ] `list_events` bem-sucedido → upsert + limpeza como antes
+- [x] `list_events` com 403 de scope → `google-sync` responde 409 `missing_calendar_scope`, eventos `source='google'` intactos
+- [x] `list_events` bem-sucedido → upsert + limpeza como antes
+- **Validado em:** 26/10/2026 — `backend-crm/tests/test_google_calendar_sync.py` (10 testes) + suites existentes de Google/appointments/busy slots (68 verdes)
 
 ### Cenário P3 — Minha Conta e Agenda mostram o erro (browser, local)
 - [ ] `/minha-conta?google_error=missing_calendar_scope` → aviso fixo com "Ligar de novo"
