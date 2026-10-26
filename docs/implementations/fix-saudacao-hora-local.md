@@ -140,9 +140,12 @@ no `ai_profile` do ContextBundle.
 
 ### Cenário P1 — Bancada local `.claude/agentes/sensi-vitae`
 - [ ] `python simular.py p-manha D1` antes das 12h de Lisboa → "Bom dia"
-- [ ] `python simular.py p-manha D1` depois das 20h de Lisboa → "Boa noite"
+- [x] `python simular.py p-manha D1` depois das 20h de Lisboa → "Boa noite" — 26/10/2026 21h27: "Boa noite! Sou a Lara, do Sensi Vitae." (`tentativas/20261026-2128-hora-local-noite-p-manha.md`)
 - [ ] `python simular.py p-micas D1` de manhã (cliente não cumprimenta) → "Bom dia"
-- [ ] Regressão `python simular.py p-ruben D1`: a pergunta junto com o cumprimento continua a seguir para o turno seguinte
+- [x] Regressão `python simular.py p-ruben D1`: a pergunta junto com o cumprimento continua a seguir para o turno seguinte — 26/10/2026 21h28: "Boa noite! Sou a Lara…" (cliente não cumprimentou) + pedido tratado na 2.ª decisão (`tentativas/20261026-2129-hora-local-noite-p-ruben.md`)
+
+> Corridas de 26/10 numa cópia isolada da bancada (código da worktree, portas 8110–8112, cópia dos bancos),
+> porque a bancada partilhada (8100–8102, `ambiente/crm.db`) estava em uso por outra sessão.
 
 ### Cenário C1 — Produção (depois do "sim" e do deploy)
 - [ ] `p-manha D1 --prod` de manhã → "Bom dia"
