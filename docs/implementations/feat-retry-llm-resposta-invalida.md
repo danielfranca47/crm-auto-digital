@@ -113,6 +113,12 @@ de ser um erro.
 | `backend-executors/tests/test_llm_failure_fallback_handoff.py` | tentativa não final → sem `set_lead_bot_disabled`/`log_handoff_requested`; final → igual a hoje |
 | `docs/architecture/llm-architecture.md` | "Fallback final": exceção da tentativa de job não final |
 
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `91eea4c` | Handoff por `llm_failure` só na última tentativa do job |
+
 Detalhe: a regra "vai repetir?" passou para `_llm_failure_will_retry(attempt)` no runner, usada tanto para
 marcar o contexto como para reagendar, para as duas não poderem divergir.
 
