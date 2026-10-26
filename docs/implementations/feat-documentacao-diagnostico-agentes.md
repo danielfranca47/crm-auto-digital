@@ -157,6 +157,22 @@ projeto.
 `decision_engine.py:4274`) — `pipeline-phases.md` ("usa `_build_child_prompt` genérica") e a skill do Agente 02
 estão errados; corrigir nas Fases 4 e 6.
 
+Hash da Fase 3: `e20f793`.
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(este commit)_ | Agente 02 reescrito; `pipeline-phases.md` corrigido (Filha de closing) |
+
+**Detalhes:**
+- Agente 02: de 452 para ~90 linhas. Corrigido face ao doc antigo: o bot **continua ativo** em closing
+  (`lead_category_policy`), e o carrinho abandonado arranca por "http" no texto da mensagem
+  (`routes/executor.py`), não por `checkout_sent`. Acrescentados os gateways reconhecidos (hotmart, kiwify,
+  stripe) e a contradição dos prompts sobre o link ("URL real" vs. "real ou placeholder")
+- `docs/architecture/pipeline-phases.md` — secção "LLM Filha de Closing" passa a descrever
+  `_build_child_prompt_closing`
+
 ### Relatório da Fase 3 — o que mudou na prática
 
 **Antes:** o guia do Agente 01 tinha 5 meses, nomes diferentes dos da página e regras que já não existem.
@@ -212,7 +228,27 @@ só critérios e cenários) e descrições das 4 skills encurtadas.
 
 ---
 
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** o guia do Agente 02 dizia que o bot se desligava no fecho e que a recuperação de carrinho
+começava só depois do link de pagamento.
+**Agora:** o guia diz o que o sistema faz: o bot continua a vender no fecho, e qualquer link enviado pelo bot
+(até o do site) arranca a recuperação de carrinho; também regista que a página promete PagSeguro, upsell e NPS,
+que o sistema não tem.
+**Para validar:** P4.
+
+---
+
 ## Ajustes Possíveis Pós-Implementação
+
+- **Carrinho abandonado arranca com qualquer link** (`routes/executor.py`, "http" no texto) — devia usar
+  `checkout_sent` ou o domínio do checkout configurado.
+- **Prompts contraditórios sobre o link de pagamento** — validação "URL real" vs. apresentação "real ou
+  placeholder" (`decision_engine.py`); relacionado com `docs/plans/motor-llm-otimizacoes.md` M5.
+- **Modo do Agente 01 lido de duas formas** — executor passa `sdr_scheduler` a `consultivo` com
+  `human_in_loop`/`requires_handoff`; o orquestrador do CRM não.
+- **Promessas da página sem código** (Calendly, PagSeguro, multicanal, upsell, NPS, renovação de pacote) —
+  decidir se a página muda ou se viram itens de produto (candidato a `docs/discovery/`).
 
 - Modo de onboarding sem conversas de referência (entrevista ao dono do negócio → bancada) — candidato a
   `docs/discovery/`.
