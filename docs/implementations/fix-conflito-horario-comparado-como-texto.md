@@ -260,9 +260,21 @@ que podia impedir o próprio cliente de remarcar para um horário próximo.
   ver "Ajustes Possíveis"
 
 ### Cenário C1 — Produção (depois do deploy, só após o "sim" ao merge)
-- [ ] Evento ocupado no Google da Ayde amanhã 15–16h; `python simular.py p-seguidas A1 --prod` → 16h aceite
-- [ ] `python simular.py p-val-17h A1 --prod` → sem 502
-- [ ] `python simular.py pos-marcacao A1 --prod` → remarcação recusada continua recusada
+- [x] Evento ocupado no Google da Ayde amanhã 15–16h; `python simular.py p-seguidas A1 --prod` → 16h aceite
+- **Validado em:** 26/10/2026 — 16h de ter 27/10 aceite e gravada (`tentativas/20261026-1231-PROD-A1-p-seguidas.md`).
+  O evento criado pela utilizadora já foi importado como `+00:00` (sincronização nova ativa) — por isso este
+  cenário sozinho não distingue código novo de antigo; a prova é o `p-val-17h` abaixo
+- [x] `python simular.py p-val-17h A1 --prod` → sem 502
+- **Validado em:** 26/10/2026 — 16h de qui 29/10 aceite e **gravada** ao lado do evento `Teste CRM — ocupado`
+  gravado com `Z` (15–16h, o caso exato do PROD07, que dava 409 → 502) (`tentativas/20261026-1232-PROD-A1-p-val-17h.md`)
+- [x] `python simular.py pos-marcacao A1 --prod` → remarcação recusada continua recusada
+- **Validado em:** 26/10/2026 — "quinta às 15h" recusada como ocupada, com alternativas 16h/sex 11h
+  (`tentativas/20261026-1234-PROD-A1-pos-marcacao.md`). Ressalva: a marcação inicial (ter 14h) não foi gravada
+  (mesmo achado "Confirmação sem gravar" de "Ajustes Possíveis"), por isso a recusa veio da resposta da IA com
+  os ocupados, não de uma remarcação real no CRM
+- Nota de deploy (26/10): backend-crm em produção às 12:19 UTC; backend-executors e worker com o build a falhar
+  pela avaria do Railway "Slow build snapshot uploads in EU West" — os cenários C1 correram com o CRM novo e o
+  executor ainda antigo (a Fase 2 só atua quando o CRM devolve 409, que estes cenários já não provocam)
 
 ---
 
