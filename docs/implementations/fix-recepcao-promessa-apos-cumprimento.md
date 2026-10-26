@@ -89,6 +89,23 @@ As duas foram retiradas (Princípio 7).
 | `docs/architecture/llm-architecture.md` | "Filha Recepção": regra do guardrail e porquê de não estar no prompt |
 | `docs/architecture/prompt-engineering-principles.md` | Princípio 1, "onde já aplicamos": guardrails da Recepção |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `31481bb` | Guardrail de promessa na Recepção + testes + docs |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando o cliente começava com um pedido ("queria saber os preços"), a receção respondia muitas vezes
+"Boa noite! Sou a Lara. Vou enviar a nossa tabela de preços.", e logo a seguir vinha outra mensagem a perguntar
+"Posso enviar a nossa tabela de preços?". Ficava uma promessa que a mensagem seguinte contradizia.
+**Agora:** nesses casos a receção envia só o cumprimento e a apresentação ("Boa noite! Sou a Lara, do Sensi
+Vitae."). A frase "vou…" é cortada antes de sair, e quem responde ao pedido é a mensagem seguinte. Um "Olá"
+sozinho continua a receber "Como posso ajudar?". As instruções da IA não mudaram, só o código que revê a resposta.
+**Para validar:** Cenários L1 e B1 já feitos. Falta o Cenário P1 (Playground de produção), que precisa do merge em
+`main`: esta branch toca instruções da IA, por isso só avança com o teu "sim".
+
 ---
 
 ## Checks de Validação
