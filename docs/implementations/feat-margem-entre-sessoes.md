@@ -1,7 +1,7 @@
 # Margem entre sessões configurável (tempo para preparar a sala)
 
 **Branch:** `worktree-feat+margem-entre-sessoes`
-**Status:** Em andamento
+**Status:** Todos os cenários validados (26/10/2026) — pendente: graduação
 **Autonomia:** manual
 **Origem:** investigação do bug A da bateria PROD07 do agente Sensi Vitae (26/10/2026) — pedido do
 utilizador para avaliar uma margem entre sessões (ex.: 15 min para a terapeuta preparar a sala).
@@ -152,9 +152,18 @@ da sessão dele. Marcações feitas à mão na Agenda continuam a poder ficar co
   O desenho do card e do badge não foi visto no browser.
 
 ### Cenário C1 — Produção (`--prod`), depois do merge e deploy
-- [ ] Com o "sim" do utilizador: merge + deploy; margem 15 na conta de produção (com confirmação)
-- [ ] `python simular.py p-seguidas M1 --prod`, `pos-marcacao M1 --prod`, `p-val-17h M1 --prod`
-- [ ] Confirmar os mesmos resultados de P1–P3
+- [x] Com o "sim" do utilizador: merge (`c01d0e9`) + deploy; margem na conta de produção (user 4) —
+  o utilizador pediu **30 min** e que fique ligada (`configs/c13d-margem-30.json`, backup
+  `ambiente/prod_backup_20261026-215502.json`, antes: 0)
+- [x] `python simular.py p-seguidas PROD-M1 --prod`, `pos-marcacao PROD-M1 --prod`, `p-val-17h PROD-M1 --prod`
+- [x] Confirmar os mesmos resultados de P1–P3 (ajustados à margem de 30)
+- **Validado em:** 26/10/2026 — Google da Ayde com ocupados ter 27/10 15–16h e qui 29/10 15–16h.
+  `p-seguidas`: 16h recusada, propôs e gravou ter 16h30–17h30. `pos-marcacao`: ter 14h recusada (acabaria
+  colada às 15h), propôs e gravou 13h30–14h30; remarcação para qui 15h recusada (ocupado) e a sessão
+  mantém-se — a IA escreveu "a sua sessão de terça-feira às 14h" em vez de 13h30 (texto, já conhecido em
+  `docs/plans/cancelamento-reagendamento` M5). `p-val-17h`: 17h recusada (limite da Val), 16h já não serve
+  (margem), propôs e gravou qui 13h30–14h30. 1.ª tentativa do `p-val-17h` caiu por falha do `railway ssh`
+  (sem marcação deixada). Marcações `[Playground]` apagadas no fim de cada cenário.
 
 ---
 
