@@ -231,11 +231,66 @@ orientações na Fase 0, a primeira resposta continua igual.
 
 ### Cenário P5 — Saudação composta com a orientação da Fase 0
 - [x] Nova conversa no Playground: "ola, gostaria de saber mais sobre as massagens da val"
-- [ ] Confirmar: a Recepção apresenta a Lara sem perguntar de novo "Val ou Daniel?"
-- **Testado em:** 26/10/2026 via API, sem passar. Com "seguir à risca", 3 de 3 respostas
-  "Olá! Sou a Lara, atendente do Sensi Vitae. Qual terapeuta você tem interesse, a Val ou o
-  Daniel?". Sem "seguir à risca", 3 de 3 com a mesma pergunta. Ou seja, o defeito é da
-  Recepção, não do modo literal. Ver Fase 4.
+- [x] Confirmar: a Recepção apresenta a Lara sem perguntar de novo "Val ou Daniel?"
+- **Validado em:** 26/10/2026, depois da Fase 4, via API do Playground, com o perfil de
+  teste alinhado à produção (Llama 3.3 70B na OpenRouter, `custom_instructions` da Lara).
+  "massagens da val": 3 de 3 "Olá! Sou a Lara, Atendente do Sensi Vitae." "quero marcar com a
+  Val": 3 de 3 iguais. Controlo "quanto custa a massagem?": 3 de 3 mantêm "Val ou Daniel?".
+  Mais 8 de 8 de cada no banco de ensaio. Antes da Fase 4 falhava 3 de 3, com e sem
+  "seguir à risca".
+
+---
+
+## Fase 4 — Recepção repetia a pergunta já respondida (26/10/2026)
+
+### Problema identificado
+
+No P5, a Recepção voltava a perguntar "Val ou Daniel?" a quem já tinha escrito "massagens da
+val". Várias instruções do prompt empurram para terminar em pergunta: a orientação estrita
+("termine nessa pergunta"), o bloco de tom de voz ("sempre feche com UMA pergunta") e a
+regra da Recepção de não tocar no pedido comercial. Só texto no prompt não resolveu: com uma
+regra e um exemplo a mais, falhou 3 de 3 no gpt-4o-mini e 5 de 5 no Llama 3.3. Pedir ao modelo
+"já respondeu? sim/não" também não, porque respondeu "não" até para "quero marcar com a Val".
+Pedir a **opção citada** funcionou: o modelo devolve "Val" 8 de 8, mas mesmo assim escreve a
+pergunta em cerca de metade das vezes.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_build_child_prompt_recepcao`: com instruções da Fase 0, exemplo ✅/❌ de pergunta já respondida e campo `lead_already_answered` no início do JSON. `compose_decision_output()`: na Recepção, com o campo preenchido, `_drop_trailing_question()` tira a frase final terminada em "?". `_strict_orientation_injection`: exceção "a menos que a mensagem do lead já a responda" |
+| `backend-executors/app/services/orchestrator_models.py` | `ChildResult.lead_already_answered` |
+| `backend-executors/tests/test_recepcao_sales_flow_orientation.py`, `test_requeue_pending_message_routing.py` | prompt com e sem instruções, corte da pergunta, pergunta mantida sem o campo, `_drop_trailing_question` |
+| `docs/architecture/llm-architecture.md`, `docs/prompts_llms.md` | campo novo e corte |
+
+Decisão: o corte fica em código (princípio 1 de `prompt-engineering-principles.md`). O
+modelo só aponta a opção, que é o que ele faz bem, e o código garante o resultado. Sem o
+campo, nada muda.
+
+### Commits Fase 4
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `639590a` | campo `lead_already_answered`, corte da pergunta repetida, exceção no "seguir à risca" |
+
+Testes: `backend-executors/tests` com 342 passados.
+
+### Relatório da Fase 4 — o que mudou na prática
+
+**Antes:** se o cliente escrevia logo "queria saber das massagens da Val", a Lara
+apresentava-se e perguntava a seguir "Val ou Daniel?", como se não tivesse lido.
+**Agora:** a Lara apresenta-se e não repete a pergunta. O pedido do cliente segue para a
+resposta seguinte, que trata das massagens da Val. Se o cliente não escolheu (ex.: "quanto
+custa?"), a pergunta continua a ser feita.
+**Para validar:** P5 acima (já validado via API).
+
+### Observação de configuração (não é código)
+
+Com o Llama 3.3, a orientação da Lara tal como está ("…Pergunte qual terapeuta ele tem
+interesse. ⏎⏎ Terapeuta Val ou Daniel") gerou em 3 de 8 vezes "Qual terapeuta você tem
+interesse?", sem nomear os dois. Escrita numa só frase ("Apresente-se como Lara, Atendente
+do Sensi Vitae, e pergunte com qual terapeuta ele tem interesse: Val ou Daniel."), saiu 8 de
+8 com os nomes. A mudança é no Fluxo de Venda da conta, feita pelo utilizador.
 
 ---
 
