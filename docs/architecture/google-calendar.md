@@ -160,7 +160,7 @@ for event in google_events:
 
 # Cleanup: apaga eventos Google do período que já não existem no Google
 synced_ids = [e["id"] for e in google_events]
-DELETE WHERE source='google' AND user_id=? AND start_at>=? AND start_at<=?
+DELETE WHERE source='google' AND user_id=? AND datetime(start_at)>=datetime(?) AND datetime(start_at)<=datetime(?)
             AND google_event_id NOT IN (synced_ids)
 ```
 
@@ -171,8 +171,8 @@ Retorna todos os appointments do período para o utilizador (CRM + Google).
 | Campo Google | Campo appointments |
 |---|---|
 | `summary` (title) | `title` |
-| `start.dateTime` | `start_at` |
-| `end.dateTime` | `end_at` |
+| `start.dateTime` (ou `start.date` em dia inteiro) | `start_at` — `dateTime` convertido para UTC (`…+00:00`, `_to_utc_iso`); `date` gravado como veio |
+| `end.dateTime` (ou `end.date`) | `end_at` — idem |
 | `description` | `description` |
 | `id` | `google_event_id` |
 | `transparency` | `google_transparency` (`transparent` = Disponível → não conta como ocupado) |

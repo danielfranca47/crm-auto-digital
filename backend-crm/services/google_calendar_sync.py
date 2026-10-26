@@ -18,6 +18,23 @@ from services.google_calendar_service import list_events
 logger = logging.getLogger(__name__)
 
 
+def _to_utc_iso(value: Optional[str]) -> Optional[str]:
+    """`dateTime` da Google (`…Z` ou `…+01:00`) no mesmo formato que o CRM grava (`…+00:00`).
+
+    As queries comparam com datetime() do SQLite, que já entende qualquer um destes formatos —
+    isto só evita guardar três formatos diferentes. Valor que não se consegue ler fica como veio.
+    """
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    if parsed.tzinfo is None:
+        return value
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
 def sync_user_google_events(user_id: int, start: str, end: str, timeout: float = 10.0) -> Optional[int]:
     """Sincroniza o período [start, end] do Google do utilizador.
 
@@ -40,8 +57,8 @@ def sync_user_google_events(user_id: int, start: str, end: str, timeout: float =
                 continue
             synced_ids.append(gid)
 
-            start_dt = event.get("start", {}).get("dateTime") or event.get("start", {}).get("date") or ""
-            end_dt = event.get("end", {}).get("dateTime") or event.get("end", {}).get("date") or start_dt
+            start_dt = _to_utc_iso(event.get("start", {}).get("dateTime")) or event.get("start", {}).get("date") or ""
+            end_dt = _to_utc_iso(event.get("end", {}).get("dateTime")) or event.get("end", {}).get("date") or start_dt
             title = event.get("summary") or "Evento Google"
             description = event.get("description")
             # "transparent" = marcado como Disponível no Google (padrão dos eventos de dia inteiro)
@@ -73,14 +90,14 @@ def sync_user_google_events(user_id: int, start: str, end: str, timeout: float =
             placeholders = ",".join("?" * len(synced_ids))
             cur.execute(
                 f"DELETE FROM appointments"
-                f" WHERE source = 'google' AND user_id = ? AND start_at >= ? AND start_at <= ?"
+                f" WHERE source = 'google' AND user_id = ? AND datetime(start_at) >= datetime(?) AND datetime(start_at) <= datetime(?)"
                 f" AND google_event_id NOT IN ({placeholders})",
                 [user_id, start, end, *synced_ids],
             )
         else:
             cur.execute(
                 "DELETE FROM appointments"
-                " WHERE source = 'google' AND user_id = ? AND start_at >= ? AND start_at <= ?",
+                " WHERE source = 'google' AND user_id = ? AND datetime(start_at) >= datetime(?) AND datetime(start_at) <= datetime(?)",
                 (user_id, start, end),
             )
 

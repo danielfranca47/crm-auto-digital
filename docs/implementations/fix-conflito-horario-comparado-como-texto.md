@@ -1,7 +1,7 @@
 # Sessões seguidas recusadas: horários comparados como texto (e o 409 que derruba o envio)
 
-**Branch:** (a criar)
-**Status:** Aguardando Plan Mode
+**Branch:** `worktree-fix+conflito-horario-comparado-como-texto` (pedida como `fix/conflito-horario-comparado-como-texto`)
+**Status:** Em andamento
 **Autonomia:** manual
 **Origem:** bateria PROD07 do agente Sensi Vitae (26/10/2026), cenário `p-val-17h` — investigação em
 `.claude/agentes/sensi-vitae/README.md`, secção "PROD07" (bug A).
@@ -132,3 +132,70 @@ como texto no futuro.
   Google da Ayde amanhã 15–16h; `python simular.py p-val-17h A1 --prod` → sem 502.
 - Regressão: `python simular.py pos-marcacao A1 --prod` (remarcação recusada por evento real continua
   recusada).
+
+---
+
+## Plano aprovado (26/10/2026)
+
+Opção 1 da tabela acima + tratar o 409 ao criar + gravar o `dateTime` do Google em UTC. Sem migração
+de dados e sem coluna nova. Toca no envio real do WhatsApp (Fase 2) → **só junta a `main` com o "sim"
+explícito do utilizador**.
+
+### Fase 1 — Comparar como datas (backend-crm)
+
+**Objetivo:** todas as queries da tabela `appointments` comparam horários como datas, não como texto.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/routes/appointments.py` | `_check_conflict`, `list_appointments` e `google_sync` usam `datetime(coluna) < datetime(?)`; `ORDER BY datetime(a.start_at)` |
+| `backend-crm/services/appointment_outcomes.py` | `_check_conflict` idem |
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | `_load_calendar_busy_slots` idem (função partilhada Playground ↔ WhatsApp real — nenhum campo novo no `ContextBundle`) |
+| `backend-crm/services/google_calendar_sync.py` | `DELETE` dos eventos que saíram do Google com `datetime()`; novo `_to_utc_iso()` grava `dateTime` como `…+00:00` |
+| `backend-crm/tests/test_appointments_conflict_by_professional.py` | 16h depois de evento `Z` 15–16h = livre; sobreposição real = 409; `+01:00` do verão; dia inteiro ocupado; `appointment_outcomes._check_conflict` |
+| `backend-crm/tests/test_calendar_busy_slots.py` | evento já acabado gravado com `+01:00` não aparece como ocupado |
+| `backend-crm/tests/test_google_calendar_sync.py` | gravação em UTC; dia inteiro no 1.º dia da janela é apagado quando sai do Google |
+| `docs/architecture/agenda.md`, `docs/architecture/google-calendar.md` | formatos guardados e regra "comparar sempre com `datetime()`" |
+
+### Fase 2 — 409 ao criar não rebenta (backend-executors)
+
+**Objetivo:** um conflito (ou outra falha do CRM) ao gravar a marcação nunca deixa o cliente sem
+resposta nem derruba o worker.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/meeting_scheduler.py` | `handle_meeting_scheduled`: `try` à volta de `create_lead_appointment` — 409 → mensagem de conflito, bot não desligado, sem evento `created`; outra falha → log e segue |
+| `backend-executors/app/runners/whatsapp.py` | exceção inesperada nos handlers de marcação é registada e não termina o worker |
+
+### Fase 3 — Sem cópia do próprio evento (backend-crm)
+
+**Objetivo:** a sincronização do Google não reimporta como "evento do Google" uma marcação que o
+próprio CRM enviou para lá.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-crm/services/google_calendar_sync.py` | antes de inserir, reconhece `google_event_id` de marcação do CRM de um lead do mesmo utilizador |
+
+---
+
+## Checks de Validação
+
+### Cenário T1 — Testes automáticos
+- [x] backend-crm: testes novos falham no código antigo (6) e passam com a correção; suite completa verde
+- **Validado em:** 26/10/2026 — 267 testes passaram
+- [ ] backend-executors: testes da Fase 2 + suite completa
+- [ ] backend-crm: teste da Fase 3
+
+### Cenário P1 — Bancada local: sessões seguidas (`p-seguidas`)
+- [ ] Setup: evento Google **ocupado** amanhã 15:00–16:00, gravado com `Z`, na base local da bancada
+- [ ] `python simular.py p-seguidas A1` → 16h aceite e gravado (evento `created`), sem 502
+
+### Cenário P2 — Bancada local: limite das 17h da Val (`p-val-17h`)
+- [ ] `python simular.py p-val-17h A1` → conversa termina sem 502
+
+### Cenário P3 — Regressão: remarcação contra evento real (`pos-marcacao`)
+- [ ] `python simular.py pos-marcacao A1` → remarcação para horário ocupado continua recusada
+
+### Cenário C1 — Produção (depois do deploy, só após o "sim" ao merge)
+- [ ] Evento ocupado no Google da Ayde amanhã 15–16h; `python simular.py p-seguidas A1 --prod` → 16h aceite
+- [ ] `python simular.py p-val-17h A1 --prod` → sem 502
+- [ ] `python simular.py pos-marcacao A1 --prod` → remarcação recusada continua recusada

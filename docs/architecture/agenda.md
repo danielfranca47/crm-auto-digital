@@ -242,6 +242,8 @@ Todos definidos em `src/hooks/useAppointments.ts`. Mutations invalidam `appointm
 
 **Índices:** `idx_appointments_lead (lead_id)`, `idx_appointments_time (start_at)`, `idx_appointments_user (user_id, start_at)`.
 
+**Formatos de `start_at`/`end_at` e comparação:** a tabela guarda ISO com fuso (`…+00:00`, escrito pelo CRM, pelo Playground e pela sincronização do Google, que converte o `dateTime` para UTC antes de gravar), só-data (`2026-10-30`, eventos de dia inteiro do Google) e, em linhas antigas do Google, `…Z`. Toda query que compara ou ordena horários usa `datetime(coluna)` do SQLite contra `datetime(?)` — nunca texto puro (`"…16:00Z" > "…16:00+00:00"` como texto). Uma sessão que começa exatamente quando outra acaba não é conflito.
+
 **Filtro de listagem:** `GET /api/appointments` filtra por `user_id` usando: `(lead_id IS NOT NULL AND l.user_id = ?) OR (lead_id IS NULL AND a.user_id = ?)`.
 
 ---

@@ -146,6 +146,75 @@ class AppointmentConflictByProfessionalTest(unittest.TestCase):
             exclude_id=appt_id,
         )  # não levanta excecao — é o próprio appointment sendo actualizado
 
+    def test_session_starting_when_google_event_ends_is_free(self):
+        """PROD07 p-val-17h: evento do Google 15–16h gravado com `Z`; sessão das 16h não colide."""
+        self._insert_appointment(
+            lead_id=None, user_id=1,
+            start_at="2026-10-29T15:00:00Z", end_at="2026-10-29T16:00:00Z",
+        )
+        import datetime as dt
+
+        _check_conflict(
+            self.conn, 1,
+            dt.datetime.fromisoformat("2026-10-29T16:00:00+00:00"),
+            dt.datetime.fromisoformat("2026-10-29T17:00:00+00:00"),
+        )  # não levanta excecao — "16:00:00Z" e "16:00:00+00:00" são a mesma hora
+
+    def test_real_overlap_with_google_z_event_conflicts(self):
+        self._insert_appointment(
+            lead_id=None, user_id=1,
+            start_at="2026-10-29T15:00:00Z", end_at="2026-10-29T16:00:00Z",
+        )
+        import datetime as dt
+
+        with self.assertRaises(HTTPException) as ctx:
+            _check_conflict(
+                self.conn, 1,
+                dt.datetime.fromisoformat("2026-10-29T15:30:00+00:00"),
+                dt.datetime.fromisoformat("2026-10-29T16:30:00+00:00"),
+            )
+        self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_google_event_with_summer_offset_compared_in_utc(self):
+        """Lisboa no verão: 16:00+01:00 é 15:00 UTC — como texto errava por uma hora inteira."""
+        self._insert_appointment(
+            lead_id=None, user_id=1,
+            start_at="2026-07-02T16:00:00+01:00", end_at="2026-07-02T17:00:00+01:00",
+        )
+        import datetime as dt
+
+        _check_conflict(
+            self.conn, 1,
+            dt.datetime.fromisoformat("2026-07-02T16:00:00+00:00"),
+            dt.datetime.fromisoformat("2026-07-02T17:00:00+00:00"),
+        )  # não levanta excecao — o evento acaba às 16:00 UTC
+        with self.assertRaises(HTTPException):
+            _check_conflict(
+                self.conn, 1,
+                dt.datetime.fromisoformat("2026-07-02T15:30:00+00:00"),
+                dt.datetime.fromisoformat("2026-07-02T16:30:00+00:00"),
+            )
+
+    def test_busy_all_day_google_event_conflicts(self):
+        """Dia inteiro marcado como Ocupado (gravado só com a data) bloqueia o dia."""
+        self._insert_appointment(
+            lead_id=None, user_id=1,
+            start_at="2026-03-05", end_at="2026-03-06",
+        )
+        import datetime as dt
+
+        with self.assertRaises(HTTPException):
+            _check_conflict(
+                self.conn, 1,
+                dt.datetime.fromisoformat("2026-03-05T10:00:00+00:00"),
+                dt.datetime.fromisoformat("2026-03-05T11:00:00+00:00"),
+            )
+        _check_conflict(
+            self.conn, 1,
+            dt.datetime.fromisoformat("2026-03-06T10:00:00+00:00"),
+            dt.datetime.fromisoformat("2026-03-06T11:00:00+00:00"),
+        )  # dia seguinte livre
+
     def test_none_user_id_skips_check(self):
         import datetime as dt
 
@@ -154,6 +223,28 @@ class AppointmentConflictByProfessionalTest(unittest.TestCase):
             dt.datetime.fromisoformat("2026-03-04T10:00:00+00:00"),
             dt.datetime.fromisoformat("2026-03-04T11:00:00+00:00"),
         )  # sem user_id resolvido, não há o que checar
+
+    def test_outcome_reschedule_conflict_compares_as_dates(self):
+        """Remarcar pelo resultado da sessão (appointment_outcomes) usa a mesma comparação por datas."""
+        from services.appointment_outcomes import _check_conflict as outcome_check_conflict
+        import datetime as dt
+
+        lead_id = self._insert_lead(user_id=1)
+        self._insert_appointment(
+            lead_id=lead_id, user_id=None,
+            start_at="2026-10-29T15:00:00Z", end_at="2026-10-29T16:00:00Z",
+        )
+        outcome_check_conflict(
+            self.conn, lead_id,
+            dt.datetime.fromisoformat("2026-10-29T16:00:00+00:00"),
+            dt.datetime.fromisoformat("2026-10-29T17:00:00+00:00"),
+        )  # não levanta excecao
+        with self.assertRaises(ValueError):
+            outcome_check_conflict(
+                self.conn, lead_id,
+                dt.datetime.fromisoformat("2026-10-29T15:30:00+00:00"),
+                dt.datetime.fromisoformat("2026-10-29T16:30:00+00:00"),
+            )
 
 
 if __name__ == "__main__":
