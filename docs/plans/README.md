@@ -20,7 +20,7 @@ implementação.
 | `plans-subscriptions.md` | Modelo de planos e assinaturas — decisões pendentes |
 | `scale-enterprise-roadmap.md` | Roadmap dos planos Scale e Enterprise |
 | `ai-profile-instrucoes-por-fase.md` | Instruções de IA por fase — a implementar |
-| `agentes-agenda-melhorias-futuras.md` | Multi-profissional por conta, closing seletivo, confiabilidade da confirmação de agendamento, error boundary, guards redundantes, badge de fuso, M4 (ALTA — respostas inválidas da IA, ~4% medido) e M12 (ALTA — diz que um horário livre está ocupado) |
+| `agentes-agenda-melhorias-futuras.md` | Multi-profissional por conta, closing seletivo, confiabilidade da confirmação de agendamento, error boundary, guards redundantes, badge de fuso, M4 (ALTA — respostas inválidas da IA, ~4% medido) |
 | `cancelamento-reagendamento-melhorias-futuras.md` | Itens deixados de fora do M1 de cancelamento/reagendamento já graduado: handoff humano na janela pós-confirmação, janela de 30 dias, gap de autenticação, bug de status duplicado em follow-up; M4 — depois de marcado, o agente não responde a preço/dúvidas simples |
 | `followup-auto-trigger-melhorias-futuras.md` | Itens deixados de fora do M2 (disparo automático/check-in de inatividade): falso-positivo de actividade, bug de trava do banco em `progress_followup_after_auto_send`, Agent 2 fora do check-in, worker sem isolamento de conta em testes locais |
 | `agent-local-melhorias-futuras-V3.md` | Itens deixados de fora da graduação da v2 do agent-local (M1–M9) + M10 "Empacotamento v3", sempre a última fase — ver `_versionamento-agent-local.md` |
