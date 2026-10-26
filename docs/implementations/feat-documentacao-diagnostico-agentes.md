@@ -222,11 +222,12 @@ perguntas genéricas sem as regras do projeto. Agora a descrição pede para car
 ### Cenário P3 — `documentacao-projeto` abre a parte certa
 - [x] "regista esta decisão" → registar-decisoes
 - [x] "audita o CLAUDE.md" → auditar-claude-md
-- [ ] "estou a escrever uma skill" → escrever-para-agentes (3 conversas novas, as 3 têm de carregar)
+- [x] "estou a escrever uma skill" → escrever-para-agentes (3 conversas novas, as 3 têm de carregar)
 - [x] As 3 skills de terceiros já não aparecem na lista
 - **Validado em:** 26/10/2026 — `claude -p --permission-mode plan` na worktree, 2 rondas: frases 1 e 2 abriram a
   referência certa nas duas (a auditoria também lê escrever-para-agentes, como o router manda); frase 3 falhou →
-  Fase 7. A ronda da Fase 7 parou no limite de uso do plano (429); repetir depois de o limite voltar
+  Fase 7. Depois da Fase 7 (ronda às 21:24): frase 3 carregou a skill e leu escrever-para-agentes nas 3
+  conversas; frases 1 e 2 continuam certas
 
 ### Cenário P4 — Docs dos agentes
 - [x] `git grep` sem "campos mínimos" e sem "consultivo" fora de contexto
