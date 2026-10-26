@@ -18,7 +18,9 @@ CRM → Google (push automático)
   → google_event_id guardado no appointment (para update/delete futuros)
 
 Google → CRM (pull)
-  Utilizador clica "Sincronizar Google" na agenda
+  a) Agente agendador: enrich_context_bundle → _load_calendar_busy_slots
+     → sync dos próximos 30 dias (no máx. 1x / 3 min por utilizador) — ver agenda.md
+  b) Agenda: ao abrir a página (mês corrente) ou botão "Sincronizar Google"
   → POST /api/appointments/google-sync
   → services/google_calendar_sync.sync_user_google_events
   → google_calendar_service.list_events
@@ -173,6 +175,7 @@ Retorna todos os appointments do período para o utilizador (CRM + Google).
 | `end.dateTime` | `end_at` |
 | `description` | `description` |
 | `id` | `google_event_id` |
+| `transparency` | `google_transparency` (`transparent` = Disponível → não conta como ocupado) |
 | — | `source = 'google'` |
 | — | `type = 'meeting'` (default) |
 | — | `status = 'pending'` |

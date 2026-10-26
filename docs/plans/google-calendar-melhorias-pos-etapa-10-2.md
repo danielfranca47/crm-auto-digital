@@ -23,46 +23,12 @@ A etapa-10-2 entregou a integração Google Calendar completa em duas fases:
   Cleanup automático: eventos removidos no Google desaparecem na próxima sync.
 
 **Resultado prático:** operador conecta o Google uma vez em MinhaConta; a partir daí,
-todos os compromissos do CRM aparecem no Google Calendar e vice-versa (via sync manual).
+todos os compromissos do CRM aparecem no Google Calendar e vice-versa (sync automática antes do
+agente e ao abrir a Agenda — ver `docs/architecture/google-calendar.md`).
 
 ---
 
 ## Pontos de melhoria identificados
-
-### M1 — Sync automática periódica
-
-**Prioridade: ALTA — o agente agendador propõe horários sem ver a agenda do Google**
-
-> **Caso real (25/10/2026, conta Sensi Vitae, Agente 03):** a conta ligou o Google Calendar
-> para o agente consultar a disponibilidade antes de oferecer horários, mas
-> `calendar_busy_slots` (`orchestrator.py::_load_calendar_busy_slots`) só lê a tabela
-> `appointments` — um evento criado no Google só entra lá depois de alguém clicar
-> "Sincronizar Google". Sem este job, o agente pode marcar por cima de uma sessão que só
-> existe no Google. Deixa de ser conforto e passa a ser condição para o agente agendar
-> sozinho com segurança. Alternativa a avaliar no Plan Mode: sincronizar o período relevante
-> no momento em que o ContextBundle é montado para leads em fase de agendamento, em vez de
-> (ou além de) um job periódico.
-
-Actualmente o utilizador precisa de clicar "Sincronizar Google" manualmente para importar
-eventos do Google Calendar. Um job periódico (a cada 5–15 min) executaria o mesmo
-`/api/appointments/google-sync` automaticamente para todos os utilizadores com Google
-conectado.
-
-**Comportamento actual:** sync só acontece quando o utilizador clica o botão na agenda.
-
-**Comportamento desejado:** eventos criados no Google Calendar aparecem no CRM
-automaticamente sem interação do utilizador.
-
-**Área do sistema:** `backend-core` ou `backend-crm` (APScheduler já disponível no
-`backend-core`). O job precisa de iterar por todos os `user_id` com `google_access_token`
-não-nulo e chamar o serviço de sync para o período relevante (ex.: ±30 dias).
-
-**Notas técnicas:**
-- APScheduler já está instalado no `backend-core`.
-- O endpoint de sync já tem toda a lógica de upsert + cleanup — o job só precisa de o chamar.
-- Cuidado com rate limiting da Google Calendar API (quota: 1M requests/day por projecto).
-
----
 
 ### M2 — Seleção de qual calendário Google usar
 
@@ -139,32 +105,16 @@ Necessário para eliminar o aviso e ultrapassar o limite de ~100 utilizadores.
 
 ---
 
-### M4 — Ligação aceite sem a permissão do calendário, e falhas escondidas
-
-**Prioridade: ALTA — o utilizador acha que o calendário está ligado e não está**
-
-**Caso real (25/10/2026, conta Sensi Vitae):** a conta ligou o Google Calendar e o ecrã mostrou
-"Conectado como …", mas o token guardado só tinha `email`/`openid` — na janela de consentimento
-granular da Google a caixa do calendário (`calendar.events`) ficou por marcar. Resultado:
-`list_events` responde 403 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` (o agente não vê a agenda do Google)
-e o push das marcações do CRM para o Google também falha — tudo silencioso, porque
-`google_calendar_service.py` é fail-silent e `POST /api/appointments/google-sync` devolve 200.
-
-**O que construir:**
-- No callback OAuth (`backend-core/app/api/auth_google.py`), conferir o `scope` devolvido pela
-  Google; sem `calendar.events`, não dar a ligação como feita e mostrar ao utilizador que tem de
-  marcar a caixa do calendário (com imagem da janela da Google).
-- Guardar o último erro do Google por utilizador e mostrá-lo em MinhaConta / na Agenda
-  ("Sem permissão para ler o calendário — volte a ligar").
-- `google-sync` devolver o erro em vez de 200 quando `list_events` falha.
-
----
-
 ## Dependências entre os itens
 
-- **M2 depende de M1 estar pelo menos planeado:** se M2 adicionar um `calendar_id` customizado,
-  o job de M1 precisa de respeitar esse campo — convém desenhar M1 com esse campo em mente.
-- **M3 é independente de M1 e M2**, mas se M2 for implementado, incluir os novos scopes
+- **M2 e a sync automática:** a sync que corre antes do agente e ao abrir a Agenda usa
+  `list_events`, que já lê o `calendar_id` devolvido pelo core — guardar o `google_calendar_id`
+  escolhido em M2 basta para a sync passar a usar esse calendário.
+- **M2 e o ecrã de consentimento:** com um segundo scope além do login (`calendar.readonly`), a
+  Google passa a mostrar caixas de seleção por scope. O callback já recusa a ligação sem
+  `calendar.events`; M2 tem de decidir o que fazer se só `calendar.readonly` ficar por marcar
+  (ex.: ligar na mesma e esconder o seletor de calendários).
+- **M3 é independente de M2**, mas se M2 for implementado, incluir os novos scopes
   na submissão do App Review (fazer tudo num só review).
 - **M3 é o mais urgente em termos de timing** — tem prazo implícito (quando clientes
   pagantes começarem a usar a funcionalidade), mas o processo é externo (não depende de código).

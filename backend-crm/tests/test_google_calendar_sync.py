@@ -105,6 +105,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE TABLE appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            google_transparency TEXT,
             lead_id INTEGER,
             user_id INTEGER,
             title TEXT,
@@ -185,11 +186,25 @@ class SyncUserGoogleEventsTest(unittest.TestCase):
             "summary": "Massagem",
             "start": {"dateTime": "2026-11-12T15:00:00+00:00"},
             "end": {"dateTime": "2026-11-12T16:00:00+00:00"},
+        }, {
+            "id": "g-bday",
+            "summary": "Aniversário",
+            "start": {"date": "2026-11-15"},
+            "end": {"date": "2026-11-16"},
+            "transparency": "transparent",
         }]
         with patch("services.google_calendar_sync.get_connection", side_effect=self._open), \
              patch("services.google_calendar_sync.list_events", return_value=events):
-            self.assertEqual(sync_user_google_events(4, START, END), 1)
-        self.assertEqual(self._google_ids(), ["g-new"])
+            self.assertEqual(sync_user_google_events(4, START, END), 2)
+        self.assertEqual(self._google_ids(), ["g-bday", "g-new"])
+        conn = self._open()
+        try:
+            transparency = dict(conn.execute(
+                "SELECT google_event_id, google_transparency FROM appointments WHERE source = 'google'"
+            ).fetchall())
+        finally:
+            conn.close()
+        self.assertEqual(transparency, {"g-new": None, "g-bday": "transparent"})
 
     def test_empty_google_removes_period_events(self):
         with patch("services.google_calendar_sync.get_connection", side_effect=self._open), \

@@ -44,6 +44,8 @@ def sync_user_google_events(user_id: int, start: str, end: str, timeout: float =
             end_dt = event.get("end", {}).get("dateTime") or event.get("end", {}).get("date") or start_dt
             title = event.get("summary") or "Evento Google"
             description = event.get("description")
+            # "transparent" = marcado como Disponível no Google (padrão dos eventos de dia inteiro)
+            transparency = event.get("transparency")
 
             existing = cur.execute(
                 "SELECT id FROM appointments WHERE google_event_id = ? AND user_id = ?",
@@ -52,16 +54,18 @@ def sync_user_google_events(user_id: int, start: str, end: str, timeout: float =
 
             if existing:
                 cur.execute(
-                    "UPDATE appointments SET title = ?, description = ?, start_at = ?, end_at = ?, updated_at = ?"
+                    "UPDATE appointments SET title = ?, description = ?, start_at = ?, end_at = ?,"
+                    " google_transparency = ?, updated_at = ?"
                     " WHERE google_event_id = ? AND user_id = ?",
-                    (title, description, start_dt, end_dt, now, gid, user_id),
+                    (title, description, start_dt, end_dt, transparency, now, gid, user_id),
                 )
             else:
                 cur.execute(
                     "INSERT INTO appointments"
-                    " (user_id, lead_id, title, description, type, status, start_at, end_at, source, google_event_id, created_at, updated_at)"
-                    " VALUES (?, NULL, ?, ?, 'meeting', 'pending', ?, ?, 'google', ?, ?, ?)",
-                    (user_id, title, description, start_dt, end_dt, gid, now, now),
+                    " (user_id, lead_id, title, description, type, status, start_at, end_at, source,"
+                    " google_event_id, google_transparency, created_at, updated_at)"
+                    " VALUES (?, NULL, ?, ?, 'meeting', 'pending', ?, ?, 'google', ?, ?, ?, ?)",
+                    (user_id, title, description, start_dt, end_dt, gid, transparency, now, now),
                 )
 
         # Remove Google appointments deste período que já não existem no Google

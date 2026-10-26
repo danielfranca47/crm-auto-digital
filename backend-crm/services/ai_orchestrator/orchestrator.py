@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +20,8 @@ from security_core import CurrentUser
 from services.ai_playbooks import get_playbook
 from services.ai_orchestrator.history import get_recent_history
 from services.ai_orchestrator.inbound_event import InboundEvent
+from services.google_calendar_service import GoogleCalendarError
+from services.google_calendar_sync import sync_user_google_events
 from services.qualification_state import get_qualification_state
 
 logger = logging.getLogger(__name__)
@@ -686,9 +689,38 @@ def _load_business_info(user_id: int) -> Optional[str]:
 
 _CALENDAR_BUSY_SLOTS_WINDOW_DAYS = 30
 
+# Sync do Google antes de montar os ocupados: no máx. 1x por utilizador a cada 3 min (por processo),
+# para não chamar a Google a cada mensagem. Conta também tentativas falhadas e utilizadores sem Google.
+_GOOGLE_SYNC_TTL_SECONDS = 180
+_GOOGLE_SYNC_TIMEOUT_SECONDS = 5.0
+_google_sync_last_attempt: Dict[int, float] = {}
+
+
+def _sync_google_for_busy_slots(user_id: int, start: datetime, end: datetime) -> None:
+    """Traz os eventos do Google para `appointments` antes de ler os ocupados. Nunca lança:
+    se a Google falhar, o agente segue com o que já está na tabela."""
+    last = _google_sync_last_attempt.get(user_id)
+    now_mono = time.monotonic()
+    if last is not None and now_mono - last < _GOOGLE_SYNC_TTL_SECONDS:
+        return
+    _google_sync_last_attempt[user_id] = now_mono
+    try:
+        sync_user_google_events(
+            user_id, start.isoformat(), end.isoformat(), timeout=_GOOGLE_SYNC_TIMEOUT_SECONDS
+        )
+    except GoogleCalendarError as exc:
+        logger.warning("busy_slots_google_sync_failed user_id=%s code=%s", user_id, exc.code)
+    except Exception as exc:
+        logger.warning("busy_slots_google_sync_error user_id=%s: %s", user_id, exc)
+
 
 def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SLOTS_WINDOW_DAYS) -> List[Dict[str, Any]]:
     """Carrega compromissos reais do profissional para a IA não inventar disponibilidade.
+
+    Antes de ler, sincroniza o Google Calendar da janela (ver _sync_google_for_busy_slots) —
+    um evento criado só no Google conta como ocupado sem ninguém clicar "Sincronizar Google".
+    Eventos do Google marcados como Disponível (transparency='transparent', padrão dos de dia
+    inteiro) ficam na Agenda mas não contam como ocupados.
 
     Mesma cláusula de scoping de routes/appointments.py::list_appointments —
     cobre tanto appointments criados pelo CRM (lead_id IS NOT NULL, herdam
@@ -697,6 +729,7 @@ def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SL
     """
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(days=window_days)
+    _sync_google_for_busy_slots(user_id, now, window_end)
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -706,6 +739,7 @@ def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SL
               FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id
              WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?)
                AND a.status = 'pending'
+               AND (a.google_transparency IS NULL OR a.google_transparency != 'transparent')
                AND a.end_at >= ?
                AND a.start_at <= ?
             """,

@@ -67,7 +67,8 @@ def _check_conflict(
 
     Cobre tanto appointments criados pelo CRM (lead_id IS NOT NULL, herdam
     user_id do lead) quanto importados do Google (lead_id IS NULL, user_id
-    próprio) — mesmo scoping de list_appointments().
+    próprio) — mesmo scoping de list_appointments(). Eventos do Google marcados
+    como Disponível (google_transparency='transparent') não contam como conflito.
     """
     if user_id is None:
         return
@@ -76,6 +77,7 @@ def _check_conflict(
     query = (
         "SELECT 1 FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id "
         "WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?) "
+        "AND (a.google_transparency IS NULL OR a.google_transparency != 'transparent') "
         "AND a.start_at < ? AND a.end_at > ?"
     )
     if exclude_id is not None:
