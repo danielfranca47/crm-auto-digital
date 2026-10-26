@@ -2,6 +2,7 @@
 
 **Branch:** (a criar)
 **Status:** Aguardando Plan Mode
+**Autonomia:** manual
 **Origem:** testes de produção de `fix-saudacao-hora-local` (26/10/2026, 21h40–22h00, conta Sensi Vitae).
 
 ---
