@@ -182,6 +182,7 @@ read-only).
 | `meeting_management_enabled` | Coluna direta | |
 | `availability_schedule` | Coluna direta | Editado aqui como texto livre — ver discrepância acima |
 | `default_session_duration_minutes` | Coluna direta | Card "Duração da sessão" (slider 15–180 min) — usada pela IA ao confirmar agendamento quando não há tabela de serviços com duração mais específica; ver [`agenda.md`](architecture/agenda.md#duração-da-sessão-fixa-vs-por-serviço) |
+| `session_buffer_minutes` | Coluna direta | Card "Intervalo entre sessões" (slider 0–60 min, padrão 0) — minutos livres que o agente deixa entre duas marcações; ver [`agenda.md`](architecture/agenda.md#intervalo-entre-sessões-session_buffer_minutes) |
 
 ### Camada 6 — Oferta (`CamadaOferta.tsx`, condicional: `agent_mode ∈ {direto, closer}`)
 

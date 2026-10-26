@@ -1567,6 +1567,7 @@ export const api = {
         availability_schedule:   (profile as any)?.availability_schedule ?? DEFAULT_AGENT_CONFIG.availability_schedule,
         scheduling_offer_style:  ((profile as any)?.scheduling_offer_style ?? DEFAULT_AGENT_CONFIG.scheduling_offer_style) as import('../types/agente').AgentConfig['scheduling_offer_style'],
         default_session_duration_minutes: (profile as any)?.default_session_duration_minutes ?? DEFAULT_AGENT_CONFIG.default_session_duration_minutes,
+        session_buffer_minutes: (profile as any)?.session_buffer_minutes ?? DEFAULT_AGENT_CONFIG.session_buffer_minutes,
         meeting_management_enabled: (profile as any)?.meeting_management_enabled ?? DEFAULT_AGENT_CONFIG.meeting_management_enabled,
 
         // Oferta e pagamento
@@ -1690,6 +1691,7 @@ export const api = {
         availability_schedule:         config.availability_schedule,
         scheduling_offer_style:        config.scheduling_offer_style,
         default_session_duration_minutes: config.default_session_duration_minutes,
+        session_buffer_minutes:        config.session_buffer_minutes,
         meeting_management_enabled:    config.meeting_management_enabled,
         nurture_vs_discard_rule:       config.nurture_vs_discard_rule,
         qualification_extraction_tolerance: config.qualification_extraction_tolerance,

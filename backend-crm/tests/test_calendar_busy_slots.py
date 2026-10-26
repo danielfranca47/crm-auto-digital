@@ -267,6 +267,85 @@ class EnrichContextBundleCalendarTest(unittest.TestCase):
         self.assertIsNone(enriched.calendar_busy_slots)
 
 
+class SessionBufferTest(unittest.TestCase):
+    """Margem entre sessões (session_buffer_minutes): os ocupados de outros chegam ao executor
+    alargados; os do próprio lead ficam com o horário real (duração da remarcação)."""
+
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        _create_schema(self.conn)
+        day = datetime.now(timezone.utc).date() + timedelta(days=3)
+        self.start = datetime(day.year, day.month, day.day, 15, 0, tzinfo=timezone.utc)
+        self.end = self.start + timedelta(hours=1)
+        cur = self.conn.cursor()
+        cur.execute("INSERT INTO leads (user_id, companyName) VALUES (1, 'Outro')")
+        self.other_lead = int(cur.lastrowid)
+        cur.execute("INSERT INTO leads (user_id, companyName) VALUES (1, 'Este')")
+        self.own_lead = int(cur.lastrowid)
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _insert(self, *, lead_id, user_id=None, offset_days=0):
+        self.conn.execute(
+            "INSERT INTO appointments (lead_id, user_id, start_at, end_at, status) VALUES (?, ?, ?, ?, 'pending')",
+            (lead_id, user_id, _iso(self.start + timedelta(days=offset_days)), _iso(self.end + timedelta(days=offset_days))),
+        )
+        self.conn.commit()
+
+    def _slots(self, buffer_minutes):
+        ai_profile = {"agent_mode": "agenda"}
+        if buffer_minutes is not None:
+            ai_profile["session_buffer_minutes"] = buffer_minutes
+        bundle = ContextBundle(
+            user_id=1, ai_profile=ai_profile, playbook={}, lead={"id": self.own_lead}, history=[], metadata={}
+        )
+        with patch("services.ai_orchestrator.orchestrator.get_connection", return_value=self.conn):
+            enriched = enrich_context_bundle(bundle, user_id=1)
+        return {slot["lead_id"]: slot for slot in enriched.calendar_busy_slots}
+
+    def _span(self, slot):
+        return datetime.fromisoformat(slot["start_at"]), datetime.fromisoformat(slot["end_at"])
+
+    def test_without_buffer_slots_unchanged(self):
+        self._insert(lead_id=self.other_lead)
+        for buffer_minutes in (None, 0, "abc", -10):
+            slots = self._slots(buffer_minutes)
+            self.assertEqual(self._span(slots[self.other_lead]), (self.start, self.end))
+
+    def test_other_lead_widened_both_sides(self):
+        self._insert(lead_id=self.other_lead)
+        slots = self._slots(15)
+        self.assertEqual(
+            self._span(slots[self.other_lead]),
+            (self.start - timedelta(minutes=15), self.end + timedelta(minutes=15)),
+        )
+
+    def test_google_event_widened(self):
+        self._insert(lead_id=None, user_id=1)
+        slots = self._slots(15)
+        self.assertEqual(
+            self._span(slots[None]),
+            (self.start - timedelta(minutes=15), self.end + timedelta(minutes=15)),
+        )
+
+    def test_own_lead_keeps_real_times(self):
+        self._insert(lead_id=self.own_lead, offset_days=1)
+        slots = self._slots(15)
+        self.assertEqual(
+            self._span(slots[self.own_lead]),
+            (self.start + timedelta(days=1), self.end + timedelta(days=1)),
+        )
+
+    def test_buffer_capped(self):
+        self._insert(lead_id=self.other_lead)
+        slots = self._slots(10_000)
+        cap = timedelta(minutes=orchestrator._SESSION_BUFFER_MAX_MINUTES)
+        self.assertEqual(self._span(slots[self.other_lead]), (self.start - cap, self.end + cap))
+
+
 class EnrichContextBundleBotDisabledTest(unittest.TestCase):
     """Paridade Playground <-> executor real para bot_disabled_reason='meeting_scheduled'.
 

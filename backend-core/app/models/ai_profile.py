@@ -75,6 +75,7 @@ class AIProfile(Base):
     appointment_mode = Column(String, nullable=True, server_default="exploratory")
     scheduling_offer_style = Column(String, nullable=True, server_default="offer_alternatives")
     default_session_duration_minutes = Column(Integer, nullable=True, server_default="30")
+    session_buffer_minutes = Column(Integer, nullable=True, server_default="0")
     meeting_management_enabled = Column(Boolean, nullable=True, default=True)
     availability_schedule = Column(String, nullable=True)
     availability_mode = Column(String, nullable=True, server_default="24h")
