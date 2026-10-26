@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUsage } from "@/hooks/useUsage";
-import { api } from "@/services/api";
+import { api, type GoogleCalendarStatus } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { AlertCircle, CalendarDays, CheckCircle2, Gauge, RefreshCw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -23,14 +23,38 @@ function formatLimitValue(value: number | null | undefined) {
   return value.toLocaleString("pt-BR");
 }
 
+// Motivos devolvidos pelo backend-core (callback OAuth em ?google_error= e last_error do status)
+const GOOGLE_ERROR_TEXT: Record<string, { title: string; description: string }> = {
+  missing_calendar_scope: {
+    title: "A Google não deu acesso ao seu calendário",
+    description:
+      "A ligação ficou só com o seu email, por isso o CRM não consegue ver nem criar eventos. Ligue de novo e, na página da Google sobre o Google Calendar, escolha Permitir / Continuar.",
+  },
+  token_revoked: {
+    title: "O acesso ao Google Calendar foi retirado ou expirou",
+    description: "O CRM deixou de conseguir ver e criar eventos no seu calendário. Volte a ligar para retomar.",
+  },
+  denied: {
+    title: "A ligação ao Google foi cancelada",
+    description: "Na janela da Google a autorização não foi concluída. Pode tentar de novo quando quiser.",
+  },
+};
+
+const GOOGLE_ERROR_FALLBACK = {
+  title: "Erro ao conectar Google Calendar",
+  description: "Não foi possível concluir a ligação. Tente de novo.",
+};
+
 export default function MinhaConta() {
   const { data, loading, error, refetch } = useUsage();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [gcalStatus, setGcalStatus] = useState<{ connected: boolean; email: string | null } | null>(null);
+  const [gcalStatus, setGcalStatus] = useState<GoogleCalendarStatus | null>(null);
   const [gcalLoading, setGcalLoading] = useState(false);
   const [gcalConnecting, setGcalConnecting] = useState(false);
+  // Motivo da última tentativa de ligação falhada — fica visível (não é toast) até nova tentativa
+  const [gcalConnectError, setGcalConnectError] = useState<string | null>(null);
 
   const fetchGcalStatus = useCallback(async () => {
     try {
@@ -50,10 +74,11 @@ export default function MinhaConta() {
     const errParam = searchParams.get("google_error");
     if (connected === "1") {
       toast({ title: "Google Calendar conectado com sucesso!" });
+      setGcalConnectError(null);
       fetchGcalStatus();
       setSearchParams({}, { replace: true });
-    } else if (errParam === "1") {
-      toast({ title: "Erro ao conectar Google Calendar", variant: "destructive" });
+    } else if (errParam) {
+      setGcalConnectError(errParam);
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams, toast, fetchGcalStatus]);
@@ -198,7 +223,31 @@ export default function MinhaConta() {
             </CardDescription>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {gcalConnectError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>{(GOOGLE_ERROR_TEXT[gcalConnectError] ?? GOOGLE_ERROR_FALLBACK).title}</AlertTitle>
+              <AlertDescription className="space-y-3">
+                <p>{(GOOGLE_ERROR_TEXT[gcalConnectError] ?? GOOGLE_ERROR_FALLBACK).description}</p>
+                <Button size="sm" variant="outline" onClick={handleGcalConnect} disabled={gcalConnecting}>
+                  {gcalConnecting ? "Redirecionando…" : "Ligar de novo"}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          {gcalStatus?.connected && gcalStatus.last_error && (
+            <Alert className="border-amber-500/50 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-500">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>{(GOOGLE_ERROR_TEXT[gcalStatus.last_error] ?? GOOGLE_ERROR_FALLBACK).title}</AlertTitle>
+              <AlertDescription className="space-y-3">
+                <p>{(GOOGLE_ERROR_TEXT[gcalStatus.last_error] ?? GOOGLE_ERROR_FALLBACK).description}</p>
+                <Button size="sm" variant="outline" onClick={handleGcalConnect} disabled={gcalConnecting}>
+                  {gcalConnecting ? "Redirecionando…" : "Voltar a ligar"}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           {gcalStatus === null ? (
             <Skeleton className="h-10 w-48" />
           ) : gcalStatus.connected ? (

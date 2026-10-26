@@ -39,3 +39,41 @@
 **Estado actual:** `_decide_post_meeting_management()` nunca define `suggested_category` — cancelar ou reagendar uma reunião via IA não move o lead entre colunas do quadro visual de vendas.
 
 **Decisão já tomada:** fora de escopo do M1 — território do M2 do plano original (`docs/plans/followup-proativo-e-cancelamento-agenda.md`, item de disparo automático de follow-up), que ainda está pendente de implementação. Revisitar apenas se, ao implementar esse M2, fizer sentido também mover a categoria neste fluxo.
+
+---
+
+## M4 — Depois de marcado, o agente não responde a perguntas simples sobre a sessão
+
+**Prioridade: MÉDIA**
+
+**Contexto:** testes do agente Sensi Vitae (25/10/2026). Nas conversas reais da conta, depois da
+marcação o cliente pergunta "Qual o valor a pagar?", "Já cheguei", a morada ou se pode tomar duche.
+
+**Estado actual:** com o bot em `bot_disabled_reason="meeting_scheduled"`,
+`_decide_post_meeting_management()` só trata cancelar/reagendar e responde "de forma mínima" —
+sem tabela de preços nem Base de Conhecimento. A "Qual o valor a pagar?" respondeu "Posso enviar
+a nossa tabela de preços?" em vez de "75€".
+
+**O que construir:** dar a este caminho acesso à tabela de serviços/preços e à referência da Base
+de Conhecimento (só para responder, sem reabrir a venda).
+
+---
+
+## M5 — Cliente aceita a proposta de remarcação, mas a IA não pede a remarcação
+
+**Prioridade: MÉDIA**
+
+**Contexto:** deixado de fora de `fix-remarcacao-grava-contraproposta.md` (graduado em 26/10/2026).
+Não aconteceu nos testes (bancada e Playground de produção); vigiar em conversas reais.
+
+**Estado actual:** `_apply_meeting_reschedule_guard` (`decision_engine.py`) só corrige ou bloqueia
+uma remarcação que a Filha de gestão pós-marcação pediu (`meeting_reschedule_requested=true`). Se o
+cliente responder "Pode ser" a uma proposta de remarcação da Lara e a Filha deixar o sinal a
+`false`, nada é remarcado e a sessão antiga mantém-se, embora o cliente julgue que mudou. A Filha
+também ignorou, nas 2 corridas da bancada, a exceção do prompt "hora da sua proposta → dia da
+proposta" (o guardrail corrigiu o dia).
+
+**O que construir:** com uma opção aceite (`_reschedule_fact` → `accepted_slot`) depois de uma
+proposta de remarcação do agente, preencher o sinal em código — como `_apply_meeting_confirmation_guard`
+faz no turno da confirmação ("filled"). O risco é ler um "pode ser" a outra pergunta como aceitação.
+Por isso a proposta tem de ser a da última mensagem do agente.

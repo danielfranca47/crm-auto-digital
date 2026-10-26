@@ -52,3 +52,44 @@ futuras sessões de debugging.
 
 **Não é urgente** — é uma conveniência de DX para testes futuros, sem
 impacto em produção; a suíte atual já está 100% verde sem isso.
+
+---
+
+## M3 — Correr os testes de backend automaticamente no GitHub a cada envio
+
+**Prioridade: MÉDIA**
+
+> Contexto: item deixado de fora da graduação de
+> `docs/implementations/fix-testes-backend-crm-a-falhar.md` (04/10/2026).
+
+**Em palavras simples:** hoje nada corre os testes de backend fora da máquina
+local — `.github/workflows/` só tem os três deploys de frontend. A suíte do
+`backend-crm` esteve com 18 testes a falhar em `main` durante meses sem
+ninguém ser avisado, porque só se descobre quando alguém a corre à mão.
+
+**O que precisaria existir:** um workflow do GitHub que instale as
+dependências e corra `python -m pytest tests/ -q` no `backend-crm` (e, quando
+estiverem verdes, nas suítes do `backend-core` e do `backend-executors`) a
+cada envio para `main`, avisando quando falha.
+
+**Decidir junto com** o agente avaliador que serve de portão para `main` (a
+automação da fila): os dois resolvem o mesmo problema — impedir que entre em
+`main` algo que parte os testes — e convém não montar dois portões diferentes.
+
+---
+
+## M4 — `pytest` em falta no `requirements.txt` do backend-crm
+
+**Prioridade: BAIXA**
+
+> Contexto: item deixado de fora da graduação de
+> `docs/implementations/fix-testes-backend-crm-a-falhar.md` (04/10/2026).
+
+**Em palavras simples:** a suíte do `backend-crm` corre com o `pytest`
+instalado no Python global da máquina; `backend-crm/requirements.txt` não o
+lista. Um ambiente novo criado só a partir do `requirements.txt` (um `.venv`
+numa worktree, ou o workflow do M3) não consegue correr os testes.
+
+**O que precisaria existir:** declarar o `pytest` como dependência de
+desenvolvimento do `backend-crm` — num `requirements-dev.txt` à parte, para
+não o instalar em produção. É pré-requisito do M3.

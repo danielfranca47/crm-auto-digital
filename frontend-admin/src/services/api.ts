@@ -179,6 +179,7 @@ export type UserProfile = {
   offer_pack?: unknown;
   llm_provider?: string;
   llm_provider_model?: string | null;
+  response_creativity?: "creative" | "balanced" | "strict" | null;
   qualification_score_threshold?: number;
   qualification_required_fields?: string[];
   qualification_extraction_tolerance?: string;

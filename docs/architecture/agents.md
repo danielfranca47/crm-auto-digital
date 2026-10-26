@@ -192,6 +192,7 @@ aberta.
 | `professional_availability` | string\|null | Horários em que o profissional atende, em texto livre (ex.: `"Seg a Sex: 14h, 16h, 18h"`). Injectado na filha de agendamento como "DISPONIBILIDADE DO PROFISSIONAL"; vazio → a IA pergunta ao lead que horário prefere. Editável em Camada 5 · Apresentação. Ver [`agenda.md`](agenda.md#horários-de-atendimento-do-profissional-professional_availability) |
 | `scheduling_offer_style` | string (enum) | Como a filha de agendamento trata um horário específico pedido pelo lead (padrão: `"offer_alternatives"`) |
 | `default_session_duration_minutes` | integer\|null | Duração (em minutos) usada ao criar um appointment via IA quando não há duração mais específica disponível (padrão: `30`). Ver [`agenda.md`](agenda.md#duração-da-sessão-fixa-vs-por-serviço) |
+| `session_buffer_minutes` | integer\|null | Intervalo mínimo (em minutos) que o agente deixa livre entre duas marcações — alarga os ocupados de outros leads e do Google antes de chegarem ao executor (padrão: `0`). Ver [`agenda.md`](agenda.md#intervalo-entre-sessões-session_buffer_minutes) |
 | `meeting_management_enabled` | boolean | Se `True` (padrão), o bot reabre e gere cancelamento/reagendamento sozinho quando o lead pede mudança após confirmar uma reunião. Se `False`, o bot fica desactivado nessa janela, exigindo reactivação manual do operador. Ver secção "Toggle de Bot por Lead" |
 | `followup_sdr_instructions` | string\|null | Instrução de texto livre injectada no prompt de follow-up quando `followup_variant=sdr_scheduler`. Sobrescreve as regras genéricas da variante com contexto específico do negócio |
 | `followup_recovery_instructions` | string\|null | Instrução de texto livre para follow-up de cart recovery (`followup_variant=cart_recovery`) |
@@ -206,6 +207,7 @@ aberta.
 | `followup_checkin_instructions` | string\|null | Instrução de texto livre injectada no prompt de follow-up quando `followup_variant=client_checkin` |
 | `llm_provider` | string (enum) | Provedor de LLM usado nas chamadas de IA (padrão: `"openai"`). Ver [`llm-architecture.md`](llm-architecture.md#multi-provedor-de-llm-openai-padrão--openrouter-alternativo) |
 | `llm_provider_model` | string\|null | Modelo curado do OpenRouter (só relevante quando `llm_provider="openrouter"`) |
+| `response_creativity` | string\|null | Temperatura da resposta da Filha: `creative` (0.9), `balanced` (0.5), `strict` (0.2); `null` = padrão do provedor. Ver [`llm-architecture.md`](llm-architecture.md#temperatura-da-filha) |
 
 ### Enums
 
@@ -218,13 +220,15 @@ aberta.
 | `"hybrid_scheduler"` | Híbrido Agendador (agent_3) |
 
 **`agent_mode`**
-| Valor | Campos obrigatórios de qualificação | Normalizado para |
+| Valor | Sugestão inicial de obrigatórios ao criar o perfil | Normalizado para |
 |---|---|---|
-| `"sdr_scheduler"` | 4 campos | `"agenda"` |
-| `"closer"` | 3 campos | `"direto"` |
-| `"consultivo"` | 6 campos | `"consultivo"` |
-| `"agenda"` | 4 campos | `"agenda"` |
-| `"direto"` | 3 campos | `"direto"` |
+| `"sdr_scheduler"` | `service_interest`, `availability_window` | `"agenda"` |
+| `"closer"` | `service_interest`, `price_acceptance` | `"direto"` |
+| `"consultivo"` | `service_interest`, `urgency`, `decision_role` | `"consultivo"` |
+| `"agenda"` | `service_interest`, `availability_window` | `"agenda"` |
+| `"direto"` | `service_interest`, `price_acceptance` | `"direto"` |
+
+É só a sugestão gravada em `qualification_required_fields` na criação (`_DEFAULT_QUAL_FIELDS`, `backend-core/app/api/ai_profiles.py`); depois é editável. O que vale em runtime é o `qualification_required_fields` do perfil — vazio significa nenhum campo obrigatório.
 
 **`presentation_variant`**: `"sales"`, `"scheduler"`, `null`. Default por `agent_mode` quando `null` — `direto`/`closer→sales`, `agenda`/`consultivo→scheduler` (`_resolve_presentation_variant()`, `decision_engine.py`)
 

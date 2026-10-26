@@ -368,6 +368,7 @@ DESEJÁVEIS — capturar se surgir oportunidade natural:
     "handoff_requested": false,
     "meeting_proposed": false,
     "meeting_datetime_candidate": null,
+    "meeting_day_reference": null,
     "offer_presented": false,
     "checkout_sent": false,
     "presentation_variant": "sales|scheduler",
@@ -401,6 +402,7 @@ DESEJÁVEIS — capturar se surgir oportunidade natural:
 | `warming_injection` (scheduler) | `template_key=hybrid_scheduler` + qualificação recém-aprovada + `presentation_variant=scheduler` | Pós-qualificação para serviços presenciais: confirmar disponibilidade e valor |
 | `commercial_injection` | `template_key=hybrid_scheduler` + qualificação recém-aprovada + `appointment_mode=commercial` | Modo comercial: apresentar serviços, tratar objeções, fechar compromisso ANTES de agendar (veja 1.4.2) |
 | `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | "Modo recibo": emite resumo estruturado da reserva usando `extracted_fields` |
+| `MARCAÇÃO JÁ GRAVADA NESTE TURNO` | `meeting_scheduled=True` + `presentation_variant≠scheduler` | Confirmação final do horário aceite (lido do histórico) no formato das instruções da conta, sem voltar a pedir confirmação (ver 1.4.4) |
 | `standard_knowledge_block` | quando NÃO há `commercial_injection` + knowledge não vazio | Injeção dos itens de knowledge com instruções de uso por categoria |
 | `_media_intro_note_apres` | `knowledge_media` não vazio | Suprime descrição — mídia enviada automaticamente |
 
@@ -413,7 +415,7 @@ DESEJÁVEIS — capturar se surgir oportunidade natural:
 - Se `media_url` presente em offer_pack: mídia já foi enviada — NÃO mencionar "veja a imagem/vídeo"
 
 **Regras do modo `scheduler`:**
-- Sempre preencher `meeting_proposed` e `meeting_datetime_candidate`
+- Sempre preencher `meeting_proposed` e `meeting_datetime_candidate` (+ `meeting_day_reference`, ver 1.4.4)
 - ISO naive no timezone de `ai_profile.timezone`
 - Confirmação final inclui `meeting_scheduled` nos signals
 
@@ -490,6 +492,79 @@ preços e objeções vêm do bloco único "BASE DE CONHECIMENTO DO NEGÓCIO"
 | Nota de mídia por categoria de referência | categoria em `knowledge_media` | "Conteúdo disponível em mídia — escreva só uma frase curta de introdução"; o texto sai do bloco de referência |
 
 ---
+
+#### 1.4.4 Datas da marcação — `tabela_de_dias`, `meeting_day_reference` e confirmação final
+
+Vale para as Filhas que propõem/gravam horário: apresentação, agendamento
+(`_build_child_prompt_agendamento`) e gestão pós-marcação (`_build_child_prompt_meeting_management`);
+a pré-agendamento recebe só a tabela.
+
+- **`tabela_de_dias`** (`_calendar_lookup_table_pt(tz_name=ai_profile.timezone)`): hoje + 14 dias
+  no fuso do perfil, uma linha por dia no formato `sexta-feira, 30/10 → 2026-10-30`, com
+  `[hoje]` / `[amanhã]` / `[depois de amanhã]` nas três primeiras. Começa pelo dia da semana e
+  traz o `dd/mm` pronto porque é a ordem em que a LLM escreve a data na mensagem.
+- **`meeting_day_reference`** (`_MEETING_DAY_REFERENCE_RULE`): junto de `meeting_datetime_candidate`,
+  a Filha copia as palavras da conversa que identificam o dia ("amanhã", "sexta-feira", "30/10").
+  Não muda o comportamento da LLM — serve ao guardrail de código abaixo.
+- **Guardrail depois da Filha** (`_apply_meeting_date_guard` → `meeting_date_guard.reconcile_meeting_date`):
+  converte a referência em data (dia da semana → a data do candidato se já cair nesse dia, senão a
+  próxima ocorrência; "amanhã" → hoje+1) e, se não bater com o candidato, corrige o candidato
+  (mantém a hora) e a data/dia escritos em `message_text`. Sem o sinal, usa o dia da semana escrito
+  junto da data na mensagem. Um `dd/mm` no sinal só vale se o lead o escreveu; no turno de
+  confirmação, um dia nunca falado na conversa é trocado pelo último dia falado. Rasto em
+  `decision_trace.meeting_date_guard`; log `event=meeting_date_corrected`.
+- **`MARCAÇÃO JÁ GRAVADA NESTE TURNO`** (`_build_meeting_already_booked_block(accepted)`): com
+  `meeting_scheduled=True` e o lead já dentro da fase (não `_compute_is_phase_entry`), entra no
+  fim do prompt de agendamento, no da apresentação (quando não é `scheduler`, que tem o "modo
+  recibo") e no de pré-agendamento (só quando há horário proposto, junto com os campos
+  `meeting_datetime_candidate`/`meeting_day_reference`/`meeting_duration_minutes` — bloco
+  "SINAIS DA MARCAÇÃO"): a marcação é gravada neste turno, por isso a Filha envia a confirmação
+  final no formato das instruções da conta, sem voltar a pedir confirmação. `accepted`
+  (`_confirmation_fact` → `meeting_proposal.py`) dá o facto: "O lead aceitou o horário da
+  última proposta: sexta-feira, 30/10, às 11h com Val" + o candidato exato a devolver. Com
+  várias opções em aberto e nenhuma escolhida, o bloco passa a "O LEAD CONFIRMOU, MAS HÁ MAIS
+  DE UMA OPÇÃO EM ABERTO" e manda perguntar qual; com a duração por saber (tabela de serviços com
+  várias durações e nenhuma dita), passa a "FALTA SABER O SERVIÇO E A DURAÇÃO" e manda perguntar
+  serviço e duração mantendo o horário. A variante normal especifica que a confirmação final é a
+  mensagem que as instruções da conta mandam enviar depois de o lead confirmar (o recibo), não o
+  resumo de antes. Sem proposta lida, fica o texto genérico. O
+  candidato devolvido é conferido em código por `_apply_meeting_confirmation_guard` (ver
+  `docs/architecture/agenda.md`, "Turno da confirmação"). Na entrada da fase não entra (o
+  `meeting_scheduler` adia a criação — gate M3).
+
+#### 1.4.5 `VERIFICAÇÃO DO HORÁRIO PEDIDO` — veredicto da agenda e do horário de atendimento
+
+Fim do prompt de pré-agendamento, agendamento e gestão pós-marcação (`_build_agenda_fact_block`),
+só quando a mensagem do lead traz uma hora inequívoca (`requested_slot.find_requested_slot`).
+Diz o que o lead pediu e quando a sessão acabaria, e o veredicto decidido em código: agenda
+(`calendar_busy_slots`) e horário de atendimento (tabela lida do texto do perfil por
+`professional_hours.get_hours`). Livre e cabe → aceitar sem oferecer outro horário; fora → dizer
+o motivo e propor o início mais próximo que cabe; ocupado → dizer que está ocupado e propor o
+início mais próximo que cabe. Nos dois últimos, a alternativa é calculada em código
+(`professional_hours.nearest_free_start`: mesmo dia, livre na agenda e dentro do horário de
+atendimento, com o profissional) e a Filha recebe "proponha <hora> com <profissional> … proponha
+exatamente este"; sem nenhuma nesse dia, "proponha outro dia". Sem tabela de horários: livre →
+afirma a agenda livre e pede à Filha que confira o horário de atendimento; ocupado → "proponha o
+horário livre mais próximo que caiba no horário de atendimento" (conta da Filha). Detalhes em
+`docs/architecture/pipeline-phases.md` ("Verificação do horário pedido").
+
+**Regras de remarcação na gestão pós-marcação** (`_build_child_prompt_meeting_management`, junto
+da regra "CONFIRME DIRETAMENTE"): com a verificação a dizer ocupado/fora do horário, a Filha diz
+isso, propõe como pergunta o horário indicado, diz que a sessão marcada se mantém e deixa
+`meeting_reschedule_requested=false` / `meeting_datetime_candidate=null` (exemplo ✅ no prompt);
+quando o lead aceita um horário que ela propôs ("pode ser", "sim, às 16h"), confirma já com
+`meeting_reschedule_requested=true` e o candidato. A regra "só hora, sem dia → mesmo dia da sessão
+marcada" tem a exceção "se essa hora é de um horário que você propôs na mensagem anterior, use o dia
+dessa proposta" — na bancada a Filha ainda a ignora às vezes, e é o guardrail que corrige. O
+guardrail de código
+`_apply_meeting_reschedule_guard` garante o mesmo independentemente do que a Filha devolva (ver
+`docs/architecture/agenda.md`, "Cancelamento e reagendamento via IA").
+
+**Prompt auxiliar** (`professional_hours._EXTRACTION_PROMPT`, `llm_service.generate_professional_hours`,
+JSON): converte o texto do perfil (`professional_availability` + `custom_instructions`) em
+`{"professionals": [{"name", "days": {"mon": [["HH:MM", "HH:MM"]]}}]}`, fim = hora em que a sessão
+tem de acabar, ignorando o horário em que o assistente responde mensagens. Uma chamada por texto
+diferente (cache em memória).
 
 ### 1.5 `_build_child_prompt_follow_up()` — Filha Follow-up
 
@@ -858,6 +933,8 @@ Blocos que só aparecem no prompt quando certas condições são atendidas:
 | `WARMING scheduler` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `presentation_variant=scheduler` | apresentation |
 | `COMMERCIAL INJECTION` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `appointment_mode=commercial` | apresentation |
 | `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | apresentation |
+| `MARCAÇÃO JÁ GRAVADA NESTE TURNO` (`_build_meeting_already_booked_block`) | `meeting_scheduled=True` (na apresentação, só quando `presentation_variant≠scheduler`; no pré-agendamento, só com horário proposto) | apresentation, pre-agendamento, agendamento |
+| `VERIFICAÇÃO DO HORÁRIO PEDIDO` (`_build_agenda_fact_block`) | mensagem do lead com uma hora inequívoca + dia reconhecível, no futuro | pre-agendamento, agendamento, meeting_management (fim do prompt) |
 | `standard_knowledge_block` | narrativas com conteúdo novo, nota de pagamento do modo comercial ou categoria de referência com mídia | apresentation |
 | `followup_knowledge_block` | `social_proof` ainda não mostrada | followup |
 | `_build_knowledge_reference_block` ("BASE DE CONHECIMENTO DO NEGÓCIO" + "COMO USAR") | `context["knowledge_reference"]` não vazio (menos as categorias excluídas pela fase — ver `knowledge-base.md`) | qualification (sem preço/oferta), apresentation (sem categorias com mídia), followup, closing, pre-agendamento, agendamento (sem a tabela, já em "SERVIÇOS E DURAÇÕES") — sempre ao lado de `business_info` |
@@ -878,6 +955,9 @@ Blocos que só aparecem no prompt quando certas condições são atendidas:
 | `few_shot_{phase}` (meta) | `generated_prompt_parts.few_shot_{phase}` preenchido | qualification, apresentation, followup |
 | `qualification_phrasing` (meta) | `generated_prompt_parts.qualification_phrasing[current_field]` | qualification |
 | `objection_rewrites` (meta) | `generated_prompt_parts.objection_rewrites` preenchido | apresentation, followup |
+| `INSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO` (Recepção) | há bloco do Fluxo de Venda da Fase 0 a injetar no turno — bloco no meio do prompt + item 4 em "O QUE VOCÊ FAZ" + regra de pergunta e modelo de `message_text` trocados + exemplo ✅/❌ de pergunta já respondida + campo `lead_already_answered` no JSON (com valor, o código tira a pergunta final) | recepcao |
+| `INSTRUÇÃO [CRÍTICA] DE FLUXO DE VENDA — SEGUIR À RISCA` (`_strict_orientation_injection`) | bloco `orientacao` com `strict=true` disparou neste turno — rótulo literal + motivo + exemplo ✅/❌; "termine nessa pergunta" tem a exceção de a mensagem do lead já a responder; também força `temperature=0.2` na chamada da Filha (ver `docs/architecture/sales-flow.md`) | recepcao, qualification, apresentation, followup, closing |
+| `AGORA (hora local do negócio)` (`_local_time_fact_line`) | Recepção: sempre. Outros: só quando cumprimentam — abertura de 1.º contacto (`_first_contact_opener_header` / `_apres_first_contact_opener`) ou cabeçalho de saudação (`next_action_hint == "greet"`). Linha com dia da semana, dd/mm, hora e período no fuso `ai_profile.timezone` (05h–12h "Bom dia", 12h–20h "Boa tarde", 20h–05h "Boa noite"); se o lead já disse um período, devolve-se o dele. Os exemplos de cumprimento da Recepção (✅ 4, lead sem período) e do cabeçalho de saudação da apresentação usam o cumprimento calculado (`_local_greeting`) | recepcao, qualification, apresentation, followup, closing |
 | `outreach_scenarios` (meta) | `ai_profile.generated_prompt_parts.outreach_scenarios` | llm.py outreach |
 
 ---

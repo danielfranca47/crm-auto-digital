@@ -23,6 +23,8 @@ _OPTIONAL_ENUM_FIELDS: dict[str, frozenset[str]] = {
 _ROUTE_TO_ALIASES: dict[str, str] = {
     "presentation": "apresentation",  # typo recorrente: falta o "a-" do enum em PT
     "qualificacao": "qualification",  # grafia PT sem cedilha, observado em produção 23/08/2026
+    "apresentacao": "apresentation",  # grafia PT, observado no Playground em 26/10/2026
+    "apresentação": "apresentation",
 }
 
 
@@ -89,3 +91,7 @@ class ChildResult(BaseModel):
     # para reenfileiramento como novo job inbound — ver "Saudação composta" em
     # docs/architecture/llm-architecture.md.
     pending_commercial_text: Optional[str] = None
+    # Também só da Recepção, quando há instruções da Fase 0: a opção que o lead já escolheu
+    # na própria mensagem (ex.: "Val" para "Val ou Daniel?"). Com valor, o código tira a
+    # pergunta final da resposta — o modelo identifica a escolha mas tende a perguntar mesmo assim.
+    lead_already_answered: Optional[str] = None

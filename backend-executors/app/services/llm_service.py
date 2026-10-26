@@ -152,7 +152,12 @@ def _extract_output_text(cfg: _ProviderConfig, payload: Dict[str, Any]) -> str:
 
 
 def _build_payload(
-    cfg: _ProviderConfig, prompt: str, *, json_mode: bool, route: Optional[str] = None
+    cfg: _ProviderConfig,
+    prompt: str,
+    *,
+    json_mode: bool,
+    route: Optional[str] = None,
+    temperature: Optional[float] = None,
 ) -> Dict[str, Any]:
     if cfg.name == PROVIDER_OPENROUTER:
         payload: Dict[str, Any] = {
@@ -161,6 +166,8 @@ def _build_payload(
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        if temperature is not None:
+            payload["temperature"] = temperature
         return payload
 
     payload = {"model": cfg.model, "input": prompt}
@@ -168,7 +175,31 @@ def _build_payload(
         payload["text"] = {"format": {"type": "json_object"}}
     if route:
         payload["metadata"] = {"route": route}
+    if temperature is not None:
+        payload["temperature"] = temperature
     return payload
+
+
+# ai_profile.response_creativity -> temperature da Filha. Ausente/desconhecido = None:
+# o payload sai sem `temperature` e vale o padrão do provedor (comportamento anterior
+# ao campo). Ver docs/architecture/llm-architecture.md, "Temperatura da Filha".
+_RESPONSE_CREATIVITY_TEMPERATURE: Dict[str, float] = {
+    "creative": 0.9,
+    "balanced": 0.5,
+    "strict": 0.2,
+}
+# Usada quando uma orientação "seguir à risca" do Fluxo de Venda está ativa no turno.
+STRICT_ORIENTATION_TEMPERATURE = 0.2
+
+
+def resolve_child_temperature(
+    ai_profile: Optional[Dict[str, Any]], override: Optional[float] = None
+) -> Optional[float]:
+    """Override do turno (orientação estrita) > nível do AI profile > None (padrão do provedor)."""
+    if override is not None:
+        return override
+    level = (ai_profile or {}).get("response_creativity")
+    return _RESPONSE_CREATIVITY_TEMPERATURE.get(level) if isinstance(level, str) else None
 
 
 def _post_with_retry(
@@ -176,6 +207,8 @@ def _post_with_retry(
     *,
     api_base: Optional[str] = None,
     api_key: Optional[str] = None,
+    max_attempts: int = _MAX_ATTEMPTS,
+    timeout_seconds: Optional[float] = None,
 ) -> Dict[str, Any]:
     """POST para a LLM API com retry curto para falhas transitórias.
 
@@ -185,6 +218,10 @@ def _post_with_retry(
 
     api_base/api_key por omissão usam a config da OpenAI (settings.llm_*) — quem
     chama por um provedor alternativo (OpenRouter) passa-os explicitamente.
+
+    max_attempts=1 desliga o retry aqui — usado pela Mãe/Filha, que repetem a etapa
+    inteira (chamada + parse + validação) em decision_engine com contador próprio;
+    timeout_seconds encurta a chamada para caber no orçamento de tempo do turno.
     """
     resolved_base = api_base if api_base is not None else settings.llm_api_base
     resolved_key = api_key if api_key is not None else settings.llm_api_key
@@ -192,9 +229,11 @@ def _post_with_retry(
         "Authorization": f"Bearer {resolved_key}",
         "Content-Type": "application/json",
     }
-    timeout = httpx.Timeout(settings.llm_timeout_seconds)
+    timeout = httpx.Timeout(
+        timeout_seconds if timeout_seconds is not None else settings.llm_timeout_seconds
+    )
     last_exc: Optional[Exception] = None
-    for attempt in range(1, _MAX_ATTEMPTS + 1):
+    for attempt in range(1, max_attempts + 1):
         try:
             with httpx.Client(timeout=timeout) as client:
                 response = client.post(resolved_base, headers=headers, json=payload)
@@ -202,9 +241,9 @@ def _post_with_retry(
             last_exc = exc
             logger.warning(
                 "event=llm_request_error attempt=%s/%s exc_type=%s exc=%s",
-                attempt, _MAX_ATTEMPTS, type(exc).__name__, exc,
+                attempt, max_attempts, type(exc).__name__, exc,
             )
-            if attempt < _MAX_ATTEMPTS:
+            if attempt < max_attempts:
                 time.sleep(_RETRY_BACKOFF_SECONDS)
                 continue
             raise
@@ -212,9 +251,9 @@ def _post_with_retry(
             truncated = response.text[:1000]
             logger.warning(
                 "event=llm_response_error attempt=%s/%s status=%s body=%s",
-                attempt, _MAX_ATTEMPTS, response.status_code, truncated,
+                attempt, max_attempts, response.status_code, truncated,
             )
-        if response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_ATTEMPTS:
+        if response.status_code in _RETRYABLE_STATUS_CODES and attempt < max_attempts:
             time.sleep(_RETRY_BACKOFF_SECONDS)
             continue
         response.raise_for_status()
@@ -224,18 +263,38 @@ def _post_with_retry(
     raise RuntimeError("llm request failed without exception")
 
 
+def is_retryable_http_error(exc: BaseException) -> bool:
+    """Erro de transporte em que vale a pena tentar de novo (rede/timeout/429/5xx)."""
+    if isinstance(exc, httpx.RequestError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response is not None and exc.response.status_code in _RETRYABLE_STATUS_CODES
+    return False
+
+
 def _generate_json(
     prompt: str,
     *,
     stub,
     ai_profile: Optional[Dict[str, Any]] = None,
     route: Optional[str] = None,
+    temperature: Optional[float] = None,
+    max_attempts: int = _MAX_ATTEMPTS,
+    timeout_seconds: Optional[float] = None,
 ) -> str:
     cfg = _resolve_provider_config(ai_profile)
     if not cfg.api_key:
         return stub()
-    payload = _build_payload(cfg, prompt, json_mode=True, route=route)
-    response = _post_with_retry(payload, api_base=cfg.api_base, api_key=cfg.api_key)
+    payload = _build_payload(cfg, prompt, json_mode=True, route=route, temperature=temperature)
+    if temperature is not None:
+        logger.info("event=llm_child_temperature route=%s temperature=%s", route, temperature)
+    response = _post_with_retry(
+        payload,
+        api_base=cfg.api_base,
+        api_key=cfg.api_key,
+        max_attempts=max_attempts,
+        timeout_seconds=timeout_seconds,
+    )
     return _extract_output_text(cfg, response)
 
 
@@ -252,14 +311,46 @@ def generate_decision_text(prompt: str, *, ai_profile: Optional[Dict[str, Any]] 
     return _generate_json(prompt, stub=_stub_response, ai_profile=ai_profile)
 
 
-def generate_mother_route(prompt: str, *, ai_profile: Optional[Dict[str, Any]] = None) -> str:
-    return _generate_json(prompt, stub=_stub_mother_response, ai_profile=ai_profile)
+def generate_mother_route(
+    prompt: str,
+    *,
+    ai_profile: Optional[Dict[str, Any]] = None,
+    max_attempts: int = _MAX_ATTEMPTS,
+    timeout_seconds: Optional[float] = None,
+) -> str:
+    return _generate_json(
+        prompt,
+        stub=_stub_mother_response,
+        ai_profile=ai_profile,
+        max_attempts=max_attempts,
+        timeout_seconds=timeout_seconds,
+    )
 
 
 def generate_child_result(
-    route: str, prompt: str, *, ai_profile: Optional[Dict[str, Any]] = None
+    route: str,
+    prompt: str,
+    *,
+    ai_profile: Optional[Dict[str, Any]] = None,
+    temperature_override: Optional[float] = None,
+    max_attempts: int = _MAX_ATTEMPTS,
+    timeout_seconds: Optional[float] = None,
 ) -> str:
-    return _generate_json(prompt, stub=_stub_child_response, ai_profile=ai_profile, route=route)
+    return _generate_json(
+        prompt,
+        stub=_stub_child_response,
+        ai_profile=ai_profile,
+        route=route,
+        temperature=resolve_child_temperature(ai_profile, temperature_override),
+        max_attempts=max_attempts,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def generate_professional_hours(prompt: str, *, ai_profile: Optional[Dict[str, Any]] = None) -> str:
+    return _generate_json(
+        prompt, stub=lambda: json.dumps({"professionals": []}), ai_profile=ai_profile, route="professional_hours"
+    )
 
 
 def generate_conflict_message(prompt: str, *, ai_profile: Optional[Dict[str, Any]] = None) -> str:

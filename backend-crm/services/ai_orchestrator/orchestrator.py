@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +20,8 @@ from security_core import CurrentUser
 from services.ai_playbooks import get_playbook
 from services.ai_orchestrator.history import get_recent_history
 from services.ai_orchestrator.inbound_event import InboundEvent
+from services.google_calendar_service import GoogleCalendarError
+from services.google_calendar_sync import sync_user_google_events
 from services.qualification_state import get_qualification_state
 
 logger = logging.getLogger(__name__)
@@ -686,9 +689,38 @@ def _load_business_info(user_id: int) -> Optional[str]:
 
 _CALENDAR_BUSY_SLOTS_WINDOW_DAYS = 30
 
+# Sync do Google antes de montar os ocupados: no máx. 1x por utilizador a cada 3 min (por processo),
+# para não chamar a Google a cada mensagem. Conta também tentativas falhadas e utilizadores sem Google.
+_GOOGLE_SYNC_TTL_SECONDS = 180
+_GOOGLE_SYNC_TIMEOUT_SECONDS = 5.0
+_google_sync_last_attempt: Dict[int, float] = {}
+
+
+def _sync_google_for_busy_slots(user_id: int, start: datetime, end: datetime) -> None:
+    """Traz os eventos do Google para `appointments` antes de ler os ocupados. Nunca lança:
+    se a Google falhar, o agente segue com o que já está na tabela."""
+    last = _google_sync_last_attempt.get(user_id)
+    now_mono = time.monotonic()
+    if last is not None and now_mono - last < _GOOGLE_SYNC_TTL_SECONDS:
+        return
+    _google_sync_last_attempt[user_id] = now_mono
+    try:
+        sync_user_google_events(
+            user_id, start.isoformat(), end.isoformat(), timeout=_GOOGLE_SYNC_TIMEOUT_SECONDS
+        )
+    except GoogleCalendarError as exc:
+        logger.warning("busy_slots_google_sync_failed user_id=%s code=%s", user_id, exc.code)
+    except Exception as exc:
+        logger.warning("busy_slots_google_sync_error user_id=%s: %s", user_id, exc)
+
 
 def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SLOTS_WINDOW_DAYS) -> List[Dict[str, Any]]:
     """Carrega compromissos reais do profissional para a IA não inventar disponibilidade.
+
+    Antes de ler, sincroniza o Google Calendar da janela (ver _sync_google_for_busy_slots) —
+    um evento criado só no Google conta como ocupado sem ninguém clicar "Sincronizar Google".
+    Eventos do Google marcados como Disponível (transparency='transparent', padrão dos de dia
+    inteiro) ficam na Agenda mas não contam como ocupados.
 
     Mesma cláusula de scoping de routes/appointments.py::list_appointments —
     cobre tanto appointments criados pelo CRM (lead_id IS NOT NULL, herdam
@@ -697,6 +729,7 @@ def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SL
     """
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(days=window_days)
+    _sync_google_for_busy_slots(user_id, now, window_end)
     with get_connection() as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -706,8 +739,9 @@ def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SL
               FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id
              WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?)
                AND a.status = 'pending'
-               AND a.end_at >= ?
-               AND a.start_at <= ?
+               AND (a.google_transparency IS NULL OR a.google_transparency != 'transparent')
+               AND datetime(a.end_at) >= datetime(?)
+               AND datetime(a.start_at) <= datetime(?)
             """,
             (user_id, user_id, now.isoformat(), window_end.isoformat()),
         )
@@ -715,6 +749,46 @@ def _load_calendar_busy_slots(user_id: int, window_days: int = _CALENDAR_BUSY_SL
             {"id": row["id"], "lead_id": row["lead_id"], "start_at": row["start_at"], "end_at": row["end_at"]}
             for row in cur.fetchall()
         ]
+
+
+_SESSION_BUFFER_MAX_MINUTES = 240
+
+
+def _resolve_session_buffer_minutes(ai_profile: Dict[str, Any]) -> int:
+    """Margem entre sessões do AI profile (`session_buffer_minutes`) — inválido ou ausente = 0."""
+    try:
+        value = int(ai_profile.get("session_buffer_minutes") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return min(max(value, 0), _SESSION_BUFFER_MAX_MINUTES)
+
+
+def _apply_session_buffer(
+    busy_slots: List[Dict[str, Any]], buffer_minutes: int, own_lead_id: Any
+) -> List[Dict[str, Any]]:
+    """Alarga cada ocupado em `buffer_minutes` antes e depois, para ficarem sempre N min livres
+    entre duas marcações (ex.: 15–16h com margem 15 → 14h45–16h15).
+
+    Os ocupados do próprio lead ficam com o horário real: já não contam como conflito
+    (exclude_lead_id) e são lidos para a duração original na remarcação e para o bloco
+    "REUNIÃO/SESSÃO JÁ CONFIRMADA". Um start/end ilegível fica como está.
+    """
+    if buffer_minutes <= 0:
+        return busy_slots
+    margin = timedelta(minutes=buffer_minutes)
+    widened: List[Dict[str, Any]] = []
+    for slot in busy_slots:
+        if own_lead_id is not None and slot.get("lead_id") == own_lead_id:
+            widened.append(slot)
+            continue
+        try:
+            start = datetime.fromisoformat(str(slot.get("start_at")))
+            end = datetime.fromisoformat(str(slot.get("end_at")))
+        except (ValueError, TypeError):
+            widened.append(slot)
+            continue
+        widened.append({**slot, "start_at": (start - margin).isoformat(), "end_at": (end + margin).isoformat()})
+    return widened
 
 
 def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
@@ -751,9 +825,15 @@ def enrich_context_bundle(bundle: ContextBundle, user_id: int) -> ContextBundle:
         lang = (bundle.lead or {}).get("detected_language") or "all"
         updates["lead_detected_language"] = lang
 
-    # B5 — calendar_busy_slots (agentes de agenda não devem inventar disponibilidade)
+    # B5 — calendar_busy_slots (agentes de agenda não devem inventar disponibilidade),
+    # já alargados com a margem entre sessões — todas as verificações de agenda do executor
+    # leem daqui, por isso a margem vale igual no Playground e no WhatsApp real
     if bundle.calendar_busy_slots is None and (bundle.ai_profile or {}).get("agent_mode") == "agenda":
-        updates["calendar_busy_slots"] = _load_calendar_busy_slots(user_id)
+        updates["calendar_busy_slots"] = _apply_session_buffer(
+            _load_calendar_busy_slots(user_id),
+            _resolve_session_buffer_minutes(bundle.ai_profile or {}),
+            (bundle.lead or {}).get("id"),
+        )
 
     # B6 — bot_disabled_reason="meeting_scheduled" (paridade Playground ↔ executor real)
     # routes/executor.py também seta isto para o fluxo real do WhatsApp, mas só para ESTE motivo

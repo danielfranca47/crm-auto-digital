@@ -276,3 +276,40 @@ def test_generate_child_result_openrouter_without_key_falls_back_to_openai(monke
     assert result == "resposta openai"
     sent_url = fake_client.post_calls[0]["args"][0]
     assert sent_url == llm_service.settings.llm_api_base
+
+
+def test_max_attempts_one_disables_retry(monkeypatch):
+    fake_client = _patch_client(
+        monkeypatch,
+        [_FakeResponse(503, text="unavailable"), _FakeResponse(200, json_data={"output_text": "ok"})],
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        llm_service._post_with_retry({"input": "x"}, max_attempts=1)
+    assert fake_client.calls == 1
+
+
+def test_timeout_seconds_overrides_default_timeout(monkeypatch):
+    seen = {}
+    fake_client = _FakeClient([_FakeResponse(200, json_data={"output_text": "ok"})])
+
+    def _client(timeout):
+        seen["timeout"] = timeout
+        return fake_client
+
+    monkeypatch.setattr(llm_service.httpx, "Client", _client)
+    llm_service.generate_mother_route("prompt", max_attempts=1, timeout_seconds=7.5)
+    assert seen["timeout"].read == 7.5
+    assert fake_client.calls == 1
+
+
+@pytest.mark.parametrize(
+    "exc,expected",
+    [
+        (httpx.ReadTimeout("t"), True),
+        (httpx.HTTPStatusError("e", request=None, response=_FakeResponse(503)), True),
+        (httpx.HTTPStatusError("e", request=None, response=_FakeResponse(400)), False),
+        (ValueError("x"), False),
+    ],
+)
+def test_is_retryable_http_error(exc, expected):
+    assert llm_service.is_retryable_http_error(exc) is expected

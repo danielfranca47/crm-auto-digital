@@ -122,7 +122,19 @@ confirmado e encerrado. Reforça a M3 acima — não corrigido, só documentado.
 
 ## M4 — `next_action_hint` da Mãe pode receber valor fora do enum (ValidationError)
 
-**Prioridade: BAIXA** (falha transitória, mitigada pelo retry de `llm_service.py`; sem padrão de frequência observado)
+**Prioridade: ALTA** (era BAIXA; frequência medida em 25/10/2026 — ver "Medição" abaixo)
+
+**Medição (25/10/2026, configuração do agente Sensi Vitae no Playground local, ~90 turnos):**
+com OpenAI, 4 falhas de validação (~4% dos turnos) — 3× a Mãe devolveu `route_to="apresentacao"`
+(fase em português, fora do `Literal`) e 1× a Filha omitiu `confidence` em `ChildResult`
+(`stage=child_validate`, "Field required"). Com `llm_provider=openrouter` +
+`meta-llama/llama-3.3-70b-instruct` a Mãe devolveu `"apresentação"` logo na 1ª mensagem em
+2 de 2 tentativas — o lead recebia "Vou te conectar com alguém do time" e, com
+`handoff_policy=disable_bot`, o bot ficava desligado para ele. O padrão é sempre o mesmo: um
+campo com valor quase-certo (sinónimo, acento, campo opcional em falta) derruba a decisão
+inteira. Relacionado: [`motor-llm-otimizacoes.md`](motor-llm-otimizacoes.md) M2 (Structured
+Outputs) resolveria a causa no caminho OpenAI; normalizar sinónimos/defaults antes da validação
+resolve nos dois provedores.
 
 **Contexto:** identificado durante a mesma sessão de testes via browser (20/06/2026).
 
@@ -299,3 +311,168 @@ nenhuma outra conta.
 **Decisão:** não corrigir agora — aguardando decisão do utilizador sobre prioridade. Revisitar
 antes de qualquer venda real do agente demo "Lara" (`agente-demo.md`), já que o próprio doc de
 marketing assume que os guardrails de saúde/handoff cobrem o maior risco de reputação do nicho.
+
+---
+
+## M11 — Ler mais formatos de hora no turno da confirmação
+
+**Prioridade: MÉDIA**
+
+**Contexto:** deixado de fora de `fix-confirmacao-grava-proposta-antiga.md` (graduado em
+26/10/2026). Ver `docs/architecture/agenda.md`, "Turno da confirmação".
+
+**Estado actual:** `meeting_proposal.py` lê as horas com o `_TIME_RE` de `requested_slot.py`
+("11h", "14h30", "15:00"). Horas por extenso ("ao meio-dia", "às onze", "às três da tarde") não
+são lidas: nesse caso não há proposta lida e a conferência do candidato não actua (o
+comportamento fica como antes da correção — decide a Filha).
+
+**O que precisaria existir:** reconhecer as formas por extenso mais comuns em PT-PT/PT-BR na
+leitura de horas partilhada (`requested_slot` + `meeting_proposal`), com testes de não-regressão
+para durações ("uma hora") e intervalos ("das onze às cinco").
+
+---
+
+## M12 — Perguntas da conferência da marcação no tom da conta
+
+**Prioridade: MÉDIA**
+
+**Contexto:** deixado de fora de `fix-confirmacao-grava-proposta-antiga.md` (graduado em
+26/10/2026).
+
+**Estado actual:** quando `_apply_meeting_confirmation_guard` bloqueia a gravação, a resposta ao
+cliente é um texto fixo do código (`meeting_proposal.ask_which_text` / `ask_duration_text`):
+"Só para confirmar: prefere X ou Y?" e "Para fechar a marcação de X: que serviço e que duração
+prefere (20, 30, 45, 60 ou 90 min)?". Sem o tom de voz da conta, com o profissional sem artigo
+("com Val") e, em tabelas grandes, uma lista de durações longa. Só aparece quando a Filha ignora
+o bloco e confirma na mesma (1 vez em 6 corridas na bancada).
+
+**O que precisaria existir:** gerar a pergunta no tom da conta (ex.: chamada curta à IA como a de
+`meeting_scheduler._generate_conflict_message`, com o texto fixo como fallback) e agrupar as
+durações por serviço quando a tabela tiver muitas.
+
+---
+
+## M13 — Dados obrigatórios antes de gravar configuráveis no AI profile
+
+**Prioridade: MÉDIA**
+
+**Contexto:** deixado de fora de `fix-confirmacao-grava-proposta-antiga.md` (graduado em
+26/10/2026).
+
+**Estado actual:** com `meeting_scheduled=true`, o código só exige a duração (quando a tabela de
+serviços tem várias e ninguém a disse — `meeting_proposal.missing_duration`). O resto do que a
+conta quer saber antes de marcar (nome do cliente, tipo de serviço, profissional) só existe em
+texto livre nas instruções personalizadas, e o bloco "MARCAÇÃO JÁ GRAVADA" vence essas
+instruções.
+
+**O que precisaria existir:** campo no AI profile com os dados exigidos antes de gravar (lista
+fixa: nome, serviço, duração, profissional); o bloco e a conferência passam a pedir o que faltar.
+Mexe na estrutura da BD (backend-core), nos ecrãs do agente e em
+`docs/architecture/admin-agents-contract.md` — sobe ao utilizador.
+
+---
+
+## M14 — "Pode ser" com duas opções em aberto grava a que a IA escolher
+
+**Prioridade: ALTA**
+
+**Contexto:** visto na bancada Sensi Vitae durante `fix-remarcacao-grava-contraproposta.md`
+(graduado em 26/10/2026), cenário `p-aceita-2a`. A Lara ofereceu "quinta às 16h ou sexta às 11h", o
+cliente respondeu "Pode ser sim, marca aí!", e ficou gravada quinta às 16h. A Lara ainda perguntou
+"Posso confirmar?".
+
+**Estado actual:** `meeting_proposal.reconcile_confirmation`, com a aceitação `ambiguous`, deixa
+passar o candidato da Filha quando ele é uma das opções (`action: ok`). Só bloqueia e pergunta "qual
+prefere?" quando o candidato não é nenhuma delas. O cliente pode aparecer à hora errada.
+
+**O que construir:** com aceitação `ambiguous`, não gravar nunca e perguntar qual opção, mesmo que o
+candidato seja uma delas (o bloco "O LEAD CONFIRMOU, MAS HÁ MAIS DE UMA OPÇÃO EM ABERTO" já pede
+isto à Filha). Confirmar antes que as opções lidas são mesmo alternativas, e não, por exemplo, a
+sessão antiga repetida no texto.
+
+---
+
+## M15 — Conflito no último segundo numa marcação nova manda duas mensagens
+
+**Prioridade: MÉDIA**
+
+**Contexto:** deixado de fora de `fix-remarcacao-grava-contraproposta.md` (graduado em 26/10/2026),
+que resolveu o mesmo problema na remarcação.
+
+**Estado actual:** quando o CRM recusa a criação com 409 (horário ocupado entre a leitura da agenda e
+a gravação), `meeting_scheduler.handle_meeting_scheduled` devolve a mensagem de conflito e o runner
+(e o Playground) envia-a **além** da resposta da Filha, que já dava a marcação como feita. O cliente
+recebe "Experiência Agendada" e logo a seguir "o horário ficou indisponível".
+
+**O que construir:** como em `handle_meeting_cancel_or_reschedule`, substituir `decision.message_text`
+pela mensagem de conflito e devolver `None` — ver `docs/architecture/agenda.md`, "Conflito de horário
+no reagendamento".
+
+---
+
+## M16 — Hora local também nos turnos que não cumprimentam
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `fix-saudacao-hora-local.md` (graduado em 26/10/2026) por minimalismo.
+
+**Estado actual:** a linha "AGORA (hora local do negócio)" (`_local_time_fact_line` em `decision_engine.py`)
+só entra na receção e nos prompts que mandam cumprimentar. Nos outros turnos a Filha só tem a tabela de dias
+(sem horas), por isso não sabe se "ainda hoje" ou "amanhã de manhã" fazem sentido à hora a que responde.
+
+**O que construir:** injetar a mesma linha (sem a instrução de cumprimento) nos prompts de apresentação,
+pré-agendamento, agendamento e gestão pós-marcação; medir antes e depois na bancada (ex.: "ainda hoje" às 19h55).
+
+---
+
+## M17 — Abertura do dono com o período escrito à mão
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `fix-saudacao-hora-local.md` (graduado em 26/10/2026).
+
+**Estado actual:** a abertura (`origin_inbound_opener`) é texto livre. Se o dono escrever literalmente
+"Boa tarde!", a IA pode copiá-lo mesmo de manhã, apesar da linha AGORA que lhe diz o período certo.
+
+**O que construir:** opções a avaliar — variável `{{saudacao}}` na abertura, substituída pelo cumprimento
+calculado; ou um aviso no ecrã do AI Profile quando a abertura contém um período fixo.
+
+---
+
+## M18 — IA vê os ocupados de outros já alargados pela margem
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `feat-margem-entre-sessoes.md` (graduado em 26/10/2026) — trade-off consciente.
+
+**Estado actual:** com `session_buffer_minutes > 0`, `_apply_session_buffer` (`orchestrator.py`) alarga os
+ocupados de outros leads e do Google antes de chegarem ao executor, por isso o bloco "HORÁRIOS JÁ OCUPADOS" e o
+facto do horário pedido mostram, por exemplo, "15:00 até 16:15" para uma sessão das 15h às 16h. Nos testes de
+26/10 a IA não citou esses horários ao cliente.
+
+**Gatilho:** só vale a pena se a IA começar a dizer ao cliente horários "estranhos" (ex.: "está ocupado até às 16h15").
+
+**O que construir:** mandar o horário real e a margem em campos separados no slot (ex.: `start_at`/`end_at`
+reais + `buffer_minutes`) e aplicar a margem dentro de `_has_conflict`, mostrando à IA o horário real.
+
+---
+
+## M19 — Textos da IA na agenda vistos nos testes da margem
+
+**Prioridade: BAIXA**
+
+**Contexto:** observado nos testes de `feat-margem-entre-sessoes.md` (bancada local e Playground de produção,
+26/10/2026) — não causado pela margem (repete-se com margem 0).
+
+**O que foi visto:**
+1. Na remarcação recusada, a IA escreveu "a sua sessão de terça-feira às 14h mantém-se até me dizer" quando a
+   sessão gravada era às 13h30 — usa o horário pedido em vez do gravado (parente de
+   `cancelamento-reagendamento-melhorias-futuras.md` M5).
+2. Quando o horário pedido só colide por causa da margem, a IA diz "já está ocupado" — não é falso para o
+   cliente, mas o motivo real é o intervalo de preparação.
+3. Em 1 de 5 corridas do `pos-marcacao`, a IA respondeu a "Afinal preciso de remarcar para quinta às 15h" como
+   marcação nova ("Como se chama?") e devolveu `meeting_reschedule_requested=false` — nada foi remarcado.
+
+**O que construir:** medir cada um na bancada (`.claude/agentes/sensi-vitae/`, 5x por cenário) antes de decidir;
+para (1), passar à Filha de gestão pós-marcação o horário gravado como facto; para (3), avaliar um guardrail
+que reconheça "remarcar/mudar para <dia> às <hora>" quando há marcação futura.

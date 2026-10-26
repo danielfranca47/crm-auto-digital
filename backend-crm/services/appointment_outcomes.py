@@ -24,7 +24,7 @@ def _check_conflict(
     params = [lead_id, end_at.isoformat(), start_at.isoformat()]
     query = (
         "SELECT 1 FROM appointments "
-        "WHERE lead_id = ? AND start_at < ? AND end_at > ?"
+        "WHERE lead_id = ? AND datetime(start_at) < datetime(?) AND datetime(end_at) > datetime(?)"
     )
     if exclude_id is not None:
         query += " AND id != ?"

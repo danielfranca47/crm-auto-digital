@@ -51,7 +51,7 @@ whatsapp_worker
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `route_to` | `recepcao\|qualification\|apresentation\|pre-agendamento\|agendamento\|follow-up\|closing` | Rota decidida. `pre-agendamento`/`agendamento` só fazem sentido para templates de agendamento (`_SCHEDULING_AGENT_TEMPLATES` — ver [`pipeline-phases.md`](pipeline-phases.md)). Campo obrigatório, sem tolerância genérica de enum (ao contrário de `perceived_category`, que degrada para `None`) — mas `_normalize_route_to_alias()` (`orchestrator_models.py`) corrige uma lista fechada de aliases conhecidos e recorrentes da LLM antes da validação (`_ROUTE_TO_ALIASES`: hoje `"presentation"→"apresentation"`, `"qualificacao"→"qualification"`). Qualquer valor fora dessa lista continua a levantar `ValidationError` e cai no fallback/retry existente — comportamento intencional, para não mascarar erros genuinamente desconhecidos. |
+| `route_to` | `recepcao\|qualification\|apresentation\|pre-agendamento\|agendamento\|follow-up\|closing` | Rota decidida. `pre-agendamento`/`agendamento` só fazem sentido para templates de agendamento (`_SCHEDULING_AGENT_TEMPLATES` — ver [`pipeline-phases.md`](pipeline-phases.md)). Campo obrigatório, sem tolerância genérica de enum (ao contrário de `perceived_category`, que degrada para `None`) — mas `_normalize_route_to_alias()` (`orchestrator_models.py`) corrige uma lista fechada de aliases conhecidos e recorrentes da LLM antes da validação (`_ROUTE_TO_ALIASES`: hoje `"presentation"`/`"apresentacao"`/`"apresentação"`→`"apresentation"`, `"qualificacao"→"qualification"`). Qualquer valor fora dessa lista continua a levantar `ValidationError` e cai nas novas tentativas / fallback — comportamento intencional, para não mascarar erros genuinamente desconhecidos. |
 | `perceived_category` | mesmos valores + null | Categoria percebida |
 | `confidence` | 0..1 | Confiança da decisão |
 | `reason` | string | Justificativa textual |
@@ -99,6 +99,7 @@ Em ambos os casos, o turno seguinte roda a Mãe **sem overrides** — `outbound_
 | `signals_structured` | dict\|null | Sinais estruturados (meeting_proposed, checkout_sent, etc.) |
 | `media_keys_to_send` | list[string]\|null | Chaves de `knowledge_media` cujas mídias a filha decidiu anexar neste turno. Só populado na filha de apresentação. Fallback estrito: `null`/`[]` → nenhuma mídia anexada. |
 | `pending_commercial_text` | string\|null | Só populado pela Filha Recepção — trecho literal do pedido comercial embutido na saudação, se houver. Ver "Saudação composta" acima. |
+| `lead_already_answered` | string\|null | Só da Filha Recepção com instruções da Fase 0 — opção que o lead já escolheu na própria mensagem; com valor, o código tira a pergunta final da resposta. Ver "Filha Recepção" abaixo. |
 | `confidence` | 0..1 | Confiança da resposta |
 
 ### Normalização de agent_mode
@@ -161,7 +162,12 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 
 ### Filha Recepção (`_build_child_prompt_recepcao`)
 - Instrução restrita: só o cumprimento inicial, sem tratar pedido comercial
+- Com blocos do Fluxo de Venda da Fase 0 ativos no turno, eles entram no meio do prompt (antes dos exemplos e do JSON), sob "INSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO", com prioridade sobre o modelo de boas-vindas: a Filha cumpre-os junto com o cumprimento (apresentar-se como pedem, fazer a pergunta que pedem), a regra "não faz perguntas de qualificação" vira "só a pergunta que as instruções pedirem" e o modelo de `message_text` muda. Sem blocos, o prompt é o de cumprimento puro
+- A resposta da Recepção é sempre o `message_text`: em `compose_decision_output()`, um `question_text` preenchido (com `should_ask=true`) não o substitui como nas outras rotas, porque a Recepção não tem pergunta de qualificação e o pedido do lead já segue em `pending_commercial_text`
+- Pergunta já respondida pelo lead: com instruções da Fase 0, o JSON pede primeiro `lead_already_answered` (a opção que o lead já citou na mensagem, ex.: "Val" para "Val ou Daniel?"). Se vier preenchido, `compose_decision_output()` tira a frase final terminada em "?" com `_drop_trailing_question()`. Fica em código porque o modelo identifica a escolha mas, por causa das regras "termine na pergunta" (orientação estrita, tom de voz), tende a repeti-la mesmo assim. O pedido continua a ir para `pending_commercial_text`
 - Extrai qualquer pedido comercial embutido na mensagem para `pending_commercial_text`, sem tentar respondê-lo (ver "Saudação composta" acima)
+- Promessa depois do cumprimento: com `pending_commercial_text` preenchido, `compose_decision_output()` tira do `message_text` as frases que começam por um compromisso na 1.ª pessoa ("Vou passar as informações…", "Já lhe envio…", "Te paso…", "I'll send…") com `_drop_promise_sentences()`. Se não sobrar nada, envia só o cumprimento do período (`_local_greeting`). O `decision_trace` regista `recepcao_promise_stripped`. Fica em código porque o prompt já proíbe prometer e o modelo (gpt-4o-mini) promete na mesma, em boa parte dos turnos com pedido, sobretudo quando a orientação da Fase 0 fala da "resposta que segue a seguir". Reforçar o prompt foi testado e saiu pior: o modelo copiava o exemplo ❌ à letra. Sem pedido pendente ("Olá" sozinho) a mensagem não é tocada
+- Cumprimento pelo período do dia: o prompt recebe a linha "AGORA (hora local do negócio)" (`_local_time_fact_line`, fuso `ai_profile.timezone` via `meeting_date_guard.local_now`) com o período já calculado — 05h–12h "Bom dia", 12h–20h "Boa tarde", 20h–05h "Boa noite". Se o lead já cumprimentou com um período, devolve-se o dele (pode estar noutro fuso). O exemplo ✅ de lead sem período usa o cumprimento calculado; sem isto a IA copiava o "Boa tarde" dos exemplos. A mesma linha entra na qualificação, apresentação, follow-up e closing só quando esses prompts mandam cumprimentar (abertura de 1.º contacto ou `next_action_hint="greet"`)
 
 ### Filha Pré-agendamento (`_build_child_prompt_pre_agendamento`)
 - Só para templates de agendamento (`sdr_padrao`, `hybrid_scheduler`)
@@ -317,6 +323,30 @@ Visibilidade admin: `docs/architecture/admin-agents-contract.md` documenta o bad
 "OpenRouter" exibido em `frontend-admin/src/pages/AdminAgents.tsx` quando um usuário está
 fora do padrão.
 
+### Temperatura da Filha
+
+Só a chamada da Filha (`generate_child_result`) envia `temperature`. A Mãe, o
+`field_extractor`, a mensagem de conflito e os geradores do meeting scheduler continuam sem
+o campo (padrão do provedor); temperatura fixa baixa para a Mãe é o item M1 de
+`docs/plans/motor-llm-otimizacoes.md`.
+
+`llm_service.resolve_child_temperature(ai_profile, override)` decide, por chamada:
+
+| Origem | Temperatura |
+|---|---|
+| `override` (orientação "seguir à risca" ativa no turno, ver [`sales-flow.md`](sales-flow.md)) | `STRICT_ORIENTATION_TEMPERATURE` = 0.2 |
+| `ai_profile.response_creativity = "creative"` / `"balanced"` / `"strict"` | 0.9 / 0.5 / 0.2 |
+| ausente / `null` / valor desconhecido ("Padrão") | não envia `temperature` |
+
+`_build_payload(..., temperature=)` põe o campo na raiz do payload nos dois provedores
+(Responses API e Chat Completions) só quando não é `None`. Cada chamada com temperatura
+gera o log `event=llm_child_temperature route=<rota> temperature=<valor>`.
+
+`response_creativity` é campo do AI Profile (`backend-core`: coluna nullable, enum
+`ResponseCreativity`), editado no card "Criatividade das respostas" da Camada Identidade
+(`CamadaIdentidade.tsx`, `ModalCriatividade`). Chega ao executor dentro de
+`context["ai_profile"]` sem passar por `enrich_context_bundle()`, como `llm_provider`.
+
 ---
 
 ## Retry com backoff nas chamadas à LLM
@@ -324,12 +354,38 @@ fora do padrão.
 `backend-executors/app/services/llm_service.py` — helper partilhado `_post_with_retry()`,
 usado pelas seis funções públicas (`generate_mother_route`, `generate_decision_text`,
 `generate_child_result`, `generate_conflict_message`, `generate_appointment_reminder_message`,
-`generate_appointment_title_message`): até 2 tentativas, com 1s de backoff entre elas, antes de
-propagar a excepção final. Cobre falhas transitórias de rede (`httpx.RequestError`) e
-status HTTP retryable (429/500/502/503/504). Aplica-se tanto ao fluxo real (WhatsApp,
-via fila de jobs) quanto ao Playground (chamada síncrona, sem fila) — antes desta
-camada, o Playground não tinha nenhum retry e qualquer falha transitória caía
-directo no fallback `reason="llm_failure"` (`message_text=""`).
+`generate_appointment_title_message`): por omissão até 2 tentativas, com 1s de backoff entre
+elas, antes de propagar a excepção final. Cobre falhas transitórias de rede
+(`httpx.RequestError`) e status HTTP retryable (429/500/502/503/504) — a mesma regra que
+`is_retryable_http_error()` expõe. `max_attempts` e `timeout_seconds` são parâmetros: a Mãe e
+a Filha de `decide()` chamam com `max_attempts=1`, porque repetem a etapa inteira (ver abaixo).
+
+### Falhas da IA e novas tentativas (Mãe/Filha)
+
+`decision_engine._run_llm_stage()` envolve cada etapa — Mãe (chamada → JSON →
+`MotherDecision`) e cada chamada da Filha (chamada → JSON → `ChildResult`) — e repete **só
+essa etapa** (a Mãe já validada não é refeita quando a Filha falha):
+
+- **Até 4 tentativas por etapa** (`LLM_STAGE_MAX_ATTEMPTS`), um contador único para todos os
+  motivos repetíveis: `request_error` (rede/timeout), `status_429/5xx`, `invalid_json`,
+  `validation_error` (Pydantic) e `invalid_output` (resposta sem texto). Espera 1s, 2s, 4s.
+- **Não repete** 4xx não-retryable (400/401/403/422) nem exceções de código — outra
+  tentativa não resolveria.
+- **Orçamento de tempo do turno:** `settings.llm_decision_budget_seconds` (40s, env
+  `LLM_DECISION_BUDGET_SECONDS`), partilhado pela Mãe e pela Filha. Cada chamada usa
+  `timeout = min(llm_timeout_seconds, tempo restante)`, e não se começa outra tentativa com
+  menos de 5s restantes. Cabe nos 60s com que o Playground (`backend-crm/routes/playground.py`)
+  espera pelo executors e folga nos 300s do lease do job do worker.
+- Mesmo prompt em cada tentativa (sem texto de correção — não mexe nas instruções da IA). O
+  laço da Filha `qualification` com `VALIDATION_ERRORS` continua por cima, só para desvio de
+  conteúdo (campo errado, pergunta vazia ou repetida).
+- Logs: `event=llm_stage_retry stage=mother|child attempt=N/4 reason=...` em cada nova
+  tentativa; `event=llm_stage_exhausted ... limit=max_attempts|budget` quando desiste — a
+  seguir vem o `event=llm_orchestrator_error` do `except` de `decide()`.
+
+Medição que motivou (26/10/2026, Playground, 355 turnos): 4 handoffs por `llm_failure`, todos
+`ValidationError` (`route_to="apresentacao"`; `confidence` em falta na Filha); o único timeout
+recuperou com o retry HTTP.
 
 As últimas quatro (`generate_conflict_message`, `generate_appointment_reminder_message`,
 `generate_appointment_title_message`) devolvem texto puro (sem `text.format=json_object`)
@@ -340,22 +396,29 @@ prompt e nunca propaga excepção — qualquer falha (sem `LLM_API_KEY`, erro de
 timeout, resposta vazia) devolve `None` e o caller cai num fallback fixo.
 
 Não interfere com o retry de job da fila (`app/runners/whatsapp.py`, backoff
-global 60s/180s) — são camadas independentes: o retry de `llm_service.py` é interno a uma
-única chamada HTTP; o retry de job é externo, reagenda o job inteiro quando
-`llm_failure` persiste mesmo após as tentativas internas. O job
+global 60s/180s) — são camadas independentes: as tentativas acima são internas a um turno;
+o retry de job é externo, reagenda o job inteiro quando `llm_failure` persiste mesmo após
+elas (o Playground não tem esta segunda camada). O job
 `whatsapp.appointment.reminder` tem um override deste backoff global — ver
 [`agenda.md`](agenda.md#lembrete-de-reunião-gerado-por-ia).
 
 ### Fallback final: falha da LLM Mãe sempre vira handoff
 
-Se a chamada à LLM Mãe (ou o parsing/validação do payload) falhar mesmo após o retry de
-`llm_service.py`, o `except Exception` de `decide()` cai sempre em
+Se a Mãe ou a Filha (chamada, parsing ou validação) falhar mesmo após as novas tentativas
+acima, o `except Exception` de `decide()` cai sempre em
 `handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)` — independente de quantos
 turnos a conversa já teve. `handoff_policy.apply()` lê `ai_profile.handoff_custom_text` (ou o
 template padrão por `identity_mode`, ver [`agents.md`](agents.md)) e envia essa mensagem ao
 lead, seguindo a política configurada (`keep_active_notify` notifica o time; `disable_bot`
 pausa o bot para aquele lead). Não existe caminho de falha da Mãe que devolva resposta vazia
 sem handoff — nem mesmo nos primeiros turnos de uma conversa nova.
+
+**Exceção — tentativa do job que ainda vai ser repetida (worker):** antes do `decide()`, o
+runner (`runners/whatsapp.py`) põe `context["llm_failure_final"] = not _llm_failure_will_retry(attempt)`.
+Com `False`, o `except` devolve o `FALLBACK_DECISION` cru (sem `handoff_policy.apply`) — nada de
+desligar o bot nem `log_handoff_requested` — e o runner reagenda o job (`event=llm_failure_retry`).
+Só a última tentativa (`attempt >= JOB_MAX_ATTEMPTS`) aplica o handoff. Sem a chave (Playground,
+pré-geração de follow-up) o handoff é imediato.
 
 ---
 

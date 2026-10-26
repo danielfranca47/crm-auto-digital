@@ -441,6 +441,16 @@ function BlockForm({ block, setBlock, knowledgeItems, customVars, phaseBlocks }:
               <option value="critical">Crítica</option>
             </select>
           </div>
+          <div className="o-field" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <input type="checkbox" id="orient-strict" checked={!!block.strict}
+              onChange={e => set('strict', e.target.checked)} style={{ cursor: 'pointer', marginTop: 3 }} />
+            <label htmlFor="orient-strict" style={{ cursor: 'pointer', fontSize: 12.5 }}>
+              Seguir à risca
+              <div className="o-field-hint" style={{ marginTop: 2 }}>
+                Na resposta em que esta orientação entra, o agente usa só o que está escrito aqui, sem cumprimentos nem informações a mais, e com a criatividade no mínimo.
+              </div>
+            </label>
+          </div>
         </>
       );
 
@@ -1381,6 +1391,11 @@ function PhaseSection({ phase, onAddBlock, onEditBlock, onRemoveBlock, onAddToGr
                       <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: meta.color }}>
                         {block.typeId.replace(/_/g, ' ')}
                       </span>
+                      {block.typeId === 'orientacao' && block.strict && (
+                        <span style={{ fontSize: 9.5, padding: '1px 6px', borderRadius: 4, border: `1px solid ${meta.color}`, color: meta.color }}>
+                          à risca
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--o-sub)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {blockSummary(block)}

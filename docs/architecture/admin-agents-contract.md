@@ -23,14 +23,12 @@ Origem: tabela `ai_profiles` em `backend-core` (via `GET /admin/agents/users/{us
 | `professional_availability` | string\|null | Horários de atendimento do profissional, em texto livre — injectado na filha de agendamento como "DISPONIBILIDADE DO PROFISSIONAL" (ver [`agenda.md`](agenda.md)) | Não exibido no painel admin atualmente |
 | `llm_provider` | string | Provedor de LLM usado nas chamadas de IA (`openai`\|`openrouter`), default `openai` — ver [`llm-architecture.md`](llm-architecture.md) | Badge "OpenRouter" ao lado do seletor de usuário quando `≠ openai`; entra no cálculo de `has_custom_config`/`diff` |
 | `llm_provider_model` | string\|null | Modelo curado do OpenRouter (só relevante quando `llm_provider=openrouter`) | Incluído no texto do badge OpenRouter |
+| `response_creativity` | string\|null | Temperatura da Filha (`creative`\|`balanced`\|`strict`; `null` = padrão do provedor) — ver [`llm-architecture.md`](llm-architecture.md#temperatura-da-filha) | Badge "criatividade: …" quando não é `null`; entra no cálculo de `has_custom_config`/`diff` (default `null`) |
+| `session_buffer_minutes` | integer\|null | Intervalo mínimo entre duas marcações do agente, em minutos (default `0`) — ver [`agenda.md`](agenda.md#intervalo-entre-sessões-session_buffer_minutes) | Badge "intervalo entre sessões: N min" quando `> 0`; entra no cálculo de `has_custom_config`/`diff` (default `0`) |
 
-### Campos de qualificação mínima por modo
+### Campos obrigatórios de qualificação
 
-| Campo | Tipo | Modo ao qual se aplica |
-|---|---|---|
-| `min_qualification_consultivo` | int / lista | `consultivo` — mínimo 6 campos |
-| `min_qualification_agenda` | int / lista | `agenda` — mínimo 4 campos |
-| `min_qualification_direto` | int / lista | `direto` — mínimo 3 campos |
+Os campos obrigatórios são `qualification_required_fields` do AI Profile (lista de chaves; lista vazia = nenhum obrigatório).
 
 ---
 

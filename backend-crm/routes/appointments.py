@@ -9,7 +9,8 @@ from models import AppointmentCreate, AppointmentOut, AppointmentUpdate, Appoint
 from security_core import CurrentUser, require_crm_access
 from services.appointment_outcomes import apply_outcome
 from services.briefing_service import schedule_briefing_job_for_appointment
-from services.google_calendar_service import delete_event as gcal_delete, list_events as gcal_list, push_event as gcal_push, update_event as gcal_update
+from services.google_calendar_service import GoogleCalendarError, delete_event as gcal_delete, push_event as gcal_push, update_event as gcal_update
+from services.google_calendar_sync import sync_user_google_events
 from services.jobs_service import cancel_pending_appointment_jobs, schedule_appointment_reminder_jobs
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,8 @@ def _check_conflict(
 
     Cobre tanto appointments criados pelo CRM (lead_id IS NOT NULL, herdam
     user_id do lead) quanto importados do Google (lead_id IS NULL, user_id
-    próprio) — mesmo scoping de list_appointments().
+    próprio) — mesmo scoping de list_appointments(). Eventos do Google marcados
+    como Disponível (google_transparency='transparent') não contam como conflito.
     """
     if user_id is None:
         return
@@ -75,7 +77,8 @@ def _check_conflict(
     query = (
         "SELECT 1 FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id "
         "WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?) "
-        "AND a.start_at < ? AND a.end_at > ?"
+        "AND (a.google_transparency IS NULL OR a.google_transparency != 'transparent') "
+        "AND datetime(a.start_at) < datetime(?) AND datetime(a.end_at) > datetime(?)"
     )
     if exclude_id is not None:
         query += " AND a.id != ?"
@@ -115,10 +118,10 @@ def list_appointments(
         params.extend([current_user.id, current_user.id])
 
         if start:
-            clauses.append("a.end_at >= ?")
+            clauses.append("datetime(a.end_at) >= datetime(?)")
             params.append(start.isoformat())
         if end:
-            clauses.append("a.start_at <= ?")
+            clauses.append("datetime(a.start_at) <= datetime(?)")
             params.append(end.isoformat())
         if lead_id is not None:
             clauses.append("a.lead_id = ?")
@@ -131,7 +134,7 @@ def list_appointments(
             "SELECT a.*, l.companyName AS lead_company, l.contactName AS lead_contact "
             "FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id"
             f" WHERE {where}"
-            " ORDER BY a.start_at ASC"
+            " ORDER BY datetime(a.start_at) ASC"
         )
         cur.execute(query, params)
         rows = cur.fetchall()
@@ -146,69 +149,21 @@ def google_sync(
     end: str = Query(..., description="ISO datetime fim do período"),
     current_user: CurrentUser = Depends(require_crm_access),
 ) -> List[AppointmentOut]:
-    google_events = gcal_list(user_id=current_user.id, time_min=start, time_max=end)
+    try:
+        sync_user_google_events(user_id=current_user.id, start=start, end=end)
+    except GoogleCalendarError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": exc.message})
 
     conn = get_connection()
     try:
         cur = conn.cursor()
-        now = datetime.now(timezone.utc).isoformat()
-        synced_ids: List[str] = []
-
-        for event in google_events:
-            gid = event.get("id")
-            if not gid:
-                continue
-            synced_ids.append(gid)
-
-            start_dt = event.get("start", {}).get("dateTime") or event.get("start", {}).get("date") or ""
-            end_dt = event.get("end", {}).get("dateTime") or event.get("end", {}).get("date") or start_dt
-            title = event.get("summary") or "Evento Google"
-            description = event.get("description")
-
-            existing = cur.execute(
-                "SELECT id FROM appointments WHERE google_event_id = ? AND user_id = ?",
-                (gid, current_user.id),
-            ).fetchone()
-
-            if existing:
-                cur.execute(
-                    "UPDATE appointments SET title = ?, description = ?, start_at = ?, end_at = ?, updated_at = ?"
-                    " WHERE google_event_id = ? AND user_id = ?",
-                    (title, description, start_dt, end_dt, now, gid, current_user.id),
-                )
-            else:
-                cur.execute(
-                    "INSERT INTO appointments"
-                    " (user_id, lead_id, title, description, type, status, start_at, end_at, source, google_event_id, created_at, updated_at)"
-                    " VALUES (?, NULL, ?, ?, 'meeting', 'pending', ?, ?, 'google', ?, ?, ?)",
-                    (current_user.id, title, description, start_dt, end_dt, gid, now, now),
-                )
-
-        # Remove Google appointments deste período que já não existem no Google (F3-2)
-        if synced_ids:
-            placeholders = ",".join("?" * len(synced_ids))
-            cur.execute(
-                f"DELETE FROM appointments"
-                f" WHERE source = 'google' AND user_id = ? AND start_at >= ? AND start_at <= ?"
-                f" AND google_event_id NOT IN ({placeholders})",
-                [current_user.id, start, end, *synced_ids],
-            )
-        else:
-            cur.execute(
-                "DELETE FROM appointments"
-                " WHERE source = 'google' AND user_id = ? AND start_at >= ? AND start_at <= ?",
-                (current_user.id, start, end),
-            )
-
-        conn.commit()
-
         # Retorna todos os appointments do período para este user
         cur.execute(
             "SELECT a.*, l.companyName AS lead_company, l.contactName AS lead_contact"
             " FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id"
             " WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?)"
-            " AND a.end_at >= ? AND a.start_at <= ?"
-            " ORDER BY a.start_at ASC",
+            " AND datetime(a.end_at) >= datetime(?) AND datetime(a.start_at) <= datetime(?)"
+            " ORDER BY datetime(a.start_at) ASC",
             (current_user.id, current_user.id, start, end),
         )
         rows = cur.fetchall()

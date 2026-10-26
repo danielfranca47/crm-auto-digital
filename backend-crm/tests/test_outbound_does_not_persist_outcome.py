@@ -5,27 +5,11 @@ import sys
 import unittest
 
 
-def _install_fastapi_stub() -> None:
-    if "fastapi" in sys.modules:
-        return
-
-    class HTTPException(Exception):
-        def __init__(self, status_code=None, detail=None):
-            super().__init__(detail)
-            self.status_code = status_code
-            self.detail = detail
-
-    fastapi_module = type(sys)("fastapi")
-    fastapi_module.HTTPException = HTTPException
-    sys.modules["fastapi"] = fastapi_module
-
-
 def _load_jobs_service():
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     module_path = os.path.join(repo_root, "services", "jobs_service.py")
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
-    _install_fastapi_stub()
     spec = importlib.util.spec_from_file_location("jobs_service", module_path)
     module = importlib.util.module_from_spec(spec)
     if spec and spec.loader:
@@ -40,6 +24,7 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             category TEXT,
+            origin TEXT DEFAULT 'Manual',
             lastMovement DATETIME DEFAULT CURRENT_TIMESTAMP,
             kanban_highlight TEXT,
             kanban_highlight_at DATETIME
@@ -53,6 +38,7 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             message_id INTEGER NULL,
             action TEXT NOT NULL,
             notes TEXT,
+            email TEXT,
             createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 

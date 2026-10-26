@@ -18,6 +18,13 @@ real, playground, configurações de ambiente).
 | `_guia-testes-desktop-app.md` | Processo para validar apps desktop nativas (ex.: `agent-local`) que não correm num browser — qual ferramenta de automação usar (`computer-use`) e armadilhas conhecidas. |
 | `guia-teste-cliente-novo-exe-agent-local.md` | Script permanente (não é sessão única) para guiar um cliente não-técnico numa call testando o `agent-local.exe` no PC dele — onboarding real + confirma em hardware real o empacotamento já graduado (ver `docs/architecture/agent-local-app.md`). |
 
+### Procedimentos permanentes
+
+| Ficheiro | Para que serve |
+|---|---|
+| `fila-automatica.md` | Regras do agente que executa a fila sozinho: que itens pode pegar, turno da noite, turno do dia, avaliador, o que sobe sempre para o utilizador, como pausar e desfazer. |
+| `local-dev.md` | Ambiente local, comandos slash, modo auto e regras de permissão do Claude Code. |
+
 ### Ficheiros regulares — trabalho activo
 
 Arquivos temporários criados durante uma sessão de testes. Depois de os testes

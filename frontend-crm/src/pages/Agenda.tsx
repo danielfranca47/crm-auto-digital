@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarDays, Calendar, Clock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScheduleView } from "@/components/ScheduleView";
@@ -6,6 +6,7 @@ import { WeekView } from "@/components/WeekView";
 import { DayView } from "@/components/DayView";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
+import type { ApiError } from "@/lib/api-client";
 import { appointmentsKeys } from "@/hooks/useAppointments";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,8 +31,9 @@ const Agenda = () => {
   });
 
   const googleConnected = googleStatus?.connected === true;
+  const autoSynced = useRef(false);
 
-  async function handleSync() {
+  async function handleSync({ silent = false }: { silent?: boolean } = {}) {
     setIsSyncing(true);
     try {
       const now = new Date();
@@ -39,17 +41,27 @@ const Agenda = () => {
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
       await api.googleCalendar.sync(start, end);
       queryClient.invalidateQueries({ queryKey: appointmentsKeys.all });
-      toast({ title: "Agenda sincronizada com Google Calendar" });
-    } catch {
+      if (!silent) toast({ title: "Agenda sincronizada com Google Calendar" });
+    } catch (err) {
+      // 409 do backend: detail = { code, message } com o motivo real (ex.: sem permissão do calendário)
+      const detail = (err as ApiError)?.data as { detail?: { message?: string } } | undefined;
       toast({
         title: "Erro ao sincronizar",
-        description: "Não foi possível importar eventos do Google Calendar.",
+        description: detail?.detail?.message || "Não foi possível importar eventos do Google Calendar.",
         variant: "destructive",
       });
+      queryClient.invalidateQueries({ queryKey: ["googleCalendarStatus"] });
     } finally {
       setIsSyncing(false);
     }
   }
+
+  // Ao abrir a Agenda com o Google ligado, traz o mês do Google uma vez (sem toast de sucesso)
+  useEffect(() => {
+    if (!googleConnected || autoSynced.current) return;
+    autoSynced.current = true;
+    handleSync({ silent: true });
+  }, [googleConnected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)] p-4 gap-4">
@@ -62,7 +74,7 @@ const Agenda = () => {
               variant="outline"
               size="sm"
               className="h-8 gap-1.5"
-              onClick={handleSync}
+              onClick={() => handleSync()}
               disabled={isSyncing}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />

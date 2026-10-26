@@ -1,5 +1,3 @@
-import importlib.machinery
-import importlib.util
 import os
 import sqlite3
 import sys
@@ -10,47 +8,6 @@ from unittest.mock import patch
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
-
-if "fastapi" not in sys.modules:
-    fastapi_stub = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("fastapi", None))
-
-    class HTTPException(Exception):
-        def __init__(self, status_code=None, detail=None):
-            super().__init__(detail)
-            self.status_code = status_code
-            self.detail = detail
-
-    fastapi_stub.HTTPException = HTTPException
-    sys.modules["fastapi"] = fastapi_stub
-
-if "httpx" not in sys.modules:
-    httpx_stub = importlib.util.module_from_spec(importlib.machinery.ModuleSpec("httpx", None))
-
-    class RequestError(Exception):
-        pass
-
-    class Client:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-    class Response:
-        status_code = 200
-        headers = {}
-        text = ""
-
-        def json(self):
-            return {}
-
-    httpx_stub.RequestError = RequestError
-    httpx_stub.Client = Client
-    httpx_stub.Response = Response
-    sys.modules["httpx"] = httpx_stub
 
 from fastapi import HTTPException
 from services.followup_channel_context import resolve_followup_tick_channel_context

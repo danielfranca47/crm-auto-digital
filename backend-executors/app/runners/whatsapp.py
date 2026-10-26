@@ -448,6 +448,10 @@ def _build_failure_details(exc: ExecutionError) -> Dict[str, Any]:
     return details
 
 
+def _llm_failure_will_retry(attempt: Optional[int]) -> bool:
+    return attempt is None or attempt < JOB_MAX_ATTEMPTS
+
+
 def _fail_job(job_id: str, logger: logging.LoggerAdapter, exc: ExecutionError, attempt: Optional[int]) -> int:
     details = _build_failure_details(exc)
     retryable = bool(details.get("retryable"))
@@ -763,6 +767,9 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
         extra={"phase": "context"},
     )
 
+    # Só a última tentativa do job aplica o handoff por llm_failure (desliga o bot / regista);
+    # nas anteriores o job é reagendado abaixo sem efeitos colaterais no lead.
+    context["llm_failure_final"] = not _llm_failure_will_retry(attempt)
     decision = decision_engine.decide(context, logger=ctx_logger)
     ctx_logger.info(
         "event=decision_made next_action=%s reason=%s",
@@ -773,7 +780,7 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
 
     # Retry automático em caso de falha LLM — evita handoff imediato
     # Usa o mecanismo de retry existente (max 3 tentativas, backoff 60s/180s)
-    if decision.reason == "llm_failure" and (attempt is None or attempt < JOB_MAX_ATTEMPTS):
+    if decision.reason == "llm_failure" and _llm_failure_will_retry(attempt):
         ctx_logger.info(
             "event=llm_failure_retry attempt=%s max=%s — agendando retry em vez de handoff",
             attempt, JOB_MAX_ATTEMPTS,
@@ -790,10 +797,26 @@ def execute_job(job_id: str, logger: logging.Logger) -> int:
             ),
             attempt,
         )
-    _meeting_conflict_message = meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
-    _meeting_conflict_message = _meeting_conflict_message or meeting_scheduler.handle_meeting_cancel_or_reschedule(
-        context, decision, logger=ctx_logger
-    )
+    # Falha do CRM ao gravar a marcação não pode terminar o worker (todas as contas) — o job é
+    # reagendado; nada foi enviado ao cliente ainda, por isso a nova tentativa decide de novo.
+    try:
+        _meeting_conflict_message = meeting_scheduler.handle_meeting_scheduled(context, decision, logger=ctx_logger)
+        _meeting_conflict_message = _meeting_conflict_message or meeting_scheduler.handle_meeting_cancel_or_reschedule(
+            context, decision, logger=ctx_logger
+        )
+    except Exception as exc:
+        return _fail_job(
+            job_id, ctx_logger,
+            ExecutionError(
+                f"Falha ao gravar a marcação no CRM — retry automático: {exc}",
+                phase="meeting",
+                service="crm",
+                http_status=getattr(exc, "status_code", None),
+                retryable=True,
+                error_type="meeting_persist_failure",
+            ),
+            attempt,
+        )
     if _meeting_conflict_message:
         try:
             _delay = min(max(len(_meeting_conflict_message) * 40, 800), 6000)

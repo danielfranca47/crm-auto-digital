@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import time
 import unicodedata
 from datetime import datetime, timedelta, timezone as _dt_timezone
 from difflib import SequenceMatcher
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, TypeVar
 from zoneinfo import ZoneInfo
+
+from pydantic import ValidationError
 
 from app.contracts.qualification_contract import (
     SIGNALS_SCHEMA,
@@ -18,7 +22,22 @@ from app.contracts.qualification_contract import (
 from app.clients import crm_client
 from app.core.config import settings
 from app.schemas.decision import DecisionOutput
-from app.services import fast_path, field_extractor, handoff_policy, llm_service
+from app.services import (
+    fast_path,
+    field_extractor,
+    handoff_policy,
+    llm_service,
+    meeting_date_guard,
+    meeting_proposal,
+    professional_hours,
+    requested_slot,
+)
+from app.services.meeting_scheduler import (
+    _ensure_aware,
+    _has_conflict,
+    _original_duration_minutes,
+    _resolve_default_duration_minutes,
+)
 from app.services.orchestrator_models import ChildResult, MotherDecision
 
 logger = logging.getLogger(__name__)
@@ -351,6 +370,11 @@ _ROUTE_TO_PHASE_ID: Dict[str, str] = {
     "follow-up":        "p4",
     "closing":          "p5",
 }
+
+
+# Rotas cujo builder de prompt da Filha injeta os blocos do Fluxo de Venda
+# (_build_sales_flow_phases_block) — usado para saber se uma orientação estrita entrou no prompt.
+_SALES_FLOW_INJECTING_CHILD_ROUTES = {"recepcao", "qualification", "apresentation", "follow-up", "closing"}
 
 
 def _parse_json_id_set(raw: Any) -> set:
@@ -863,7 +887,13 @@ def _evaluate_sales_flow_phases(
                 if content:
                     priority = (block.get("priority") or "normal").strip().lower()
                     label = "INSTRUÇÃO CRÍTICA DE FLUXO DE VENDA" if priority == "critical" else "INSTRUÇÃO DE FLUXO DE VENDA"
-                    result["prompt_injections"].append(f"{label}:\n{content}")
+                    if block.get("strict"):
+                        # "Seguir à risca": rótulo literal + temperatura baixa na chamada da
+                        # Filha (decide() lê strict_active). Ver sales-flow.md, bloco orientacao.
+                        result["prompt_injections"].append(_strict_orientation_injection(label, content))
+                        result["strict_active"] = True
+                    else:
+                        result["prompt_injections"].append(f"{label}:\n{content}")
                     _oid = (block.get("id") or "").strip()
                     if _oid:
                         _injected_block_ids.add(_oid)
@@ -993,6 +1023,66 @@ def _evaluate_sales_flow_phases(
         )
 
     return result
+
+
+def _strict_orientation_injection(label: str, content: str) -> str:
+    """Injeção de uma orientação marcada "seguir à risca" (`strict=True`).
+
+    Só no turno em que a orientação dispara — a reinjeção permanente de orientações
+    críticas (segunda passagem) usa o rótulo normal, senão a Filha repetiria a mesma frase
+    literal em todo turno da fase."""
+    return (
+        f"{label} — SEGUIR À RISCA:\n{content}\n"
+        "Escreva a resposta só com o que esta instrução pede, usando as palavras dela o mais "
+        "de perto possível. O dono do negócio escreveu este texto do jeito que quer que o lead "
+        "o leia: cumprimentos, elogios ou dados (horários, preços, serviços) que não estão aqui "
+        "mudam a mensagem dele. Se a instrução pede uma pergunta, termine nessa pergunta — a "
+        "menos que a mensagem do lead já a responda: aí omita a pergunta, porque perguntar de "
+        "novo o que o lead acabou de dizer soa como se ninguém tivesse lido a mensagem dele.\n"
+        "Exemplo — instrução \"Pergunte se prefere de manhã ou à tarde\":\n"
+        "✅ \"Prefere de manhã ou à tarde?\"\n"
+        "❌ \"Que bom falar com você! Temos ótimos horários disponíveis. Prefere de manhã ou à tarde?\"\n"
+        "✅ (lead escreveu \"queria marcar de manhã\") a resposta segue sem essa pergunta"
+    )
+
+
+_TRAILING_QUESTION_RE = re.compile(r"\s*[^.!?\n]*\?\s*$")
+
+
+def _drop_trailing_question(text: str) -> str:
+    """Remove a frase final terminada em "?". Usada na Recepção quando o lead já respondeu à
+    pergunta das instruções da Fase 0 (`lead_already_answered`): o modelo identifica a
+    escolha mas costuma repetir a pergunta. Se sobrar só a pergunta, devolve o texto original."""
+    stripped = _TRAILING_QUESTION_RE.sub("", text or "").rstrip()
+    return stripped or text
+
+
+# Frase que começa por um compromisso na 1.ª pessoa ("Vou passar as informações…", "Já lhe
+# envio…", "Let me check…"). Português, espanhol e inglês: as contas não são todas pt.
+_PROMISE_SENTENCE_RE = re.compile(
+    r"^(?:eu\s+|yo\s+|i\s+)?(?:vou|irei|iremos|vamos|j[áa]\s+(?:lhe|te|vos)|deix[ae][- ]me|deixa\s+eu|"
+    r"aguarde|um\s+momento|em\s+breve|voy|te\s+paso|le\s+paso|d[ée]jame|enseguida|"
+    r"i'll|i\s+will|let\s+me|we'll|we\s+will)\b",
+    re.IGNORECASE,
+)
+_SENTENCE_SPLIT_RE = re.compile(r"((?<=[.!?])[ \t]+|\n+)")
+
+
+def _drop_promise_sentences(text: str) -> str:
+    """Remove as frases de promessa da mensagem da Recepção. Usada quando há
+    `pending_commercial_text`: o pedido do lead é respondido pela mensagem seguinte (2.ª
+    decisão), e um "Vou passar as informações…" aqui fica uma promessa que essa mensagem
+    contradiz. Mantém os separadores originais; devolve "" se só houver promessas."""
+    parts = _SENTENCE_SPLIT_RE.split(text or "")
+    kept: list[str] = []
+    for i in range(0, len(parts), 2):
+        sentence = parts[i]
+        if not sentence.strip() or _PROMISE_SENTENCE_RE.match(sentence.strip()):
+            continue
+        if kept:
+            kept.append(parts[i - 1])
+        kept.append(sentence)
+    return "".join(kept).strip()
 
 
 def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
@@ -1782,7 +1872,7 @@ _WEEKDAY_NAMES_PT = (
 )
 
 
-def _calendar_lookup_table_pt(days_ahead: int = 14) -> str:
+def _calendar_lookup_table_pt(days_ahead: int = 14, tz_name: Optional[str] = None) -> str:
     """Tabela com hoje + próximos `days_ahead` dias, cada um com data e dia da semana.
 
     Só dar à LLM a data de hoje + nome do dia da semana ("2026-06-21
@@ -1791,14 +1881,160 @@ def _calendar_lookup_table_pt(days_ahead: int = 14) -> str:
     2026-06-25). Com a tabela completa pronta, ela só precisa localizar a
     linha cujo dia da semana bate com o que o lead disse — sem fazer
     nenhuma conta de calendário por conta própria.
+
+    Cada linha começa pelo dia da semana e traz a data já em dd/mm — a mesma ordem em que a
+    LLM escreve ("sexta-feira, 30/10"), para ela copiar a linha em vez de completar a data de
+    memória. "Hoje" é o do fuso do perfil — o mesmo que meeting_date_guard usa para validar.
     """
-    now = datetime.utcnow()
+    today = meeting_date_guard.local_today(tz_name)
+    markers = {0: " [hoje]", 1: " [amanhã]", 2: " [depois de amanhã]"}
     lines = []
     for offset in range(days_ahead + 1):
-        day = now + timedelta(days=offset)
-        marker = " [hoje]" if offset == 0 else ""
-        lines.append(f"{day.strftime('%Y-%m-%d')} ({_WEEKDAY_NAMES_PT[day.weekday()]}){marker}")
+        day = today + timedelta(days=offset)
+        lines.append(
+            f"{_WEEKDAY_NAMES_PT[day.weekday()]}, {day.strftime('%d/%m')} → "
+            f"{day.isoformat()}{markers.get(offset, '')}"
+        )
     return "\n".join(lines)
+
+
+def _greeting_for_hour(hour: int) -> Tuple[str, str]:
+    """(cumprimento, período) para a hora local: 05h–12h manhã, 12h–20h tarde, 20h–05h noite."""
+    if 5 <= hour < 12:
+        return "Bom dia", "manhã"
+    if 12 <= hour < 20:
+        return "Boa tarde", "tarde"
+    return "Boa noite", "noite"
+
+
+def _local_greeting(ai_profile: Dict[str, Any], now_utc: Optional[datetime] = None) -> str:
+    return _greeting_for_hour(meeting_date_guard.local_now(ai_profile.get("timezone"), now_utc).hour)[0]
+
+
+def _local_time_fact_line(ai_profile: Dict[str, Any], now_utc: Optional[datetime] = None) -> str:
+    """Hora local do negócio para os prompts que cumprimentam.
+
+    Sem isto a IA não sabe que horas são e copia o período dos exemplos ("Boa tarde" às 10h55 em
+    PROD07). Se o lead já disse um período, devolve-se o dele — pode estar noutro fuso, e corrigir
+    o cumprimento soa mal.
+    """
+    now = meeting_date_guard.local_now(ai_profile.get("timezone"), now_utc)
+    greeting, period = _greeting_for_hour(now.hour)
+    return (
+        f"AGORA (hora local do negócio): {_WEEKDAY_NAMES_PT[now.weekday()]}, {now.strftime('%d/%m')}, "
+        f"{now.strftime('%Hh%M')} — {period}. Ao cumprimentar pelo período do dia, use \"{greeting}\"; "
+        "se o lead já cumprimentou com um período (bom dia / boa tarde / boa noite), devolva o mesmo "
+        "que ele usou.\n"
+    )
+
+
+_MEETING_DAY_REFERENCE_RULE = (
+    "  * meeting_day_reference: sempre que preencher meeting_datetime_candidate, escreva aqui as "
+    "palavras que identificam o dia escolhido, tal como foram ditas na conversa: 'hoje', 'amanhã', "
+    "'depois de amanhã' ou o nome do dia da semana (ex.: 'sexta-feira'); uma data (ex.: '30/10') "
+    "só se o próprio lead a escreveu. Se o lead aceitou uma opção que você propôs, use o dia da "
+    "semana dessa opção. O sistema usa este campo para conferir a data — copie as palavras da "
+    "conversa, nunca a data que você calculou.\n"
+)
+
+
+def _professional_names(ai_profile: Dict[str, Any]) -> List[str]:
+    hours = professional_hours.get_hours(ai_profile) if professional_hours.source_text(ai_profile) else None
+    return [name for name in (hours or {}) if name != "Profissional"]
+
+
+def _confirmation_fact(context: Dict[str, Any]) -> meeting_proposal.AcceptedSlot:
+    """Horário que o lead aceitou nesta mensagem: a última proposta lida do histórico. Ver
+    meeting_proposal.py."""
+    ai_profile = context.get("ai_profile") or {}
+    tz_name = ai_profile.get("timezone")
+    inbound_now = _extract_message_text(context)
+    names = _professional_names(ai_profile)
+    proposal = meeting_proposal.last_proposal(
+        context.get("history") or [], inbound_now, tz_name=tz_name, professionals=names
+    )
+    return meeting_proposal.accepted_slot(inbound_now, proposal, tz_name=tz_name, professionals=names)
+
+
+def _missing_booking_duration(
+    context: Dict[str, Any], accepted: meeting_proposal.AcceptedSlot
+) -> Optional[List[int]]:
+    """Durações por escolher antes de gravar (ver meeting_proposal.missing_duration)."""
+    if accepted.option is None:
+        return None
+    lead_texts = [_extract_message_text(context)] + [
+        str(item.get("body") or item.get("text") or "")
+        for item in context.get("history") or []
+        if str(item.get("model") or "").lower() == "inbound"
+    ]
+    pricing = str((context.get("knowledge_items") or {}).get("service_pricing_table") or "")
+    return meeting_proposal.missing_duration(lead_texts, accepted.proposal_text, pricing)
+
+
+def _build_meeting_already_booked_block(
+    accepted: Optional[meeting_proposal.AcceptedSlot] = None,
+    missing_durations: Optional[List[int]] = None,
+) -> str:
+    """Quando a Mãe dá meeting_scheduled=true, a marcação é gravada neste turno — a Filha tem
+    de enviar a confirmação final, não o resumo + "Posso confirmar?" que as instruções da
+    conta pedem antes de o lead aceitar (em teste real o lead ficava sem a confirmação).
+
+    `accepted` (de _confirmation_fact) diz qual foi o horário aceite: sem ele a Filha escolhia
+    sozinha e, em teste real, confirmou a 1.ª proposta, já recusada, em vez da 2.ª. Com várias
+    opções em aberto e nenhuma escolhida, o bloco manda perguntar qual em vez de confirmar.
+
+    Só entra quando o lead NÃO está a entrar na fase neste turno: na entrada,
+    meeting_scheduler.handle_meeting_scheduled adia a criação (gate M3) e uma confirmação
+    final aqui anunciaria uma marcação que não existe."""
+    if accepted is not None and accepted.source == "ambiguous":
+        options = "; ".join(meeting_proposal.describe(o) for o in accepted.options)
+        return (
+            "\nO LEAD CONFIRMOU, MAS HÁ MAIS DE UMA OPÇÃO EM ABERTO (prevalece sobre o passo de pedir "
+            "confirmação das instruções personalizadas):\n"
+            f"A última proposta tinha estas opções: {options}. A mensagem do lead não diz qual "
+            "escolheu. Pergunte numa frase curta qual delas prefere, citando as opções, e deixe "
+            "meeting_datetime_candidate=null: a marcação só é gravada quando ele escolher.\n"
+        )
+    if accepted is not None and accepted.option is not None and missing_durations:
+        choices = meeting_proposal.durations_text(missing_durations)
+        return (
+            "\nFALTA SABER O SERVIÇO E A DURAÇÃO (prevalece sobre o passo de confirmar das "
+            "instruções personalizadas):\n"
+            f"O lead aceitou {meeting_proposal.describe(accepted.option)}, mas ainda não disse que "
+            f"serviço e que duração quer, e a tabela de serviços tem várias durações ({choices}). "
+            "Pergunte numa frase curta que serviço e que duração prefere, mantendo o horário "
+            "aceite, e deixe meeting_datetime_candidate=null: a marcação é gravada quando ele "
+            "responder — confirmar agora obrigava a escolher um serviço por ele.\n"
+        )
+    if accepted is not None and accepted.option is not None:
+        option = accepted.option
+        return (
+            "\nMARCAÇÃO JÁ GRAVADA NESTE TURNO (prevalece sobre o passo de pedir confirmação das "
+            "instruções personalizadas):\n"
+            f"O lead aceitou o horário da última proposta: {meeting_proposal.describe(option)}. O "
+            "sistema grava a marcação com meeting_datetime_candidate assim que você responder. "
+            "Escreva já a mensagem de confirmação final com exatamente este dia, esta hora e este "
+            "profissional — é a mensagem que as instruções personalizadas mandam enviar DEPOIS de o "
+            "lead confirmar (ex.: o recibo da marcação), não o resumo que elas pedem antes — e "
+            "termine sem pedir confirmação: o lead já confirmou, e perguntar de novo faz parecer que "
+            f"nada ficou marcado. Preencha meeting_datetime_candidate=\"{meeting_proposal.candidate_iso(option)}\" "
+            f"e meeting_day_reference=\"{meeting_date_guard.WEEKDAY_NAMES_PT[option.start.weekday()]}\".\n"
+        )
+    return (
+        "\nMARCAÇÃO JÁ GRAVADA NESTE TURNO (prevalece sobre o passo de pedir confirmação das "
+        "instruções personalizadas):\n"
+        "O lead já aceitou o dia e o horário (ex.: 'pode confirmar', 'sim, marque'), e o sistema "
+        "grava a marcação com meeting_datetime_candidate assim que você responder. Escreva já a "
+        "mensagem de confirmação final — no formato das instruções personalizadas, se houver um — "
+        "e termine sem pedir confirmação: o lead já confirmou, e perguntar de novo faz parecer que "
+        "nada ficou marcado. Preencha meeting_datetime_candidate e meeting_day_reference com o "
+        "dia e a hora aceites.\n"
+    )
+
+
+def _confirmation_block(context: Dict[str, Any], accepted: Optional[meeting_proposal.AcceptedSlot] = None) -> str:
+    accepted = accepted or _confirmation_fact(context)
+    return _build_meeting_already_booked_block(accepted, _missing_booking_duration(context, accepted))
 
 
 def _get_mother_mode_conflict(context: Dict[str, Any], mother_decision: Optional[MotherDecision]) -> tuple[Optional[str], bool]:
@@ -1978,6 +2214,287 @@ def _normalize_scheduler_child_signals(
     normalized["meeting_proposed"] = meeting_proposed
     normalized["meeting_datetime_candidate"] = meeting_candidate
     return normalized
+
+
+def _recent_conversation(context: Dict[str, Any]) -> tuple[str, List[str], List[str]]:
+    """(mensagem atual, mensagens do lead, todas as mensagens) — da mais recente para a mais
+    antiga, a começar pela mensagem atual."""
+    inbound_now = _extract_message_text(context)
+    recent = list(reversed(context.get("history") or []))[:10]
+    lead_messages = [inbound_now] + [
+        str(item.get("body") or item.get("text") or "")
+        for item in recent
+        if str(item.get("model") or "").lower() == "inbound"
+    ][:5]
+    earlier_messages = [inbound_now] + [str(item.get("body") or item.get("text") or "") for item in recent]
+    return inbound_now, lead_messages, earlier_messages
+
+
+def _build_agenda_fact_block(context: Dict[str, Any], message_text: str) -> str:
+    """Horário pedido na mensagem + resultado da verificação da agenda, como facto para a Filha.
+    Vazio quando a mensagem não traz uma hora inequívoca. Ver requested_slot.py."""
+    ai_profile = context.get("ai_profile") or {}
+    _inbound, lead_messages, earlier_messages = _recent_conversation(context)
+    slot = requested_slot.find_requested_slot(
+        message_text,
+        earlier_messages[1:],
+        tz_name=ai_profile.get("timezone"),
+        busy_slots=context.get("calendar_busy_slots") or [],
+        duration_minutes=_resolve_default_duration_minutes(ai_profile),
+        exclude_lead_id=(context.get("lead") or {}).get("id"),
+        lead_messages=lead_messages[1:],
+    )
+    if slot is None:
+        return ""
+    hours = professional_hours.get_hours(ai_profile)
+    if not hours:
+        return requested_slot.build_agenda_fact_block(slot)
+    professional = professional_hours.mentioned_professional(hours, lead_messages)
+    lead_id = (context.get("lead") or {}).get("id")
+    busy_slots = context.get("calendar_busy_slots") or []
+    # alternativa livre na agenda E dentro do horário de atendimento — calculada aqui, não pela IA
+    alternative = professional_hours.nearest_free_start(
+        hours,
+        slot.start,
+        slot.end,
+        lambda start, end: not _has_conflict(busy_slots, start, end, exclude_lead_id=lead_id),
+        professional,
+    )
+    if not slot.free:
+        return requested_slot.build_agenda_fact_block(slot, alternative=alternative, hours_known=True)
+    verdict = professional_hours.check(hours, slot.start, slot.end, professional)
+    if not verdict.fits:
+        verdict.suggestion, verdict.suggestion_for = alternative or (None, None)
+    return requested_slot.build_agenda_fact_block(slot, verdict)
+
+
+def _apply_meeting_date_guard(
+    decision: DecisionOutput, context: Dict[str, Any], logger: Optional[logging.Logger] = None
+) -> None:
+    """Confere a data do candidato contra o dia que o lead pediu e corrige candidato + texto.
+
+    Corre antes do meeting_scheduler ler child_signals_structured, por isso o appointment
+    já é criado/remarcado com a data corrigida. Ver meeting_date_guard.py.
+    """
+    trace = decision.decision_trace or {}
+    signals = trace.get("child_signals_structured")
+    if not isinstance(signals, dict) or not signals.get("meeting_datetime_candidate"):
+        return
+    _inbound_now, lead_messages, earlier_messages = _recent_conversation(context)
+    result = meeting_date_guard.reconcile_meeting_date(
+        signals.get("meeting_datetime_candidate"),
+        decision.message_text or "",
+        day_reference=signals.get("meeting_day_reference"),
+        tz_name=(context.get("ai_profile") or {}).get("timezone"),
+        lead_messages=lead_messages,
+        earlier_messages=earlier_messages,
+        is_confirmation=trace.get("meeting_scheduled") is True,
+    )
+    trace["meeting_date_guard"] = result.trace
+    if not result.trace.get("applied"):
+        return
+    trace["child_signals_structured"] = {**signals, "meeting_datetime_candidate": result.candidate}
+    decision.message_text = result.message_text
+    decision.decision_trace = trace
+    (logger or logging.getLogger(__name__)).warning(
+        "event=meeting_date_corrected from=%s to=%s reference=%s source=%s text_changed=%s",
+        result.trace.get("candidate_from"),
+        result.trace.get("candidate_to"),
+        result.trace.get("reference"),
+        result.trace.get("reference_source"),
+        result.trace.get("text_changed"),
+    )
+
+
+def _apply_meeting_confirmation_guard(
+    decision: DecisionOutput, context: Dict[str, Any], logger: Optional[logging.Logger] = None
+) -> None:
+    """No turno da confirmação, o candidato tem de ser o horário que o lead aceitou.
+
+    Corre depois de _apply_meeting_date_guard e antes do meeting_scheduler: corrige (ou preenche,
+    quando a Filha não o devolveu) o candidato com a opção aceite; com várias opções em aberto e
+    um candidato que não é nenhuma, não grava e pergunta qual. Ver meeting_proposal.py."""
+    trace = decision.decision_trace or {}
+    if trace.get("meeting_scheduled") is not True or trace.get("is_phase_entry"):
+        return
+    ai_profile = context.get("ai_profile") or {}
+    signals = trace.get("child_signals_structured")
+    signals = dict(signals) if isinstance(signals, dict) else {}
+    accepted = _confirmation_fact(context)
+    result = meeting_proposal.reconcile_confirmation(
+        signals.get("meeting_datetime_candidate"),
+        decision.message_text or "",
+        accepted,
+        tz_name=ai_profile.get("timezone"),
+        professionals=_professional_names(ai_profile),
+        missing_durations=_missing_booking_duration(context, accepted),
+    )
+    trace["meeting_confirmation_guard"] = result.trace
+    decision.decision_trace = trace
+    action = result.trace.get("action")
+    if action in ("ok", "skip"):
+        return
+    signals["meeting_datetime_candidate"] = result.candidate
+    if result.candidate:
+        signals["meeting_proposed"] = True
+    trace["child_signals_structured"] = signals
+    decision.message_text = result.message_text
+    if result.blocked:
+        trace["meeting_scheduled"] = False
+        trace["meeting_scheduled_blocked"] = (
+            "missing_duration" if action == "blocked_duration" else "ambiguous_options"
+        )
+    (logger or logging.getLogger(__name__)).warning(
+        "event=meeting_confirmation_%s from=%s to=%s source=%s text_changed=%s",
+        "blocked" if result.blocked else "corrected",
+        result.trace.get("candidate_from"),
+        result.candidate,
+        result.trace.get("accepted_source"),
+        result.trace.get("text_changed", result.blocked),
+    )
+
+
+def _current_meeting(context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """O compromisso já marcado deste lead — o mesmo que handle_meeting_cancel_or_reschedule altera."""
+    lead_id = (context.get("lead") or {}).get("id")
+    slots = [
+        slot
+        for slot in context.get("calendar_busy_slots") or []
+        if slot.get("lead_id") == lead_id and slot.get("id") is not None
+    ]
+    return min(slots, key=lambda slot: str(slot.get("start_at") or "")) if slots else None
+
+
+def _meeting_start(meeting: Optional[Dict[str, Any]], tz_name: Optional[str]) -> Optional[datetime]:
+    """Início do compromisso no fuso do perfil (sem fuso = UTC, como em _has_conflict)."""
+    if meeting is None:
+        return None
+    try:
+        start = _ensure_aware(datetime.fromisoformat(str(meeting.get("start_at"))), "UTC")
+    except (TypeError, ValueError):
+        return None
+    return start.astimezone(meeting_proposal._tz(tz_name))
+
+
+def _reschedule_fact(
+    context: Dict[str, Any], current_start: Optional[datetime]
+) -> meeting_proposal.AcceptedSlot:
+    """Como _confirmation_fact, mas sem a sessão já marcada entre as opções: "a sua sessão de
+    terça às 14h mantém-se" não é uma proposta, e com ela um "Pode ser" ficava ambíguo."""
+    ai_profile = context.get("ai_profile") or {}
+    tz_name = ai_profile.get("timezone")
+    inbound_now = _extract_message_text(context)
+    names = _professional_names(ai_profile)
+    proposal = meeting_proposal.last_proposal(
+        context.get("history") or [], inbound_now, tz_name=tz_name, professionals=names
+    )
+    if current_start is not None:
+        proposal.options = [o for o in proposal.options if o.start != current_start]
+    return meeting_proposal.accepted_slot(inbound_now, proposal, tz_name=tz_name, professionals=names)
+
+
+def _apply_meeting_reschedule_guard(
+    decision: DecisionOutput, context: Dict[str, Any], logger: Optional[logging.Logger] = None
+) -> None:
+    """Na gestão pós-marcação, só se remarca para um horário que o lead pediu ou aceitou, que está
+    livre e que cabe no horário do profissional.
+
+    Corre depois de _apply_meeting_date_guard e antes do meeting_scheduler. Em teste real a
+    marcação foi mudada para a contraproposta da Lara (fora do horário da terapeuta) no mesmo
+    turno em que ela a propôs; e, com o lead a aceitar "quinta às 16h" ("Pode ser às 16h"), a
+    Filha remarcou para terça às 16h (o dia da sessão antiga). Ver meeting_proposal.reschedule_origin."""
+    trace = decision.decision_trace or {}
+    signals = trace.get("child_signals_structured")
+    if not isinstance(signals, dict) or not signals.get("meeting_reschedule_requested"):
+        return
+    candidate = signals.get("meeting_datetime_candidate")
+    if not candidate:
+        return
+    ai_profile = context.get("ai_profile") or {}
+    tz_name = ai_profile.get("timezone")
+    inbound_now, lead_messages, _earlier = _recent_conversation(context)
+    current = _current_meeting(context)
+    original_start = _meeting_start(current, tz_name)
+    original = meeting_proposal.ProposedOption(start=original_start) if original_start else None
+    accepted = _reschedule_fact(context, original_start)
+    guard_trace: Dict[str, Any] = {"candidate": candidate}
+
+    if accepted.option is not None:
+        # o lead aceitou uma opção da proposta: é essa que se grava (e o texto diz essa)
+        check = meeting_proposal.reconcile_confirmation(
+            candidate,
+            decision.message_text or "",
+            accepted,
+            tz_name=tz_name,
+            professionals=_professional_names(ai_profile),
+        )
+        if check.trace.get("action") == "corrected":
+            guard_trace["corrected_to"] = check.candidate
+            candidate = check.candidate
+            signals = {**signals, "meeting_datetime_candidate": candidate}
+            trace["child_signals_structured"] = signals
+            decision.message_text = check.message_text
+    origin = meeting_proposal.reschedule_origin(candidate, inbound_now, accepted, tz_name=tz_name)
+    guard_trace["origin"] = origin
+
+    start = meeting_proposal._local(candidate, tz_name)
+    unavailable = None
+    if start is not None:
+        end = start + timedelta(
+            minutes=_original_duration_minutes(current) or _resolve_default_duration_minutes(ai_profile)
+        )
+        lead_id = (context.get("lead") or {}).get("id")
+        if _has_conflict(context.get("calendar_busy_slots") or [], start, end, exclude_lead_id=lead_id):
+            unavailable = "busy"
+        else:
+            hours = professional_hours.get_hours(ai_profile) if professional_hours.source_text(ai_profile) else None
+            if hours:
+                verdict = professional_hours.check(
+                    hours, start, end, professional_hours.mentioned_professional(hours, lead_messages)
+                )
+                if not verdict.fits:
+                    unavailable = "outside_hours"
+    reason = unavailable or ("counter_proposal" if origin == "counter_proposal" else None)
+    guard_trace["blocked"] = reason
+    trace["meeting_reschedule_guard"] = guard_trace
+    decision.decision_trace = trace
+    log = logger or logging.getLogger(__name__)
+
+    if reason is None:
+        if start is not None and not meeting_proposal.announces_reschedule(decision.message_text or ""):
+            # remarcação gravada neste turno, mas a resposta não a dá como feita ("Posso confirmar?")
+            option = accepted.option if origin == "accepted" else meeting_proposal.ProposedOption(start=start)
+            decision.message_text = meeting_proposal.reschedule_done_text(option)
+            guard_trace["text_changed"] = True
+        if guard_trace.get("corrected_to") or guard_trace.get("text_changed"):
+            log.warning(
+                "event=meeting_reschedule_corrected from=%s to=%s text_changed=%s",
+                guard_trace["candidate"],
+                candidate,
+                guard_trace.get("text_changed", False),
+            )
+        return
+
+    trace["child_signals_structured"] = {
+        **signals,
+        "meeting_reschedule_requested": False,
+        "meeting_datetime_candidate": None,
+    }
+    if meeting_proposal.announces_reschedule(decision.message_text or ""):
+        if unavailable is None and start is not None:
+            # a contraproposta cabe: o texto deixa de a dar como feita e pergunta se serve
+            decision.message_text = meeting_proposal.reschedule_confirm_text(
+                meeting_proposal.ProposedOption(start=start), original
+            )
+        else:
+            decision.message_text = meeting_proposal.reschedule_unavailable_text(original)
+        guard_trace["text_changed"] = True
+    log.warning(
+        "event=meeting_reschedule_blocked reason=%s candidate=%s text_changed=%s",
+        reason,
+        candidate,
+        guard_trace.get("text_changed", False),
+    )
 
 
 def _is_filled_value(value: Any) -> bool:
@@ -2710,12 +3227,60 @@ def _build_child_prompt_recepcao(
 
     lead_name_ctx = f"Nome do lead: {lead_name}." if lead_name else "Nome do lead: desconhecido."
     brand_name = (ai_profile.get("brand_name") or "").strip() or "o negócio"
+    local_time_line = _local_time_fact_line(ai_profile)
+    local_greeting = _local_greeting(ai_profile)
+
+    # Blocos do Fluxo de Venda (Fase 0) avaliados antes de montar o texto: quando existem,
+    # entram no meio do prompt com prioridade sobre o modelo de boas-vindas e as regras
+    # "só cumprimentar" ficam condicionais — colados no fim, depois do JSON, perdiam sempre
+    # para o prompt fixo. Sem blocos, o prompt é idêntico ao de antes.
+    _sf_block = _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
+    if _sf_block:
+        _owner_step = (
+            "4. Cumpre as INSTRUÇÕES DO DONO DO NEGÓCIO abaixo junto com o cumprimento —\n"
+            "   incluindo apresentar-se como elas pedem ou fazer a pergunta que elas pedem.\n"
+            "   Se a mensagem do lead já responde ao que a instrução pergunta, siga a\n"
+            "   instrução sem repetir a pergunta.\n"
+        )
+        _owner_block = (
+            "\nINSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO (prioridade sobre o modelo de boas-vindas acima):\n"
+            "O dono configurou como quer que o primeiro contato soe — siga estas instruções\n"
+            "no message_text; o cumprimento genérico dos exemplos é só o ponto de partida.\n"
+            f"{_sf_block}"
+            "Exemplo — instrução \"Apresente-se como Ana e pergunte se é a primeira visita\":\n"
+            "✅ \"Olá! Sou a Ana. É a sua primeira visita?\"\n"
+            "❌ \"Olá! Seja bem-vindo(a)! Como posso ajudar?\" (ignorou a instrução do dono)\n"
+            "Quando a mensagem do lead já responde à pergunta da instrução, cumpra o resto da\n"
+            "instrução, registre a opção que ele escolheu em lead_already_answered e deixe a\n"
+            "pergunta de fora — o lead já disse, e ouvir a mesma pergunta de volta parece que\n"
+            "ninguém leu. O pedido dele segue em pending_commercial_text.\n"
+            "Exemplo — instrução \"Apresente-se como Ana e pergunte qual profissional: Rita ou Paulo\",\n"
+            "mensagem \"oi, queria saber das sessões da Rita\":\n"
+            "✅ lead_already_answered: \"Rita\" | message_text: \"Olá! Sou a Ana.\" | pending_commercial_text: \"queria saber das sessões da Rita\"\n"
+            "❌ message_text: \"Olá! Sou a Ana. Qual profissional você prefere, Rita ou Paulo?\" (o lead já escolheu a Rita)\n"
+        )
+        _answered_field = (
+            "  \"lead_already_answered\": \"<se a pergunta das INSTRUÇÕES DO DONO oferece opções e a "
+            "mensagem do lead já cita uma delas, a opção citada (ex.: 'quero com a Rita' → 'Rita'); "
+            "senão null>\",\n"
+        )
+        _question_rule = (
+            "- Só faz a pergunta que as instruções do dono pedirem; nenhuma outra\n"
+            "  pergunta de qualificação neste turno."
+        )
+        _message_text_shape = "<cumprimento + o que as instruções do dono pedem>"
+    else:
+        _owner_step = ""
+        _owner_block = ""
+        _question_rule = "- Não faz perguntas de qualificação neste turno."
+        _message_text_shape = "<cumprimento caloroso — máximo 2-3 linhas>"
+        _answered_field = ""
 
     _recepcao_prompt = f"""{identity_block}
 {tone_block}FASE: recepção (saudação).
 
 {lead_name_ctx}
-Mensagem recebida: {message_text}
+{local_time_line}Mensagem recebida: {message_text}
 
 IDENTIDADE:
 Você é a Recepção de {brand_name} — a primeira pessoa que o lead encontra ao
@@ -2731,14 +3296,14 @@ O QUE VOCÊ FAZ:
    comercial (agendar, preço, horário de funcionamento, disponibilidade,
    serviço, catálogo, etc.) — mesmo fundida na MESMA linha da saudação —
    extrai esse trecho, literal, para o campo "pending_commercial_text".
-
+{_owner_step}
 COMO VOCÊ FAZ:
 {greeting_instruction}
 Extração: releia linha a linha antes de responder. Copie o trecho comercial
 LITERAL (não resuma, não reescreva, não responda a ele) para
 "pending_commercial_text". Se a mensagem for saudação/social pura, sem nenhum
 pedido embutido, retorne "pending_commercial_text": null.
-
+{_owner_block}
 EXEMPLOS DO QUE FAZER (✅):
 1. Mensagem: "Oi"
    → message_text: "Oi! Seja bem-vindo(a)! Como posso ajudar?" | pending_commercial_text: null
@@ -2746,12 +3311,16 @@ EXEMPLOS DO QUE FAZER (✅):
    → message_text: "Boa tarde! Obrigado pelo contato." | pending_commercial_text: "gostaria de agendar para hoje às 17:30"
 3. Mensagem: "oi\\nboa tarde\\ntudo bem?\\nqual o preço da massagem e horários disponíveis?"
    → message_text: "Boa tarde! Agradeço o contato, estou aqui para ajudar." | pending_commercial_text: "qual o preço da massagem e horários disponíveis?"
+   (o lead disse "boa tarde": devolve-se o período dele)
+4. Mensagem: "Gostaria de mais informações sobre as massagens"
+   → message_text: "{local_greeting}! Obrigado pelo contato." | pending_commercial_text: "Gostaria de mais informações sobre as massagens"
+   (o lead não disse período: usa-se o de AGORA)
 
 O QUE VOCÊ NÃO FAZ:
 - Não responde, não promete verificar, não qualifica o pedido comercial —
   isso é trabalho de outro turno do sistema, não seu.
 - Não menciona preços, tabelas, serviços, imagens, links ou catálogo.
-- Não faz perguntas de qualificação neste turno.
+{_question_rule}
 - Máximo 2-3 linhas, sempre.
 
 EXEMPLOS DE ERRO (❌) — NÃO FAÇA ISTO:
@@ -2768,7 +3337,7 @@ EXEMPLOS DE ERRO (❌) — NÃO FAÇA ISTO:
 
 Retorne SOMENTE JSON válido:
 {{
-  "message_text": "<cumprimento caloroso — máximo 2-3 linhas>",
+{_answered_field}  "message_text": "{_message_text_shape}",
   "should_ask": false,
   "question_text": "",
   "field": null,
@@ -2778,7 +3347,6 @@ Retorne SOMENTE JSON válido:
   "pending_commercial_text": "<trecho literal do pedido comercial, ou null se só houve saudação>"
 }}
 """
-    _recepcao_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _recepcao_prompt
 
 
@@ -3045,7 +3613,8 @@ def _build_child_prompt_qualification(
         f"ABERTURA OBRIGATÓRIA — PRIMEIRO CONTATO:\n"
         f"Este é o PRIMEIRO contacto do lead. Use o texto abaixo como BASE da tua resposta.\n"
         f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
-        f"{origin_opener}\n\n"
+        f"{origin_opener}\n"
+        f"{_local_time_fact_line(ai_profile)}\n"
         if (is_first_contact and origin_opener.strip())
         else ""
     )
@@ -3168,7 +3737,7 @@ def _build_child_prompt_apresentation(
     presentation_variant, presentation_variant_source = _resolve_presentation_variant(context, agent_mode_normalized)
     hybrid_flow_style = _resolve_hybrid_flow_style(context)
     offer_pack_summary = _build_offer_pack_summary(context)
-    dates_table = _calendar_lookup_table_pt()
+    dates_table = _calendar_lookup_table_pt(tz_name=ai_profile.get("timezone"))
 
     # Fix P9: passive reply antes do agendamento quando a qualificação foi auto-promovida
     # neste mesmo turno e o lead tinha uma pergunta aberta de serviço na mensagem.
@@ -3205,10 +3774,13 @@ def _build_child_prompt_apresentation(
     # objetivo do estágio (agendamento, aquecimento ou pitch). Sem alterar roteamento.
     _mother_hint_apres = (mother_decision.next_action_hint or "").strip().lower()
     _is_greeting_apres = _mother_hint_apres == "greet"
+    _local_greeting_apres = _local_greeting(ai_profile)
     _greeting_apres_header = (
         "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação como primeira mensagem.\n"
-        "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar com um cumprimento caloroso e natural "
-        "(ex.: 'Boa noite!', 'Olá, boa noite!', 'Oi, boa noite! Tudo bem?'). "
+        + _local_time_fact_line(ai_profile)
+        + "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar com um cumprimento caloroso e natural "
+        f"(ex.: '{_local_greeting_apres}!', 'Olá, {_local_greeting_apres.lower()}!', "
+        f"'Oi, {_local_greeting_apres.lower()}! Tudo bem?'). "
         "O cumprimento deve ser breve e proporcional à saudação recebida.\n"
         "DEPOIS do cumprimento, de forma fluida e natural na MESMA mensagem, "
         "executa o objetivo do estágio atual (agendamento, aquecimento ou apresentação).\n"
@@ -3228,7 +3800,9 @@ def _build_child_prompt_apresentation(
         f"ABERTURA OBRIGATÓRIA — PRIMEIRO CONTATO:\n"
         f"Este é o PRIMEIRO contacto do lead. Use o texto abaixo como BASE da tua resposta.\n"
         f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
-        f"{origin_opener_apres}\n\n"
+        f"{origin_opener_apres}\n"
+        + ("" if _is_greeting_apres else _local_time_fact_line(ai_profile))
+        + "\n"
         if (is_first_contact_apres and origin_opener_apres.strip())
         else ""
     )
@@ -3492,6 +4066,15 @@ def _build_child_prompt_apresentation(
             "NÃO substituas o recibo por texto verbal solto. O recibo É a resposta principal.\n"
             f"extracted_fields disponíveis: {json.dumps(_extracted_fields_apres, ensure_ascii=False)}\n"
         )
+    # Fora do modo recibo, o bloco "marcação já gravada" vai no FIM do prompt (ver abaixo):
+    # no meio, a regra sales "peça confirmação" e as instruções da conta vinham depois e venciam.
+    _already_booked_block = (
+        _confirmation_block(context)
+        if _apres_meeting_scheduled
+        and not _booking_confirmation_block
+        and not _compute_is_phase_entry(context, "apresentation")
+        else ""
+    )
 
     # Bloco de seleção contextual de mídias — a filha declara explicitamente quais
     # mídias do knowledge devem ser anexadas neste turno. O decision_engine usa essa
@@ -3605,7 +4188,7 @@ def _build_child_prompt_apresentation(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": ["..."],\n'
-        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false, "meeting_proposed": false, "meeting_datetime_candidate": null} (opcional),\n'
+        '  "signals_structured": {"missing_fields": ["..."], "handoff_requested": false, "meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_day_reference": null} (opcional),\n'
         '  "media_keys_to_send": ["..."],\n'
         '  "confidence": 0.0\n'
         "}\n"
@@ -3622,7 +4205,8 @@ def _build_child_prompt_apresentation(
         "  * Para datas relativas (amanhã, depois de amanhã, etc.) ou nomes de dia da semana (sábado, "
         "quinta-feira, etc.), procure a linha correspondente na tabela_de_dias abaixo e use a data dessa linha — "
         "NUNCA calcule a data ou o dia da semana por conta própria, esse cálculo não é confiável.\n"
-        "  * Em confirmação final do agendamento, inclua 'meeting_scheduled' em signals para compatibilidade.\n"
+        + _MEETING_DAY_REFERENCE_RULE
+        + "  * Em confirmação final do agendamento, inclua 'meeting_scheduled' em signals para compatibilidade.\n"
         "- Em presentation_variant=sales, UM TURNO = UMA AÇÃO: ou CONFIRMAR (sem link) ou ENVIAR LINK (com link).\n"
         "- Formato CONFIRMAR (sem link): descreva oferta e peça confirmação (ex.: 'quer seguir?').\n"
         "  * Proibido URL real e proibido placeholder de link (ex.: [link_do_checkout]).\n"
@@ -3696,6 +4280,7 @@ def _build_child_prompt_apresentation(
     )
     _apres_prompt += _build_sales_flow_block(_evaluate_sales_flow(context, "apresentation", mother_decision.signals))
     _apres_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "apresentation", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
+    _apres_prompt += _already_booked_block
     return _inject_generated_parts(_apres_prompt, context, "apresentation")
 
 
@@ -3930,7 +4515,8 @@ def _build_child_prompt_follow_up(
     _is_greeting_fu = _mother_hint_fu == "greet"
     _greeting_fu_header = (
         "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação.\n"
-        "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o follow-up.\n"
+        + _local_time_fact_line(ai_profile)
+        + "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o follow-up.\n"
         "DEPOIS, de forma fluida na MESMA mensagem, executa o objetivo do estágio de follow-up.\n\n"
         if _is_greeting_fu
         else ""
@@ -4058,7 +4644,8 @@ def _build_child_prompt_closing(
     _is_greeting_closing = _mother_hint_closing == "greet"
     _greeting_closing_header = (
         "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação.\n"
-        "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o fechamento.\n"
+        + _local_time_fact_line(ai_profile)
+        + "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o fechamento.\n"
         "DEPOIS, de forma fluida na MESMA mensagem, executa o objetivo do estágio de closing.\n\n"
         if _is_greeting_closing
         else ""
@@ -4163,7 +4750,7 @@ def _build_child_prompt_pre_agendamento(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
-    dates_table = _calendar_lookup_table_pt()
+    dates_table = _calendar_lookup_table_pt(tz_name=ai_profile.get("timezone"))
 
     # Detecta se é o trigger de check-in agendado (mensagem gerada pelo job)
     is_checkin_trigger = message_text.strip() == "preagendamento_checkin_trigger"
@@ -4259,7 +4846,24 @@ def _build_child_prompt_pre_agendamento(
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
         + _build_knowledge_reference_block(context)
+        + _build_agenda_fact_block(context, message_text)
     )
+    # A confirmação também cai aqui: num agente de agendamento, quando a Mãe diz "closing",
+    # _enforce_scheduling_agent_no_closing devolve a rota à categoria atual. Sem candidato no
+    # schema a Filha escrevia "Experiência Agendada" e nada ficava gravado.
+    if _extract_meeting_scheduled_signal(mother_decision) and not _compute_is_phase_entry(
+        context, "pre-agendamento"
+    ):
+        accepted = _confirmation_fact(context)
+        if accepted.option is not None or accepted.source == "ambiguous":
+            _pre_prompt += (
+                "\nSINAIS DA MARCAÇÃO (neste turno, em vez de checkin_at_iso): signals_structured = "
+                '{"meeting_datetime_candidate": "YYYY-MM-DDTHH:MM:SS" | null, "meeting_day_reference": '
+                '"..." | null, "meeting_duration_minutes": inteiro | null} — candidato em ISO naive no fuso '
+                "de ai_profile.timezone; duração em minutos só se foi dita na conversa.\n"
+                + _MEETING_DAY_REFERENCE_RULE
+                + _confirmation_block(context, accepted)
+            )
     return _pre_prompt
 
 
@@ -4340,7 +4944,7 @@ def _build_child_prompt_agendamento(
     history_text = _format_history(history)
     mode_contract = _build_mode_contract_context(context, mother_decision)
     agent_mode_normalized = mode_contract["agent_mode_normalized"]
-    dates_table = _calendar_lookup_table_pt()
+    dates_table = _calendar_lookup_table_pt(tz_name=ai_profile.get("timezone"))
 
     _busy_lines = _format_busy_slots_block(context.get("calendar_busy_slots"), ai_profile.get("timezone"))
     _busy_block = (
@@ -4425,7 +5029,7 @@ def _build_child_prompt_agendamento(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": [],\n'
-        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_duration_minutes": null} (opcional),\n'
+        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_day_reference": null, "meeting_duration_minutes": null} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n\n"
         "REGRAS DE SINALIZAÇÃO ESTRUTURADA (obrigatório):\n"
@@ -4438,7 +5042,8 @@ def _build_child_prompt_agendamento(
         "  * Para datas relativas (amanhã, depois de amanhã, etc.) ou nomes de dia da semana (sábado, "
         "quinta-feira, etc.), procure a linha correspondente na tabela_de_dias abaixo e use a data dessa linha — "
         "NUNCA calcule a data ou o dia da semana por conta própria, esse cálculo não é confiável.\n"
-        "  * meeting_duration_minutes: preencha (inteiro, em minutos) só quando houver SERVIÇOS E DURAÇÕES "
+        + _MEETING_DAY_REFERENCE_RULE
+        + "  * meeting_duration_minutes: preencha (inteiro, em minutos) só quando houver SERVIÇOS E DURAÇÕES "
         "DISPONÍVEIS configurado acima e você tiver identificado claramente a qual linha o lead se refere; "
         "deixe null se não houver essa tabela configurada ou se ainda não confirmou qual serviço o lead quer.\n\n"
         f"Contexto:\n"
@@ -4451,6 +5056,13 @@ def _build_child_prompt_agendamento(
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
         + _build_knowledge_reference_block(context, exclude_categories=("service_pricing_table",))
+        + _build_agenda_fact_block(context, message_text)
+        + (
+            _confirmation_block(context)
+            if _extract_meeting_scheduled_signal(mother_decision)
+            and not _compute_is_phase_entry(context, "agendamento")
+            else ""
+        )
     )
     return _sched_prompt
 
@@ -4471,7 +5083,7 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         "name": _resolve_lead_name(lead),
     }
     history_text = _format_history(history)
-    dates_table = _calendar_lookup_table_pt()
+    dates_table = _calendar_lookup_table_pt(tz_name=ai_profile.get("timezone"))
 
     busy_slots = context.get("calendar_busy_slots") or []
     same_lead_slots = [slot for slot in busy_slots if slot.get("lead_id") == lead.get("id")]
@@ -4500,13 +5112,27 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         "PROIBIDO responder de forma hesitante ('vou verificar', 'vou confirmar', 'um momento') "
         "quando dia e horário já foram informados — isso obriga outro turno e o lead fica sem "
         "resposta real; confirme já, como nas REGRAS acima para cancelamento.\n"
+        "- Se a VERIFICAÇÃO DO HORÁRIO PEDIDO (fim deste prompt) disser que o horário pedido está "
+        "ocupado ou fora do horário de atendimento: diga isso, proponha como pergunta o horário que "
+        "ela indica e diga que a sessão já marcada se mantém até o lead responder. Deixe "
+        "meeting_reschedule_requested=false e meeting_datetime_candidate=null — a remarcação só é "
+        "gravada no turno em que o lead aceitar, para ele nunca ficar com uma sessão que não "
+        "escolheu. Ex.: ✅ 'Quinta às 15h já está ocupado. Pode ser quinta às 16h? A sua sessão de "
+        "terça às 14h mantém-se até me dizer.'\n"
+        "- Se o lead aceitar um horário que você propôs para remarcar (ex.: 'pode ser', 'sim, às "
+        "16h'): confirme já a remarcação para esse horário — preencha "
+        "meeting_reschedule_requested=true e meeting_datetime_candidate com esse dia e hora.\n"
+        + _MEETING_DAY_REFERENCE_RULE
+        +
         "- Se a mensagem propuser SÓ UM HORÁRIO diferente do já confirmado, SEM mencionar um novo "
         "dia (ex.: 'pode ser às 16h em vez de 14h?', 'na verdade prefiro às 16h', 'dá pra adiantar "
         "pras 16h?'): trate como reagendamento para o MESMO DIA da reunião já confirmada (ver bloco "
         "acima) — preencha signals_structured.meeting_reschedule_requested=true e "
         "meeting_datetime_candidate combinando a DATA da reunião já confirmada com o NOVO horário "
         "mencionado. NÃO responda como se fosse uma nova confirmação nem peça o dia de novo — o dia "
-        "já é conhecido (está no bloco acima).\n"
+        "já é conhecido (está no bloco acima). Exceção: se essa hora é a de um horário que você "
+        "propôs na sua mensagem anterior (ex.: você propôs 'quinta às 16h' e o lead respondeu 'pode "
+        "ser às 16h'), o lead está a aceitar a sua proposta — use o dia dessa proposta.\n"
         "- Se o lead pedir para reagendar mas NÃO disser um horário novo (ex.: só 'posso "
         "remarcar?'): pergunte qual horário prefere e deixe meeting_reschedule_requested=false "
         "até ele responder com um horário.\n"
@@ -4523,7 +5149,7 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": [],\n'
-        '  "signals_structured": {"meeting_cancel_requested": false, "meeting_reschedule_requested": false, "meeting_datetime_candidate": null},\n'
+        '  "signals_structured": {"meeting_cancel_requested": false, "meeting_reschedule_requested": false, "meeting_datetime_candidate": null, "meeting_day_reference": null},\n'
         '  "confidence": 0.0\n'
         "}\n\n"
         f"Contexto:\n"
@@ -4533,6 +5159,7 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         f"- history: {history_text}\n"
         f"- inbound_message_text: {message_text}\n"
         + _build_custom_instructions_block(ai_profile)
+        + _build_agenda_fact_block(context, message_text)
     )
 
 
@@ -4575,7 +5202,7 @@ def _decide_post_meeting_management(
             reason="meeting_management_llm_failure",
         )
 
-    return DecisionOutput(
+    decision = DecisionOutput(
         next_action="reply",
         message_text=child_result.message_text or "",
         questions=[],
@@ -4589,6 +5216,9 @@ def _decide_post_meeting_management(
             "child_signals_structured": child_result.signals_structured or {},
         },
     )
+    _apply_meeting_date_guard(decision, context, logger)
+    _apply_meeting_reschedule_guard(decision, context, logger)
+    return decision
 
 
 def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
@@ -4609,6 +5239,83 @@ def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
         return json.loads(snippet)
     except json.JSONDecodeError:
         return None
+
+
+# Novas tentativas da Mãe/Filha antes do handoff por llm_failure: cada etapa repete só
+# a si mesma (chamada + parse + validação), até 4 tentativas no total, sem passar o
+# orçamento de tempo do turno (settings.llm_decision_budget_seconds).
+LLM_STAGE_MAX_ATTEMPTS = 4
+# Abaixo disto não compensa começar outra chamada — viraria timeout quase certo.
+_LLM_STAGE_MIN_CALL_SECONDS = 5.0
+
+_T = TypeVar("_T")
+
+
+class _InvalidLlmJson(ValueError):
+    pass
+
+
+def _llm_stage_failure_reason(exc: BaseException) -> Optional[str]:
+    """Motivo da falha quando vale tentar de novo; None = erro que outra tentativa não resolve."""
+    if isinstance(exc, ValidationError):
+        return "validation_error"
+    if isinstance(exc, _InvalidLlmJson):
+        return "invalid_json"
+    if llm_service.is_retryable_http_error(exc):
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        return f"status_{status}" if status else "request_error"
+    if isinstance(exc, ValueError):
+        return "invalid_output"
+    return None
+
+
+def _run_llm_stage(
+    stage_name: str,
+    call: Callable[[float], str],
+    parse: Callable[[str], _T],
+    *,
+    deadline: float,
+    logger: Optional[logging.Logger] = None,
+) -> _T:
+    """Corre `parse(call(timeout))` repetindo em falha passageira ou resposta inválida.
+
+    A última exceção sobe para o `except` de decide(), que aplica o FALLBACK_DECISION.
+    """
+    attempt = 1
+    while True:
+        started = time.monotonic()
+        timeout_seconds = max(min(float(settings.llm_timeout_seconds), deadline - started), 1.0)
+        try:
+            return parse(call(timeout_seconds))
+        except Exception as exc:
+            reason = _llm_stage_failure_reason(exc)
+            if reason is None:
+                raise
+            backoff = float(2 ** (attempt - 1))
+            remaining = deadline - time.monotonic()
+            if attempt >= LLM_STAGE_MAX_ATTEMPTS or remaining - backoff < _LLM_STAGE_MIN_CALL_SECONDS:
+                if logger:
+                    logger.warning(
+                        "event=llm_stage_exhausted stage=%s attempts=%s/%s reason=%s limit=%s",
+                        stage_name,
+                        attempt,
+                        LLM_STAGE_MAX_ATTEMPTS,
+                        reason,
+                        "max_attempts" if attempt >= LLM_STAGE_MAX_ATTEMPTS else "budget",
+                    )
+                raise
+            if logger:
+                logger.warning(
+                    "event=llm_stage_retry stage=%s attempt=%s/%s reason=%s elapsed=%.1fs exc=%s",
+                    stage_name,
+                    attempt + 1,
+                    LLM_STAGE_MAX_ATTEMPTS,
+                    reason,
+                    time.monotonic() - started,
+                    _truncate_snip(str(exc), 200),
+                )
+            time.sleep(backoff)
+            attempt += 1
 
 
 def _truncate_snip(text: Optional[str], limit: int = 300) -> str:
@@ -5211,6 +5918,11 @@ def compose_decision_output(
         highlight = None
     next_action = "ask_qualification" if effective_route_to == "qualification" else "reply"
     question_text = str(child_result.question_text or child_result.message_text or "").strip()
+    if effective_route_to == "recepcao":
+        # A Recepção não tem pergunta de qualificação (o prompt pede question_text vazio).
+        # Quando o modelo arruma ali uma pergunta do roteiro (ex.: "Posso enviar a tabela?"),
+        # ela substituía o cumprimento; o pedido do lead já segue em pending_commercial_text.
+        question_text = str(child_result.message_text or child_result.question_text or "").strip()
     message_text = question_text
     message_field_used: Optional[str] = None
     # Fix P7: passive mode reply-first override.
@@ -5346,6 +6058,7 @@ def compose_decision_output(
         },
     )
     decision = _apply_mode_guardrails(decision, context, mother_decision, child_result)
+    _apply_meeting_date_guard(decision, context)
 
     # Mídia rica no pitch — Agent 2 (Tarefa 3.6)
     # Se estamos em rota de apresentation para agent closer e offer_pack tem media_url,
@@ -5420,6 +6133,7 @@ def compose_decision_output(
     if decision.decision_trace is None:
         decision.decision_trace = {}
     decision.decision_trace["is_phase_entry"] = _is_phase_entry
+    _apply_meeting_confirmation_guard(decision, context)
     _phases_result = _evaluate_sales_flow_phases(
         context, effective_route_to, _extract_message_text(context),
         detected_intents=mother_decision.detected_intents,
@@ -5473,8 +6187,17 @@ def compose_decision_output(
     # tratar tudo no mesmo turno: o próximo ciclo do pipeline roda a Mãe de verdade, sem
     # overrides de rota. Ver "Saudação composta" em docs/architecture/llm-architecture.md.
     if effective_route_to == "recepcao":
+        if str(getattr(child_result, "lead_already_answered", None) or "").strip():
+            decision.message_text = _drop_trailing_question(decision.message_text)
         _pending_text = str(getattr(child_result, "pending_commercial_text", None) or "").strip()
         if _pending_text:
+            # Guardrail: a regra "não prometer" do prompt falha com frequência (o modelo anuncia
+            # o que a 2.ª decisão vai fazer). A promessa é cortada aqui; fica o cumprimento.
+            _without_promise = _drop_promise_sentences(decision.message_text)
+            if _without_promise != (decision.message_text or "").strip():
+                decision.message_text = _without_promise or f"{_local_greeting(ai_profile)}!"
+                if isinstance(decision.decision_trace, dict):
+                    decision.decision_trace["recepcao_promise_stripped"] = True
             _sys = list(decision.system_actions or [])
             _sys.append({"type": "requeue_pending_message", "message_text": _pending_text})
             decision.system_actions = _sys
@@ -5517,17 +6240,31 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
     qualification_retry_count = 0
     qualification_validation_status = "n/a"
     qualification_repeated_similarity = 0.0
+    llm_deadline = time.monotonic() + settings.llm_decision_budget_seconds
     try:
         mother_prompt = _build_mother_prompt(context, message_text)
-        stage = "mother_call"
-        mother_text = llm_service.generate_mother_route(mother_prompt, ai_profile=ai_profile)
-        stage = "mother_parse"
-        mother_payload = _extract_json_payload(mother_text)
-        if mother_payload is None:
-            raise ValueError("llm returned invalid mother json")
-        mother_payload = _normalize_null_strings(mother_payload)
-        stage = "mother_validate"
-        mother_decision = MotherDecision.model_validate(mother_payload)
+
+        def _call_mother(timeout_seconds: float) -> str:
+            nonlocal stage, mother_text
+            stage = "mother_call"
+            mother_text = llm_service.generate_mother_route(
+                mother_prompt, ai_profile=ai_profile, max_attempts=1, timeout_seconds=timeout_seconds
+            )
+            return mother_text
+
+        def _parse_mother(text: str) -> MotherDecision:
+            nonlocal stage
+            stage = "mother_parse"
+            mother_payload = _extract_json_payload(text)
+            if mother_payload is None:
+                raise _InvalidLlmJson("llm returned invalid mother json")
+            mother_payload = _normalize_null_strings(mother_payload)
+            stage = "mother_validate"
+            return MotherDecision.model_validate(mother_payload)
+
+        mother_decision = _run_llm_stage(
+            "mother", _call_mother, _parse_mother, deadline=llm_deadline, logger=logger
+        )
         mode_ctx_forced_route = _build_mode_contract_context(context, mother_decision)
         mother_decision = _enforce_qualification_route_when_missing(
             mother_decision,
@@ -5813,9 +6550,49 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         else:
             child_prompt = _build_child_prompt(context, message_text, mother_decision)
             _prompt_function_used = "_build_child_prompt(generic)"
+        # Orientação "seguir à risca" ativa neste turno → temperatura baixa na Filha. Mesma
+        # avaliação pura que o builder do prompt acabou de fazer (só os builders abaixo
+        # injetam o Fluxo de Venda; pré-agendamento/agendamento não).
+        _strict_orientation_active = False
+        if route_for_child in _SALES_FLOW_INJECTING_CHILD_ROUTES:
+            _strict_orientation_active = bool(_evaluate_sales_flow_phases(
+                context, route_for_child, message_text,
+                detected_intents=mother_decision.detected_intents,
+                is_phase_entry=_is_phase_entry_for_prompt,
+                branch_selections=mother_decision.branch_selections,
+            ).get("strict_active"))
         stage = "child_call"
         child_result: Optional[ChildResult] = None
         validation_errors: list[str] = []
+        prompt_to_use = child_prompt
+
+        def _call_child(timeout_seconds: float) -> str:
+            nonlocal stage, child_text
+            stage = "child_call"
+            child_kwargs: Dict[str, Any] = {
+                "ai_profile": ai_profile,
+                "max_attempts": 1,
+                "timeout_seconds": timeout_seconds,
+            }
+            if _strict_orientation_active:
+                child_kwargs["temperature_override"] = llm_service.STRICT_ORIENTATION_TEMPERATURE
+            child_text = llm_service.generate_child_result(route_for_child, prompt_to_use, **child_kwargs)
+            return child_text
+
+        def _parse_child(text: str) -> ChildResult:
+            nonlocal stage
+            stage = "child_parse"
+            child_payload = _extract_json_payload(text)
+            if child_payload is None:
+                raise _InvalidLlmJson("llm returned invalid child json")
+            child_payload = _normalize_null_strings(child_payload)
+            if "question_text" not in child_payload and "message_text" in child_payload:
+                child_payload["question_text"] = child_payload.get("message_text")
+            stage = "child_validate"
+            return ChildResult.model_validate(child_payload)
+
+        # O laço de qualification repete por conteúdo (campo errado, pergunta repetida) com
+        # VALIDATION_ERRORS no prompt; formato inválido já é repetido dentro de _run_llm_stage.
         attempts = 2 if route_for_child == "qualification" else 1
         for attempt_index in range(attempts):
             qualification_retry_count = attempt_index
@@ -5825,20 +6602,9 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     f"{child_prompt}\n\nVALIDATION_ERRORS: {json.dumps(validation_errors, ensure_ascii=False)}\n"
                     "Corrija o JSON para field=current_field e reformule a pergunta sem repetir texto anterior."
                 )
-            child_text = llm_service.generate_child_result(
-                route_for_child, prompt_to_use, ai_profile=ai_profile
+            child_result = _run_llm_stage(
+                "child", _call_child, _parse_child, deadline=llm_deadline, logger=logger
             )
-            stage = "child_parse"
-            child_payload = _extract_json_payload(child_text)
-            if child_payload is None:
-                validation_errors = ["invalid_json"]
-                qualification_validation_status = "invalid_json"
-                continue
-            child_payload = _normalize_null_strings(child_payload)
-            if "question_text" not in child_payload and "message_text" in child_payload:
-                child_payload["question_text"] = child_payload.get("message_text")
-            stage = "child_validate"
-            child_result = ChildResult.model_validate(child_payload)
             if route_for_child != "qualification":
                 break
 
@@ -6080,4 +6846,10 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 FALLBACK_DECISION.next_action,
                 FALLBACK_DECISION.reason,
             )
+        # O worker marca False quando o job ainda vai ser repetido: o handoff (desligar o bot,
+        # registar) fica para a última tentativa. Ausente (Playground) = handoff já.
+        if context.get("llm_failure_final") is False:
+            if logger:
+                logger.info("decision llm_failure handoff_deferred=job_retry")
+            return FALLBACK_DECISION.model_copy(deep=True)
         return handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)

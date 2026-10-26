@@ -88,9 +88,9 @@ backfill — os campos de "Critérios de Qualificação" continuam 100% manuais.
 
 ### Implementado (comum a todos os agentes)
 
-- Campos obrigatórios por `agent_mode` — `backend-crm/services/qualification_guardrails.py`:
-  - `consultivo`: 6 campos | `agenda`: 4 campos | `direto`: 3 campos
-  - Override por perfil: `ai_profile.qualification_required_fields` (lista explícita) substitui o default do modo; cada campo em `qualification_fields` tem `mode: "required"|"optional"` — só os `required` entram em `missing_fields`
+- Campos obrigatórios — `backend-crm/services/qualification_guardrails.py` (`required_fields_for_mode`) e `backend-executors/app/contracts/qualification_contract.py`:
+  - Fonte única: `ai_profile.qualification_required_fields`. Sem configuração = lista vazia = nenhum campo obrigatório (não há mínimos fixos por `agent_mode`)
+  - Ao criar um AI Profile, o backend-core sugere uma lista inicial editável por modo (`_DEFAULT_QUAL_FIELDS`, `backend-core/app/api/ai_profiles.py`); cada campo em `qualification_fields` tem `mode: "required"|"optional"` — só os `required` entram em `missing_fields`
 - Bloqueio de avanço: HTTP 409 se campos faltantes — `backend-crm/routes/leads.py`
 - Extração heurística de campos por regex/keywords — `backend-executors/app/contracts/qualification_contract.py`
 - Persistência em `lead_qualification_state` com histórico de perguntas (max 3/campo) —
@@ -290,9 +290,30 @@ Fases intermédias entre Presentation e Closing, usadas só por `sdr_padrao` e `
 - **Homologação directa:** quando `effective_route_to=="agendamento"`, `compose_decision_output()` força `suggested_category="agendamento"` directamente — ignora o clamp de salto único de `apply_mother_category_guardrails()` (que bloquearia, por exemplo, um salto de `apresentation` para `agendamento` sem passar por `pre-agendamento`). Sem isto, a categoria do lead ficava presa na fase anterior mesmo depois de uma confirmação real, e o gate `is_phase_entry` (ver [`llm-architecture.md`](llm-architecture.md)) nunca via a categoria alcançar `agendamento` — bloqueando a criação do appointment indefinidamente.
 - **Estilo de oferta de horário (`scheduling_offer_style` no AI Profile — ver [`agents.md`](agents.md)):** controla a instrução de oferta de horário no prompt desta filha. Default `"offer_alternatives"` sempre propõe 2-3 horários concretos, mesmo quando o horário pedido pelo lead está livre (tática comercial deliberada de escassez). `"confirm_exact"` substitui essa instrução por uma regra de confirmação directa: se o horário pedido não constar em `calendar_busy_slots`, confirma sem oferecer alternativas — só propõe alternativas quando há conflito real ou o lead não especificou horário. Quando a agenda está completamente livre, o bloco `calendar_busy_slots` declara isso explicitamente em vez de ficar omitido do prompt — ver "Agenda vazia" em [`agenda.md`](agenda.md#calendar_busy_slots--a-ia-consulta-disponibilidade-real-antes-de-proporconfirmar-horário). Configurável na UI em "Camada de Apresentação" → secção "Disponibilidade de horários".
 
+### Verificação do horário pedido (agenda + horário de atendimento)
+
+Quando a mensagem do lead traz uma hora inequívoca, as filhas de Pré-agendamento, Agendamento e gestão pós-confirmação recebem, no **fim** do prompt, o bloco "VERIFICAÇÃO DO HORÁRIO PEDIDO" com um veredicto decidido em código (`_build_agenda_fact_block()` em `decision_engine.py`). Sem isto, com serviço + dia + hora na mesma mensagem, a LLM dizia "não está disponível" com a agenda vazia em ~metade dos casos — e, quando lhe foi pedido para conferir o horário de atendimento sozinha, errava a conta ao contrário (aceitava sessões que acabavam depois do fim).
+
+1. **Horário pedido** (`requested_slot.find_requested_slot`): uma única hora na mensagem atual ("às 11h", "14h30", "15:00"; não contam durações como "de 1h" nem limites como "depois das 19h" / "a partir das"); o dia é a palavra de dia da mensagem atual ou, sem ela, o último dia falado na conversa (mesma leitura de `meeting_date_guard`); a duração é a dita pelo lead ("60 minutos", "de 1h30", "uma hora") ou `default_session_duration_minutes`. Sem hora inequívoca, ou no passado, não há bloco.
+2. **Agenda**: `calendar_busy_slots` + `meeting_scheduler._has_conflict` (exclui compromissos do próprio lead). Colide → o bloco manda dizer que está ocupado e propor outro.
+3. **Horário de atendimento** (`professional_hours.py`): o texto do perfil (`professional_availability`, quando existir, + `custom_instructions`) é convertido por uma chamada à LLM (`llm_service.generate_professional_hours`) numa tabela profissional → dia da semana → intervalos, com o fim = hora a que as sessões têm de acabar. Uma chamada por texto diferente (cache em memória por hash do texto; log `event=professional_hours_extracted` com a tabela lida). `check()` diz se a sessão cabe (no profissional nomeado pelo lead, ou em qualquer um) e, se não cabe, o início mais próximo que cabe. Sem tabela (texto sem horários, leitura falhada), o bloco diz só "agenda livre" e pede à filha que confira o horário de atendimento.
+
+Veredictos: **livre e cabe** → "aceite-o, sem oferecer outro horário nem dizer que está ocupado"; **fora** → "diga que está fora do horário de atendimento (com os horários desse dia) e proponha <início que cabe> com <profissional>"; **ocupado** → "diga que está ocupado e proponha <início que cabe> com <profissional>"; **dia sem atendimento / sem alternativa livre** → "proponha outro dia".
+
+A alternativa de "fora" e de "ocupado" vem de `professional_hours.nearest_free_start()`: inícios de 15 em 15 min (mais o último possível) dentro dos intervalos desse dia do profissional nomeado (ou de qualquer um), a sessão inteira tem de caber e estar livre em `calendar_busy_slots` (`_has_conflict`, excluindo o próprio lead); escolhe o mais próximo da hora pedida, em empate o mais tarde. Sem tabela de horários, o caso "ocupado" mantém "proponha o horário livre mais próximo que caiba no horário de atendimento" (conta da filha).
+
+Limite: um horário de atendimento mal lido pela LLM fica errado de forma consistente até o texto mudar — o log mostra a tabela.
+
 ### Resolução de datas relativas e nomes de dia da semana
 
-Ambas as filhas acima (e a de Presentation) recebem `tabela_de_dias`: uma lista pronta com hoje + os próximos 14 dias, cada um já com a data e o nome do dia da semana calculados (`_calendar_lookup_table_pt()` em `decision_engine.py`). A instrução é "procure a linha correspondente — nunca calcule a data ou o dia da semana por conta própria". Dar só a data de hoje não bastou em teste real (a LLM ainda errava a contagem de dias para nomes de dia da semana, ex.: confirmava "quinta-feira" numa terça-feira real) — eliminar a aritmética do lado da LLM, trocando por uma busca em tabela, resolveu de forma confiável. Limite: cobre até 14 dias à frente; referências mais distantes ("mês que vem") caem de volta no fallback heurístico.
+Duas camadas — a tabela ajuda a LLM a acertar; o guardrail de código garante que a data gravada é a do dia pedido.
+
+1. **`tabela_de_dias` no prompt** (`_calendar_lookup_table_pt(tz_name=ai_profile.timezone)` em `decision_engine.py`), para as filhas de Presentation, Pré-agendamento, Agendamento e gestão pós-confirmação: hoje + 14 dias no fuso do perfil, uma linha por dia como `sexta-feira, 30/10 → 2026-10-30`, com `[hoje]`/`[amanhã]`/`[depois de amanhã]`. Sozinha não chega: com `gpt-4o-mini` a LLM escolhe bem o dia da semana mas completa a data de memória (ex.: "Dia: 28/10 (sexta-feira)", sendo 28/10 uma quarta).
+2. **Guardrail `meeting_date_guard.py`** — `_apply_meeting_date_guard()` corre em `compose_decision_output()` e em `_decide_post_meeting_management()`, antes de `meeting_scheduler.py` ler `child_signals_structured`. A filha devolve, junto de `meeting_datetime_candidate`, `meeting_day_reference` (as palavras da conversa que identificam o dia: "amanhã", "sexta-feira", "30/10"); sem esse sinal, usa o dia da semana ou "amanhã/hoje" escrito junto da data em `message_text`. Conversão determinística: "hoje/amanhã/depois de amanhã" → hoje+0/1/2; dia da semana → a data do candidato se já cair nesse dia, senão a próxima ocorrência (amanhã…+7); `dd/mm` → essa data. Duas defesas contra o próprio sinal: um `dd/mm` só vale se o lead o escreveu (senão é a data calculada pela LLM, e vale a última palavra de dia do lead); e no turno de confirmação (`meeting_scheduled=true`) o dia tem de já ter sido falado na conversa (lead ou agente) — senão vale o último dia falado (ex.: o agente propôs só horários de terça, o lead disse "sim, confirmo", a LLM confirmou "quarta-feira"). Se não bater com o candidato, troca a data (mantém hora/offset) e reescreve a data e o dia da semana errados no texto, para o lead ver o mesmo dia que é gravado. Rasto em `decision_trace.meeting_date_guard`; log `event=meeting_date_corrected`. Sem referência reconhecível, nada muda.
+
+Limites: a tabela cobre 14 dias; "terça da próxima semana" com a LLM a escrever uma terça errada é corrigido para a terça mais próxima.
+
+Quando a Mãe dá `meeting_scheduled=true` e o lead **já estava** na fase (não é entrada — na entrada o `meeting_scheduler` adia a criação, gate M3), as filhas de Agendamento e Presentation (variante ≠ `scheduler`, que tem o "modo recibo") recebem, no fim do prompt, o bloco "MARCAÇÃO JÁ GRAVADA NESTE TURNO": a marcação é criada neste turno, por isso a resposta é a confirmação final no formato das instruções da conta — não um novo pedido de confirmação. Na entrada da fase o bloco não entra: a Filha pede confirmação e a marcação é criada no turno seguinte.
 
 ---
 
@@ -378,7 +399,7 @@ Ver [`docs/architecture/sales-flow.md`](sales-flow.md) para detalhes completos s
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `backend-crm/services/qualification_guardrails.py` | Campos obrigatórios por modo |
+| `backend-crm/services/qualification_guardrails.py` | Campos obrigatórios (do AI Profile; vazio = nenhum) |
 | `backend-crm/services/ai_playbooks/__init__.py` | Playbooks e hardcodes por template |
 | `backend-crm/services/ai_orchestrator/orchestrator.py` | Monta ContextBundle, aplica overrides por mode |
 | `backend-executors/app/services/decision_engine.py` | Motor de decisão, prompts das filhas, guardrails anti-loop |

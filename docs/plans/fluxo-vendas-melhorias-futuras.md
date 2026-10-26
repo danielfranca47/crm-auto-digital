@@ -256,3 +256,86 @@ divergente.
 divergência (Mãe retorna `route_to` "atrasado" mas `perceived_category` "adiantado"),
 e decidir se os guardrails devem também corrigir `perceived_category` quando mutam
 `route_to`.
+
+---
+
+## M14 — Pré-agendamento e Agendamento ignoram as orientações do Fluxo de Venda
+
+**Prioridade:** promovido (era ALTA) — 26/10/2026, para
+[`docs/implementations/fix-agendamento-le-fluxo-de-venda.md`](../implementations/fix-agendamento-le-fluxo-de-venda.md)
+(`Autonomia: manual`, fora da fila da noite). Remover esta secção quando essa implementação for graduada.
+
+**Contexto:** configuração do agente Sensi Vitae (25/10/2026) — um bloco `orientacao` na fase
+p3b (formato fixo da mensagem de confirmação) nunca chegou à IA.
+
+**Estado actual:** `_build_child_prompt_pre_agendamento()` e `_build_child_prompt_agendamento()`
+(`backend-executors/app/services/decision_engine.py`) não chamam
+`_build_sales_flow_phases_block(_evaluate_sales_flow_phases(...))` — as outras 5 fases chamam.
+O builder deixa configurar blocos em p3a/p3b sem aviso, e
+[`docs/architecture/sales-flow.md`](../architecture/sales-flow.md) diz que "todas as fases"
+injetam os blocos `orientacao`. Hoje a única forma de influenciar estas duas fases é
+`custom_instructions`, que vale para todas as fases ao mesmo tempo. A avaliação de blocos de
+ação (mídia, mensagem, avançar fase) também precisa de ser conferida para p3a/p3b.
+
+**O que fazer:** ligar o bloco às duas Filhas (como nas outras fases) e corrigir o doc; ou, se
+for deliberado, esconder p3a/p3b no builder e corrigir o doc.
+
+## M15 — Outras Filhas colam o bloco do Fluxo de Venda no fim do prompt
+
+**Prioridade: BAIXA**
+
+Origem: "Ajustes possíveis" da graduação de `feat-temperatura-respostas-ia.md`. Na Recepção, a
+orientação da Fase 0 era ignorada porque o bloco entrava depois do formato JSON; foi movido
+para o meio do prompt. As Filhas de qualificação, apresentação, follow-up e fechamento ainda
+colam `_build_sales_flow_phases_block(...)` no fim. Os prompts delas não proíbem perguntas como
+o da Recepção proibia, por isso não há defeito confirmado.
+
+**O que fazer:** só agir se aparecer uma orientação de outra fase a ser ignorada em teste real;
+aí aplicar o mesmo padrão da Recepção (bloco no meio, com prioridade explícita).
+
+## M16 — Regra de tom "sempre feche com UMA pergunta" contra orientações literais
+
+**Prioridade: MÉDIA**
+
+Origem: testes da Lara (Sensi Vitae) em 26/10/2026, na graduação de
+`feat-temperatura-respostas-ia.md`. `_build_tone_block()` manda "Encerramento: sempre feche com
+UMA pergunta ou UM próximo passo claro", igual para todos os agentes. Com uma orientação "seguir
+à risca" que pede só uma frase de apresentação, o gpt-4o-mini acrescentava "Como posso ajudar?"
+em 5 de 5. Só deixou de o fazer quando o próprio texto da orientação disse "termina em ponto
+final". Noutras respostas, duas perguntas seguidas ("Qual prefere? Posso enviar a tabela?").
+
+**O que fazer:** quando há orientação estrita ativa no turno (`strict_active`), trocar a regra
+de encerramento do bloco de tom por "termine como a instrução do dono pede". Medir antes e
+depois no banco de ensaio da Lara.
+
+## M17 — A Recepção antecipa a pergunta do roteiro
+
+**Prioridade: MÉDIA**
+
+Origem: graduação de `fix-recepcao-promessa-apos-cumprimento.md` (26/10/2026). Com um pedido no
+1.º turno ("Olá, queria saber os preços"), a Filha Recepção escreve às vezes no `message_text` a
+pergunta da fase seguinte ("Posso enviar a nossa tabela de preços?"), e a 2.ª decisão faz a mesma
+pergunta logo a seguir. Medido localmente: 2/6 com a orientação atual da Sensi Vitae e quase
+sempre com a orientação anterior ("…por isso não acrescente mais nada."). No Playground de
+produção, depois do guardrail de promessas, 0/6. Não é promessa, por isso
+`_drop_promise_sentences()` não a corta.
+
+**O que fazer:** com `pending_commercial_text` preenchido, tirar a pergunta final da Recepção,
+como `_drop_trailing_question()` já faz com `lead_already_answered`. Exceção: a pergunta pedida
+pelas instruções da Fase 0 (ex.: "Val ou Daniel?"). Distinguir as duas é a parte frágil: medir na
+bancada antes de decidir.
+
+## M18 — Simplificar a orientação da Fase 0 da Sensi Vitae
+
+**Prioridade: MÉDIA**
+
+Origem: graduação de `fix-recepcao-promessa-apos-cumprimento.md` (26/10/2026). A orientação
+`sv-p0-ola` da conta ("…numa única frase curta que termina em ponto final. A resposta ao pedido
+do cliente segue noutra mensagem logo a seguir.", com `strict`) foi a que mais puxou a promessa
+"Vou passar as informações…". O guardrail em código já a corta, por isso deixou de causar o
+defeito. A frase sobre a resposta seguinte já não é precisa.
+
+**O que fazer:** configuração da conta, não código. Testar na bancada
+`.claude/agentes/sensi-vitae` uma versão só com "Cumprimente e apresente-se como Lara, do Sensi
+Vitae, numa frase curta que termina em ponto final.", 1.º turno 6x com pedido e com "Olá" sozinho,
+e aplicar em produção com `aplicar_producao.sh` se não piorar.

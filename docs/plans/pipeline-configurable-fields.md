@@ -264,6 +264,16 @@ Nenhuma mudança de backend necessária (colunas já existem e são aceites pela
 
 ---
 
+### J2 — Abertura inbound/outbound e texto de handoff (achado em 25/10/2026)
+
+`getConfig()`/`saveConfig()` (`frontend-crm/src/services/api.ts`) leem e gravam
+`handoff_custom_text`, `origin_inbound_opener` e `origin_outbound_opener` dentro de
+`offer_pack`, mas o motor (`decision_engine.py`, `handoff_policy.py`) lê as colunas de topo
+com o mesmo nome. Caso real: na conta Sensi Vitae o ecrã mostrava a abertura "Olá
+{{lead.nome}}… Me chamo Lara" e o texto de handoff "Vou consultar minha colega…", enquanto o
+agente usava os valores de topo (o texto genérico de fábrica). Mesmo padrão de correção da
+Etapa J: ler/gravar como chave de topo.
+
 ## Tabela de campos
 
 | Campo | Tipo | Status |

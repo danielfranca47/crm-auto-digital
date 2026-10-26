@@ -15,6 +15,14 @@ O utilizador pediu para melhorar algo no sistema. Pode ter dito coisas como:
 
 Antes de escrever qualquer código, siga os passos abaixo em ordem.
 
+> **Sessão da fila automática** (lançada pela rotina da noite ou pelo comando
+> do dia, sem o utilizador presente): os passos são os mesmos, com três
+> exceções — o agente aprova o próprio plano (ou pára em "só plano"), a branch
+> chama-se `claude/<slug>` sem confirmação, e a triagem da graduação não faz
+> perguntas. Regras completas em
+> [`docs/ops/fila-automatica.md`](../ops/fila-automatica.md). Numa conversa
+> normal com o utilizador, nada disto se aplica.
+
 ---
 
 ## Passo 0 — Diagnóstico em Plan Mode (obrigatório)
@@ -105,6 +113,11 @@ automático. Depois de confirmado:
   `git worktree add` especificando a branch pai como base, seguida de
   `EnterWorktree(path=...)`.
 
+**Item que estava na fila automática:** se o ficheiro já existia como
+"Aguardando Plan Mode" e não tinha `**Autonomia:** manual`, pôr essa linha no
+cabeçalho **em `main`** (commit + push de documentação) antes de abrir a
+worktree — senão o turno da noite pode pegar no mesmo item em paralelo.
+
 ### Arquivo
 
 **Formato do nome:** `etapa-<codigo>-<slug-descritivo>.md`
@@ -132,6 +145,7 @@ Copie e preencha o template abaixo. As seções marcadas com `(*)` são obrigat�
 
 **Branch:** `<branch-atual>`
 **Status:** Em andamento
+**Autonomia:** noturna
 
 ---
 

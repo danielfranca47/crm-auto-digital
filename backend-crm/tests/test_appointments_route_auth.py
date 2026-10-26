@@ -27,6 +27,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            google_transparency TEXT,
             lead_id INTEGER,
             user_id INTEGER,
             title TEXT,

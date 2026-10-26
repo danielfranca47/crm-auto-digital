@@ -390,6 +390,43 @@ function ModalLlmProvider({ provider, model, onSave, onClose }: {
   );
 }
 
+// ─── Modal: Criatividade das respostas (temperatura) ──────────
+const RESPONSE_CREATIVITY_LABELS: Record<string, string> = {
+  '': 'Padrão',
+  creative: 'Criativa',
+  balanced: 'Equilibrada',
+  strict: 'Rígida',
+};
+
+function ModalCriatividade({ value, onSave, onClose }: {
+  value: AgentConfig['response_creativity'];
+  onSave: (v: AgentConfig['response_creativity']) => void;
+  onClose: () => void;
+}) {
+  const [local, setLocal] = useState<string>(value ?? '');
+  const options = [
+    { v: '',         label: RESPONSE_CREATIVITY_LABELS[''],     desc: 'Deixa o modelo no padrão dele. É o comportamento de sempre do agente.' },
+    { v: 'creative', label: RESPONSE_CREATIVITY_LABELS.creative, desc: 'Respostas mais variadas e espontâneas. Pode acrescentar frases por conta própria.' },
+    { v: 'balanced', label: RESPONSE_CREATIVITY_LABELS.balanced, desc: 'Natural, mas mais previsível. Bom ponto de partida para a maioria dos negócios.' },
+    { v: 'strict',   label: RESPONSE_CREATIVITY_LABELS.strict,   desc: 'Fica o mais perto possível das instruções, com menos variação e menos invenção.' },
+  ];
+  return (
+    <ModalBase
+      title="Criatividade das respostas"
+      sub="Quanto o agente pode variar e acrescentar ao que você configurou"
+      onClose={onClose}
+      onSave={() => onSave((local || null) as AgentConfig['response_creativity'])}
+    >
+      {options.map(o => (
+        <OptCard key={o.v || 'default'} selected={local === o.v} onClick={() => setLocal(o.v)} label={o.label} desc={o.desc} />
+      ))}
+      <div className="o-field-hint" style={{ marginTop: 8 }}>
+        Para uma frase específica, marque "Seguir à risca" na orientação do Fluxo de Venda: aquela resposta fica rígida mesmo com outro nível aqui.
+      </div>
+    </ModalBase>
+  );
+}
+
 // ─── Modal: Perfil gerado (custom_instructions) ───────────────
 function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
   value: string; name: string; brand: string; agentMode: string; tone: string;
@@ -429,7 +466,7 @@ function ModalPerfil({ value, name, brand, agentMode, tone, onSave, onClose }: {
 // ─────────────────────────────────────────────────────────────
 
 type DrawerKey = 'nome' | 'empresa' | 'nicho' | 'timezone' | 'tom' | 'goals' | 'handoff' | 'inbound_opener' | 'outbound_opener' | 'social_proof' | 'session_preview' | 'response_style' | 'variaveis' | null;
-type ModalKey  = 'identidade' | 'perfil' | 'llm_provider' | null;
+type ModalKey  = 'identidade' | 'perfil' | 'llm_provider' | 'criatividade' | null;
 
 export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeProps) {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
@@ -527,6 +564,13 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
           sub="Modelo de linguagem usado nas respostas"
           onClick={() => setModal('llm_provider')}
           help="Provedor de IA que gera as mensagens do agente. OpenAI é o padrão recomendado. OpenRouter é uma alternativa útil como opção de resiliência caso a OpenAI apresente oscilações."
+        />
+        <EditCard
+          label="Criatividade das respostas"
+          value={RESPONSE_CREATIVITY_LABELS[config.response_creativity ?? '']}
+          sub="Quanto o agente varia e acrescenta"
+          onClick={() => setModal('criatividade')}
+          help="Padrão mantém o modelo como sempre. Rígida faz o agente ficar o mais perto possível do que você escreveu, com menos frases extra e menos invenção. Criativa deixa as respostas mais soltas."
         />
       </div>
 
@@ -724,6 +768,13 @@ export function CamadaIdentidade({ config, onUpdate, resumo }: CamadaIdentidadeP
             });
             setModal(null);
           }}
+        />
+      )}
+      {modal === 'criatividade' && (
+        <ModalCriatividade
+          value={config.response_creativity}
+          onClose={() => setModal(null)}
+          onSave={v => { onUpdate({ response_creativity: v }); setModal(null); }}
         />
       )}
       {modal === 'perfil' && (

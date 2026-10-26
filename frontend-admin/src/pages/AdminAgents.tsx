@@ -478,6 +478,16 @@ export default function AdminAgents() {
                 OpenRouter{userDetail.profile.llm_provider_model ? ` · ${String(userDetail.profile.llm_provider_model)}` : ""}
               </Badge>
             )}
+            {!!userDetail.profile.response_creativity && (
+              <Badge className="bg-violet-900/40 text-violet-300 border-violet-700/40 text-xs">
+                criatividade: {({ creative: "criativa", balanced: "equilibrada", strict: "rígida" } as Record<string, string>)[String(userDetail.profile.response_creativity)] ?? String(userDetail.profile.response_creativity)}
+              </Badge>
+            )}
+            {Number(userDetail.profile.session_buffer_minutes) > 0 && (
+              <Badge className="bg-teal-900/40 text-teal-300 border-teal-700/40 text-xs">
+                intervalo entre sessões: {Number(userDetail.profile.session_buffer_minutes)} min
+              </Badge>
+            )}
           </div>
         )}
       </div>

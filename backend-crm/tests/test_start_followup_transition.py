@@ -16,6 +16,17 @@ from routes.leads import _map_lead_row, start_followup_transition
 from security_core import CurrentUser
 
 
+def _current_user() -> CurrentUser:
+    # Espelha o que require_crm_access devolve: entitlements é sempre um dict.
+    # "limits" vazio = follow-up incluído no plano (default de check_follow_up_enabled).
+    return CurrentUser(
+        id=11,
+        email="x@example.com",
+        token="t",
+        entitlements={"products": [{"product_code": "crm", "status": "active"}], "limits": {}},
+    )
+
+
 def _create_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
@@ -55,6 +66,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             attempts_json TEXT,
             asked_questions_json TEXT,
             last_question_text TEXT,
+            qualification_total_score INTEGER NOT NULL DEFAULT 0,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """
@@ -99,6 +111,7 @@ def _create_legacy_schema_without_followup_mirror_columns(conn: sqlite3.Connecti
             attempts_json TEXT,
             asked_questions_json TEXT,
             last_question_text TEXT,
+            qualification_total_score INTEGER NOT NULL DEFAULT 0,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         """
@@ -142,6 +155,24 @@ class StartFollowupTransitionTest(unittest.TestCase):
         self.conn.row_factory = sqlite3.Row
         _create_schema(self.conn)
 
+        # A rota consulta o AI Profile no backend-core e enfileira um job de
+        # pré-geração — aqui ficam substituídos para o teste não depender de
+        # rede nem escrever no banco real.
+        self.ai_profile: dict = {}
+        for patcher in (
+            patch(
+                "services.qualification_guardrails._fetch_ai_profile",
+                side_effect=lambda _user_id: dict(self.ai_profile),
+            ),
+            patch(
+                "routes.leads.fetch_core_ai_profile",
+                side_effect=lambda _token: dict(self.ai_profile),
+            ),
+            patch("routes.leads.create_job"),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def tearDown(self):
         try:
             self.conn.close()
@@ -173,7 +204,7 @@ class StartFollowupTransitionTest(unittest.TestCase):
         with patch("routes.leads.get_connection", return_value=self.conn):
             result = start_followup_transition(
                 payload,
-                current_user=CurrentUser(id=11, email="x@example.com", token="t"),
+                current_user=_current_user(),
             )
 
         self.assertEqual(result["status"], "ok")
@@ -225,7 +256,7 @@ class StartFollowupTransitionTest(unittest.TestCase):
         with patch("routes.leads.get_connection", return_value=self.conn):
             start_followup_transition(
                 payload,
-                current_user=CurrentUser(id=11, email="x@example.com", token="t"),
+                current_user=_current_user(),
             )
 
         check_conn = sqlite3.connect(self.db_path)
@@ -263,12 +294,21 @@ class StartFollowupTransitionTest(unittest.TestCase):
             with self.assertRaises(HTTPException) as exc_ctx:
                 start_followup_transition(
                     payload,
-                    current_user=CurrentUser(id=11, email="x@example.com", token="t"),
+                    current_user=_current_user(),
                 )
 
         self.assertEqual(exc_ctx.exception.status_code, 400)
 
     def test_start_followup_blocks_when_qualification_incomplete(self):
+        # Campos obrigatórios vêm só do AI Profile (sem configuração = nenhum obrigatório).
+        self.ai_profile = {
+            "qualification_required_fields": [
+                "service_interest",
+                "availability_window",
+                "location_preference",
+                "price_acceptance",
+            ]
+        }
         cur = self.conn.cursor()
         cur.execute(
             "INSERT INTO leads (user_id, category, agent_type) VALUES (?, ?, ?)",
@@ -294,7 +334,7 @@ class StartFollowupTransitionTest(unittest.TestCase):
             with self.assertRaises(HTTPException) as exc_ctx:
                 start_followup_transition(
                     payload,
-                    current_user=CurrentUser(id=11, email="x@example.com", token="t"),
+                    current_user=_current_user(),
                 )
 
         self.assertEqual(exc_ctx.exception.status_code, 400)
@@ -357,7 +397,7 @@ class StartFollowupTransitionTest(unittest.TestCase):
             with patch("routes.leads.get_connection", return_value=legacy_conn):
                 result = start_followup_transition(
                     payload,
-                    current_user=CurrentUser(id=11, email="x@example.com", token="t"),
+                    current_user=_current_user(),
                 )
             self.assertEqual(result["status"], "ok")
         finally:

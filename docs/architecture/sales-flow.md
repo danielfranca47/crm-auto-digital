@@ -30,7 +30,7 @@ O Fluxo de Venda opera **como uma camada que corre antes do prompt filho** no `d
 
 O mapeamento `effective_route_to → phase_id` está em `_ROUTE_TO_PHASE_ID` dentro de `_evaluate_sales_flow_phases()`.
 
-Todas as fases — incluindo `p5` (Fechamento) — injectam blocos `orientacao` configurados no prompt da respectiva LLM filha via `_build_sales_flow_phases_block(_evaluate_sales_flow_phases(...))`, chamado no fim de cada `_build_child_prompt_<fase>()`. É assim que, para o Closer (`direto`), instruções de fechamento (ex.: quando enviar o link de pagamento) podem ser configuradas em `p5` pelo builder — sem precisar de nenhum flag especial de bloco, ao contrário de `qual_opener`/`booking_signal_opener` (ver abaixo).
+As fases p0, p1, p2, p4 e p5 (Fechamento) injectam blocos `orientacao` configurados no prompt da respectiva LLM filha via `_build_sales_flow_phases_block(_evaluate_sales_flow_phases(...))`, chamado no fim de `_build_child_prompt_<fase>()` — exceto na Recepção (`p0`), onde o bloco é avaliado antes e inserido no meio do prompt com prioridade sobre o cumprimento padrão (ver [`llm-architecture.md`](llm-architecture.md#filha-recepção-_build_child_prompt_recepcao)), porque o prompt fixo dela proíbe perguntas e um bloco colado no fim perdia sempre. **p3a (Pré-agendamento) e p3b (Agendamento) não injectam** — `_build_child_prompt_pre_agendamento()`/`_build_child_prompt_agendamento()` não chamam esse bloco, por isso orientações configuradas nessas fases não chegam à IA; a única forma de influenciar essas Filhas é `custom_instructions` (ver `docs/plans/fluxo-vendas-melhorias-futuras.md`, M14). É assim que, para o Closer (`direto`), instruções de fechamento (ex.: quando enviar o link de pagamento) podem ser configuradas em `p5` pelo builder — sem precisar de nenhum flag especial de bloco, ao contrário de `qual_opener`/`booking_signal_opener` (ver abaixo).
 
 ---
 
@@ -210,6 +210,8 @@ Independente do gating posicional: não participa de `_prereqs_satisfied_by_scop
 
 **3) Orientações críticas como guarda permanente** — depois da passagem principal, uma segunda passagem percorre a fase novamente: toda `orientacao` com `priority: "critical"` que não foi injectada neste turno (porque o `last_trigger_active` da sua posição estava `False`) é reinjectada mesmo assim, **desde que o próximo gatilho sequencial da fase (o primeiro depois dela na lista de blocos) ainda não esteja satisfeito** (persistido). Isto faz uma instrução como "não pergunte disponibilidade ainda" continuar presente em todo turno da fase — não só no turno em que foi originalmente disparada — até a condição que ela guarda ser efetivamente cumprida. Orientações com `priority` diferente de `critical` continuam com o comportamento antigo: só aparecem no turno em que o `last_trigger_active` da sua posição é `True`.
 
+**4) Orientação "seguir à risca" (`strict: true`)** — caixa "Seguir à risca" no formulário de `orientacao` (`CamadaFluxoVenda.tsx`; `BlockRow` mostra a etiqueta "à risca"). Na passagem principal, uma orientação estrita que dispara é injectada por `_strict_orientation_injection()` com o rótulo `INSTRUÇÃO [CRÍTICA] DE FLUXO DE VENDA — SEGUIR À RISCA`, seguido de uma instrução para usar só o conteúdo dela (com motivo e exemplo ✅/❌), e marca `result["strict_active"] = True`. `decide()` reavalia a fase antes da chamada da Filha, nas rotas de `_SALES_FLOW_INJECTING_CHILD_ROUTES` (recepção, qualificação, apresentação, follow-up, fechamento; pré-agendamento e agendamento não injectam blocos), e, se `strict_active`, chama `generate_child_result(..., temperature_override=STRICT_ORIENTATION_TEMPERATURE)` (0.2), que prevalece sobre `ai_profile.response_creativity` (ver [`llm-architecture.md`](llm-architecture.md#temperatura-da-filha)). Vale só no turno em que a orientação dispara: a reinjeção permanente de orientações críticas (item 3) usa sempre o rótulo normal e não marca `strict_active`, senão a Filha repetiria a mesma frase literal em todo turno da fase. Uma orientação estrita num caminho de `condicao` não escolhido não entra no prompt nem baixa a temperatura.
+
 **Avaliação por tipo de trigger:**
 
 | Trigger | Condição de `fired = True` |
@@ -224,7 +226,7 @@ Independente do gating posicional: não participa de `_prereqs_satisfied_by_scop
 
 | Ação | Destino |
 |---|---|
-| `orientacao` | `result["prompt_injections"]` → injectado no prompt filho |
+| `orientacao` | `result["prompt_injections"]` → injectado no prompt filho (com `strict=true`: rótulo literal + `result["strict_active"]`, ver abaixo) |
 | `mensagem` | `result["system_actions"][{type:"send_message", content}]` |
 | `midia` | `result["system_actions"][{type:"send_media", media_url, media_type}]` |
 | `avancar_fase` | `result["system_actions"][{type:"advance_phase", target_phase}]` |

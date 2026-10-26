@@ -15,6 +15,14 @@ export type CoreProduct = {
   name?: string;
 };
 
+/** Códigos em `last_error`: missing_calendar_scope | token_revoked (ver docs/architecture/google-calendar.md) */
+export type GoogleCalendarStatus = {
+  connected: boolean;
+  email: string | null;
+  last_error?: string | null;
+  last_error_at?: string | null;
+};
+
 export type CoreUser = {
   id?: number;
   email?: string | null;
@@ -104,6 +112,7 @@ export type AiProfilePayload = {
   calendar_integration?: "none" | "google_calendar" | "calendly" | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
   response_style?: "active" | "passive" | null;
+  response_creativity?: "creative" | "balanced" | "strict" | null;
   qualification_price_disclosure?: "after_qualification" | "on_request" | null;
   custom_variables?: Record<string, string> | null;
 };
@@ -1465,6 +1474,7 @@ export const api = {
         timezone:          (profile as any)?.timezone          ?? DEFAULT_AGENT_CONFIG.timezone,
         custom_instructions: (profile as any)?.custom_instructions ?? DEFAULT_AGENT_CONFIG.custom_instructions,
         response_style:      ((profile as any)?.response_style ?? DEFAULT_AGENT_CONFIG.response_style) as 'active' | 'passive',
+        response_creativity: ((profile as any)?.response_creativity ?? DEFAULT_AGENT_CONFIG.response_creativity) as import('../types/agente').AgentConfig['response_creativity'],
         qualification_price_disclosure: ((profile as any)?.qualification_price_disclosure ?? DEFAULT_AGENT_CONFIG.qualification_price_disclosure) as 'after_qualification' | 'on_request',
 
         // Camada 2
@@ -1558,6 +1568,7 @@ export const api = {
         professional_availability: (profile as any)?.professional_availability ?? DEFAULT_AGENT_CONFIG.professional_availability,
         scheduling_offer_style:  ((profile as any)?.scheduling_offer_style ?? DEFAULT_AGENT_CONFIG.scheduling_offer_style) as import('../types/agente').AgentConfig['scheduling_offer_style'],
         default_session_duration_minutes: (profile as any)?.default_session_duration_minutes ?? DEFAULT_AGENT_CONFIG.default_session_duration_minutes,
+        session_buffer_minutes: (profile as any)?.session_buffer_minutes ?? DEFAULT_AGENT_CONFIG.session_buffer_minutes,
         meeting_management_enabled: (profile as any)?.meeting_management_enabled ?? DEFAULT_AGENT_CONFIG.meeting_management_enabled,
 
         // Oferta e pagamento
@@ -1655,6 +1666,7 @@ export const api = {
         timezone:            config.timezone,
         custom_instructions: config.custom_instructions,
         response_style:      config.response_style,
+        response_creativity: config.response_creativity,
         qualification_price_disclosure: config.qualification_price_disclosure,
         appointment_mode:     config.appointment_mode,
         // presentation_variant acompanha appointment_mode só para agentes de agenda/consultivo;
@@ -1681,6 +1693,7 @@ export const api = {
         professional_availability:     config.professional_availability,
         scheduling_offer_style:        config.scheduling_offer_style,
         default_session_duration_minutes: config.default_session_duration_minutes,
+        session_buffer_minutes:        config.session_buffer_minutes,
         meeting_management_enabled:    config.meeting_management_enabled,
         nurture_vs_discard_rule:       config.nurture_vs_discard_rule,
         qualification_extraction_tolerance: config.qualification_extraction_tolerance,
@@ -1875,7 +1888,7 @@ export const api = {
   // -------- GOOGLE CALENDAR --------
   googleCalendar: {
     getStatus: () =>
-      coreClient.get<{ connected: boolean; email: string | null }>("/auth/google/calendar/status"),
+      coreClient.get<GoogleCalendarStatus>("/auth/google/calendar/status"),
     disconnect: () =>
       coreClient.delete<{ disconnected: boolean }>("/auth/google/calendar"),
     /** URL para iniciar o fluxo OAuth — abrir directamente no browser (redirect). */

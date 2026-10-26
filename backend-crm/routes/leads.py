@@ -320,6 +320,8 @@ def _check_conflict(
     importados do Google (lead_id IS NULL, user_id próprio).
     Regra: há conflito quando um outro registro tem start < end_do_novo
     E (end ou start se end for nulo) > start_do_novo.
+    Eventos do Google marcados como Disponível (google_transparency='transparent')
+    não contam como conflito.
     """
     start_iso = _normalize_or_400(start_at, "start_at")
     if start_iso is None:
@@ -336,6 +338,7 @@ def _check_conflict(
     query = (
         "SELECT a.id FROM appointments a LEFT JOIN leads l ON a.lead_id = l.id "
         "WHERE (a.lead_id IS NOT NULL AND l.user_id = ? OR a.lead_id IS NULL AND a.user_id = ?) "
+        "AND (a.google_transparency IS NULL OR a.google_transparency != 'transparent') "
         "AND datetime(a.start_at) < datetime(?) "
         "AND datetime(COALESCE(a.end_at, a.start_at)) > datetime(?)"
     )

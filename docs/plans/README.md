@@ -15,12 +15,13 @@ implementação.
 | `_versionamento-agent-local.md` | Regra do ciclo de versões vN do agent-local (única feature do repo com numeração própria) — empacotamento sempre como última fase de cada versão |
 | `plano-sprint-YYYY-MM-DD.md` | Sprint plan gerado após análise (criado sob demanda) |
 | `kiwify-checkout-melhorias-*.md` | Melhorias identificadas após a etapa de checkout |
-| `pipeline-configurable-fields.md` | Campos configuráveis do AI Profile ainda a implementar |
+| `pipeline-configurable-fields.md` | Campos configuráveis do AI Profile ainda a implementar (Etapa J/J2: campos que o ecrã grava em `offer_pack` mas o motor lê da coluna de topo) |
+| `google-calendar-melhorias-pos-etapa-10-2.md` | Google Calendar: M2 seleção de calendário, M3 publicação OAuth, M5 (BAIXA — verificar contas antigas sem permissão do calendário), M6 (BAIXA — datas dos eventos do Google em UTC) |
 | `plans-subscriptions.md` | Modelo de planos e assinaturas — decisões pendentes |
 | `scale-enterprise-roadmap.md` | Roadmap dos planos Scale e Enterprise |
 | `ai-profile-instrucoes-por-fase.md` | Instruções de IA por fase — a implementar |
-| `agentes-agenda-melhorias-futuras.md` | Multi-profissional por conta, closing seletivo, confiabilidade da confirmação de agendamento, error boundary, guards redundantes e badge de fuso |
-| `cancelamento-reagendamento-melhorias-futuras.md` | Itens deixados de fora do M1 de cancelamento/reagendamento já graduado: handoff humano na janela pós-confirmação, janela de 30 dias, gap de autenticação, bug de status duplicado em follow-up |
+| `agentes-agenda-melhorias-futuras.md` | Multi-profissional por conta, closing seletivo, confiabilidade da confirmação de agendamento, error boundary, guards redundantes, badge de fuso, M4 (ALTA — respostas inválidas da IA, ~4% medido) |
+| `cancelamento-reagendamento-melhorias-futuras.md` | Itens deixados de fora do M1 de cancelamento/reagendamento já graduado: handoff humano na janela pós-confirmação, janela de 30 dias, gap de autenticação, bug de status duplicado em follow-up; M4 — depois de marcado, o agente não responde a preço/dúvidas simples |
 | `followup-auto-trigger-melhorias-futuras.md` | Itens deixados de fora do M2 (disparo automático/check-in de inatividade): falso-positivo de actividade, bug de trava do banco em `progress_followup_after_auto_send`, Agent 2 fora do check-in, worker sem isolamento de conta em testes locais |
 | `agent-local-melhorias-futuras-V3.md` | Itens deixados de fora da graduação da v2 do agent-local (M1–M9) + M10 "Empacotamento v3", sempre a última fase — ver `_versionamento-agent-local.md` |
 | `seguranca-melhorias-futuras.md` | Achados Altos/Médios/Baixos da auditoria de segurança de 2026-07-15 ainda não corrigidos (os 2 críticos já foram corrigidos e graduados) |
@@ -29,14 +30,18 @@ implementação.
 | `persistencia-dados-melhorias-futuras.md` | Item deixado de fora da correcção de persistência do backend-crm: aplicar a mesma checagem de arranque (recusar subir sem env var de persistência) ao backend-core |
 | `qualificacao-score-generalizado-melhorias-futuras.md` | Fases 3-4 adiadas de `qualificacao-flexivel-score-generalizado.md` (score generalizado para campos custom, presets não-obrigatórios com risco a redesenhar) + didática/transparência de score na UI + gate de score pular checagem com reunião real confirmada |
 | `qualificacao-race-condition-melhorias-futuras.md` | Item deixado de fora do fix de race condition em `upsert_qualification_state()` já graduado: TOCTOU similar em `increment_attempt()` |
-| `fluxo-vendas-melhorias-futuras.md` | Itens deixados de fora da graduação do fix de fluxo de vendas sequencial e do guardrail de gatilhos pendentes (fases restantes): migrar instrução de agendamento para `consultivo`, detalhar marcos do Fluxo de Venda no modal do lead, bug `client-list` inalcançável, constante duplicada de templates agendadores, dessincronismo `perceived_category`/`route_to` |
+| `fluxo-vendas-melhorias-futuras.md` | Itens deixados de fora da graduação do fix de fluxo de vendas sequencial e do guardrail de gatilhos pendentes (fases restantes): migrar instrução de agendamento para `consultivo`, detalhar marcos do Fluxo de Venda no modal do lead, bug `client-list` inalcançável, constante duplicada de templates agendadores, dessincronismo `perceived_category`/`route_to`; M14 (ALTA) — Pré-agendamento/Agendamento ignoram as orientações do Fluxo de Venda |
+| `retry-llm-melhorias-futuras.md` | Itens deixados de fora da implementação das novas tentativas da Mãe/Filha: dizer à IA o erro na nova tentativa, tentativas no atalho pós-reunião (BAIXA) |
 | `confiabilidade-integracoes-externas-melhorias-futuras.md` | Itens deixados de fora da graduação do fix de SMTP+webhook Efí do primeiro assinante: auditoria de falhas silenciosas em dependências externas, auditoria de efeitos de reentrega em todos os webhooks |
 | `reembolso-melhorias-futuras.md` | Itens deixados de fora da graduação do botão de reembolso admin MVP: agente automático de reembolso dos 7 dias via email, inconsistência "7 dias" vs "30 dias" na copy da landing |
 | `motor-llm-otimizacoes.md` | Achados da graduação de `prompt-engineering-principles`: temperature não configurada, Structured Outputs (json_schema+strict) da OpenAI, isolamento da mensagem do lead contra prompt injection, reordenação do prompt para prompt caching automático, validação semântica de `signals_structured` (checkout_sent+URL) |
 | `monitoramento-colaborador-melhorias-futuras.md` | Item deixado de fora da graduação da paginação do monitoramento de colaborador: contagem total ("Página N de M") nos pagers |
 | `website-acessibilidade-melhorias-futuras.md` | Item deixado de fora da graduação do fix de contraste WCAG do website: verificação automática de contraste no build/CI |
 | `assinatura-inativa-melhorias-futuras.md` | Itens deixados de fora da graduação do ecrã de renovação para conta sem plano activo: período de tolerância após o vencimento, preços nos cartões de plano, 401 do backend-crm por falha do core, faixa de expiração dentro da app, modo só-leitura, texto do botão de suporte, aviso de sessão expirada único |
+| `modo-auto-melhorias-futuras.md` | Item deixado de fora da graduação do modo auto do Claude Code: sessões sem ecrã ignoram as regras `allow` do projeto em pasta não marcada como de confiança (pré-requisito do agente que executa a fila sozinho) |
+| `fila-automatica-melhorias-futuras.md` | Itens deixados de fora da graduação do contrato da fila automática: pacotes novos passam a subir sempre (M1), reconhecer instruções da IA em ficheiros novos (M2), push só de documentação reinicia produção — configurar o Railway (M3); e do turno da noite: tranca do lado do GitHub contra escrita da cloud em `main` (M4), a noite não abrir pull requests (M5), recusa a mais em código com `git push` num comentário (M6) |
 | `knowledge-base-melhorias-futuras.md` | Base de Conhecimento: dedup narrativo por uso/conteúdo/reengajamento (M1–M3), fontes duplicadas lidas em simultâneo (M4) e conversão assistida dos itens "Para mover" em blocos do Fluxo de Venda (M5) |
+| `docs-qualificacao-campos-obrigatorios-melhorias-futuras.md` | Itens deixados de fora da graduação da correção dos documentos sobre campos obrigatórios de qualificação: frases soltas que ainda falam em campos mínimos por tipo de agente — `playground-parity.md` (M1), guias dos três agentes e guia de campos do perfil de IA (M2), exemplo do guia de conflitos e mapa de prompts (M3) |
 
 Os arquivos sem prefixo `_` são os **planos concretos** — contêm melhorias identificadas
 que ainda não foram implementadas.
@@ -72,6 +77,12 @@ relevantes se já souber.]
 
 Não há formato obrigatório rígido — o importante é que cada item seja identificável
 (M1, M2... ou por título) e tenha prioridade declarada.
+
+**`Prioridade: por definir`** aparece em itens que a fila automática deixou aqui ao
+graduar uma implementação sem o utilizador presente (ver
+[`docs/ops/fila-automatica.md`](../ops/fila-automatica.md)). Estão à espera de triagem:
+na análise de sprint, perguntar ao utilizador a prioridade de cada um (ou se é para
+descartar). A fila automática só pega sozinha em itens `ALTA`.
 
 ---
 

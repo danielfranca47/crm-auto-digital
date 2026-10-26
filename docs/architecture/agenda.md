@@ -242,6 +242,8 @@ Todos definidos em `src/hooks/useAppointments.ts`. Mutations invalidam `appointm
 
 **Índices:** `idx_appointments_lead (lead_id)`, `idx_appointments_time (start_at)`, `idx_appointments_user (user_id, start_at)`.
 
+**Formatos de `start_at`/`end_at` e comparação:** a tabela guarda ISO com fuso (`…+00:00`, escrito pelo CRM, pelo Playground e pela sincronização do Google, que converte o `dateTime` para UTC antes de gravar), só-data (`2026-10-30`, eventos de dia inteiro do Google) e, em linhas antigas do Google, `…Z`. Toda query que compara ou ordena horários usa `datetime(coluna)` do SQLite contra `datetime(?)` — nunca texto puro (`"…16:00Z" > "…16:00+00:00"` como texto). Uma sessão que começa exatamente quando outra acaba não é conflito.
+
 **Filtro de listagem:** `GET /api/appointments` filtra por `user_id` usando: `(lead_id IS NOT NULL AND l.user_id = ?) OR (lead_id IS NULL AND a.user_id = ?)`.
 
 ---
@@ -255,11 +257,15 @@ Eventos importados via `POST /api/appointments/google-sync` têm `source='google
 - **Cursor:** `isGoogle ? "cursor-default opacity-80" : "cursor-pointer"`
 - **Lead:** `leadName` é `null` para eventos Google — a linha "Lead:" é suprimida na UI
 
-**Botão "Sincronizar Google"** em `Agenda.tsx`: visível apenas quando `googleCalendar.getStatus()` retorna `connected: true`. Ao clicar, chama o endpoint google-sync para o mês corrente e invalida `appointmentsKeys.all` (refetch de todas as vistas).
+**Sync na Agenda** (`Agenda.tsx`, só quando `googleCalendar.getStatus()` retorna `connected: true`):
+ao abrir a página corre uma vez o google-sync do mês corrente (sem toast de sucesso); o botão
+"Sincronizar Google" faz o mesmo à mão. Ambos invalidam `appointmentsKeys.all`. Em erro (409),
+o toast mostra `detail.message` do backend.
 
-**Upsert e cleanup (google-sync):**
+**Upsert e cleanup (google-sync, `services/google_calendar_sync.py`):**
 - Upsert por `(google_event_id, user_id)` — sincronizar duas vezes não duplica
-- Cleanup automático: apaga `source='google'` do período que já não existem no Google → F3-2 (evento removido do Google desaparece na próxima sync)
+- Cleanup automático: apaga `source='google'` do período que já não existem no Google → F3-2 (evento removido do Google desaparece na próxima sync) — só depois de uma leitura bem-sucedida; se a Google falhar nada é apagado
+- `google_transparency` guarda o "Ocupado/Disponível" do Google (`transparent` = Disponível, padrão dos eventos de dia inteiro). Eventos Disponível aparecem na Agenda mas **não contam como ocupados** (nem em `calendar_busy_slots`, nem em `_check_conflict`)
 
 ---
 
@@ -267,7 +273,7 @@ Eventos importados via `POST /api/appointments/google-sync` têm `source='google
 
 **Ao criar** (`POST /api/leads/{id}/appointments` ou via `routes/appointments.py`), o backend:
 
-1. Valida que não há conflito de horário **para o profissional inteiro** (`_check_conflict`) — não apenas para o mesmo lead. Existem duas implementações paralelas e independentes (uma em cada arquivo, mesma regra): `routes/leads.py::_check_conflict` (usa `current_user.id` diretamente — endpoint já autenticado) e `routes/appointments.py::_check_conflict` (resolve o `user_id` via `_resolve_owner_user_id()`, a partir do `lead_id` ou do `user_id` próprio em appointments importados do Google sem lead). Ambas bloqueiam com `409` se outro appointment do mesmo `user_id` (qualquer lead, ou evento Google) sobrepuser o intervalo — esta é a defesa real contra conflito, pois roda dentro da transacção SQLite no momento exacto do INSERT/UPDATE.
+1. Valida que não há conflito de horário **para o profissional inteiro** (`_check_conflict`) — não apenas para o mesmo lead. Existem duas implementações paralelas e independentes (uma em cada arquivo, mesma regra): `routes/leads.py::_check_conflict` (usa `current_user.id` diretamente — endpoint já autenticado) e `routes/appointments.py::_check_conflict` (resolve o `user_id` via `_resolve_owner_user_id()`, a partir do `lead_id` ou do `user_id` próprio em appointments importados do Google sem lead). Ambas bloqueiam com `409` se outro appointment do mesmo `user_id` (qualquer lead, ou evento Google marcado como Ocupado) sobrepuser o intervalo — esta é a defesa real contra conflito, pois roda dentro da transacção SQLite no momento exacto do INSERT/UPDATE.
 2. Agenda jobs de lembrete (`whatsapp.appointment.reminder`, `jobs_service.schedule_appointment_reminder_jobs()`) com offsets configuráveis por `appointment_reminder_offsets` do AI Profile (default por `template_key`) — cada job recebe um `reminder_kind` (`"early"`/`"final"`, ver secção dedicada abaixo)
 3. Agenda job de briefing (`whatsapp.appointment.briefing`, `briefing_service.schedule_briefing_job_for_appointment()`) se `briefing_enabled` não for `False`
 4. Faz push para Google Calendar se o utilizador tiver tokens OAuth2 válidos (`google_calendar_service.push_event`)
@@ -317,7 +323,9 @@ checa conflito com outros leads do mesmo profissional.
 backend-crm (orchestrator.py)
   enrich_context_bundle() carrega calendar_busy_slots — compromissos reais do
   profissional (próximos 30 dias, status='pending', inclui CRM + importados
-  do Google) — quando ai_profile.agent_mode == "agenda"
+  do Google marcados como Ocupado) — quando ai_profile.agent_mode == "agenda".
+  Antes de ler, sincroniza o Google da janela (no máx. 1x / 3 min por utilizador,
+  timeout 5 s, falha nunca bloqueia) — ver abaixo
         ↓ (mesmo ContextBundle — paridade automática Playground + WhatsApp real)
 backend-executors (decision_engine.py)
   _build_child_prompt_agendamento injeta bloco "HORÁRIOS JÁ OCUPADOS"
@@ -347,9 +355,89 @@ backend-crm (routes/appointments.py + routes/leads.py)
   _check_conflict (ver secção acima) é a barreira final — roda na transacção
   do INSERT, cobre também a criação manual via UI e fecha a race condition
   entre o fetch do ContextBundle e a criação do appointment.
+        ↓
+backend-executors — resposta do CRM ao criar
+  409 → handle_meeting_scheduled() trata como conflito (log
+  meeting_create_conflict, reason="conflict_on_create"): mesma mensagem de
+  correcção, bot NÃO desabilitado, sem evento "created".
+  Outra falha → a exceção sobe; o runner (whatsapp.py) regista
+  meeting_persist_failure e reagenda o job (retryable) sem enviar nada —
+  o worker nunca termina por isto e o lead nunca recebe "está marcado" sem
+  marcação gravada. No Playground essa falha continua a dar 502.
 ```
 
-**Função:** `_load_calendar_busy_slots(user_id, window_days=30)` em `backend-crm/services/ai_orchestrator/orchestrator.py` — mesma cláusula de scoping de `routes/appointments.py::list_appointments`.
+**Função:** `_load_calendar_busy_slots(user_id, window_days=30)` em `backend-crm/services/ai_orchestrator/orchestrator.py` — mesma cláusula de scoping de `routes/appointments.py::list_appointments`, excluindo `google_transparency='transparent'`.
+
+**Sync do Google antes dos ocupados:** `_sync_google_for_busy_slots` chama
+`google_calendar_sync.sync_user_google_events(user_id, now, now+30d, timeout=5)` — um evento
+criado só no Google conta como ocupado sem ninguém clicar "Sincronizar Google". Cache em memória
+por processo (`_google_sync_last_attempt`, TTL `_GOOGLE_SYNC_TTL_SECONDS = 180`) que conta também
+tentativas falhadas e utilizadores sem Google ligado. Qualquer erro (Google, rede, BD) só gera
+log `busy_slots_google_sync_failed`/`_error` — o agente segue com o que já está na tabela. Como
+corre dentro de `enrich_context_bundle`, vale igual para Playground e WhatsApp real.
+
+### Intervalo entre sessões (`session_buffer_minutes`)
+
+Campo do AI profile (padrão `0` = sem intervalo, uma margem por conta, card "Intervalo entre
+sessões" em `CamadaApresentacao.tsx`). Garante N min livres entre quaisquer duas marcações.
+
+**Onde é aplicado — um só ponto:** `enrich_context_bundle` (B5) passa os ocupados por
+`_apply_session_buffer`, que alarga cada um em N antes e N depois (15–16h com margem 15 →
+14h45–16h15; o intervalo é semiaberto, por isso 16h15 e uma sessão que acabe às 14h45 cabem).
+Todas as verificações de agenda do executor leem `calendar_busy_slots` — marcação nova
+(`handle_meeting_scheduled`), horário pedido e alternativa (`requested_slot`,
+`professional_hours.nearest_free_start`), remarcação e o bloco "HORÁRIOS JÁ OCUPADOS" — e por
+isso respeitam a margem sem código próprio. Vale para eventos do Google (`lead_id` nulo).
+Valor inválido = 0; máximo `_SESSION_BUFFER_MAX_MINUTES = 240`.
+
+**Os ocupados do próprio lead não são alargados:** já ficam fora dos conflitos
+(`exclude_lead_id`) e são lidos para a duração original na remarcação
+(`_original_duration_minutes`), para o compromisso atual e para o bloco "REUNIÃO/SESSÃO JÁ
+CONFIRMADA" — alargá-los tornaria a sessão remarcada mais longa.
+
+**Fora de propósito:** `_check_conflict` (gravação no CRM) só trava sobreposição real — o dono
+pode marcar à mão colado; `professional_hours` (abertura/fecho do dia) não usa a margem.
+
+## Turno da confirmação — grava-se o horário que o lead aceitou
+
+Quando a Mãe dá `meeting_scheduled=true` e o lead já estava na fase (não é entrada — gate M3),
+o horário a gravar é decidido pelo código, não pela Filha sozinha
+(`backend-executors/app/services/meeting_proposal.py`):
+
+```
+history + mensagem atual
+  → last_proposal(): último horário em cima da mesa — as opções (dia + hora + profissional)
+    da mensagem mais recente do agente que tenha horas, ou a hora que o próprio lead disse.
+    Ignora horas em frases negativas ("às 9h está fora…") e intervalos de atendimento
+    ("das 11h às 17h", "até às 19h30"); dd/mm com dia da semana colado que não bate vale
+    pelo dia da semana.
+  → accepted_slot(): single_option | matched_option (lead nomeia hora/dia/profissional de uma)
+    | ambiguous (várias, nenhuma escolhida) | lead_stated (hora nova — não é aceitação) | none
+  → prompt: _build_meeting_already_booked_block(accepted) diz à Filha o horário aceite e o
+    candidato a devolver; ambíguo → manda perguntar qual
+  → duração por saber? missing_duration(): a tabela de serviços (service_pricing_table, já
+    renderizada pelo CRM como "— 60min") tem mais de uma duração e nem o lead nem a proposta
+    aceite a disseram → o bloco passa a "FALTA SABER O SERVIÇO E A DURAÇÃO" (perguntar,
+    candidato null)
+  → depois da resposta: _apply_meeting_confirmation_guard (decision_engine.py, logo após o
+    trace ganhar is_phase_entry, antes do meeting_scheduler)
+      duração por saber → sem candidato, meeting_scheduled=false
+        (meeting_scheduled_blocked="missing_duration"); se a Filha confirmou mesmo assim, texto
+        = "Para fechar a marcação de X: que serviço e que duração prefere (60 ou 90 min)?"
+      aceite único ≠ candidato (ou candidato em falta) → candidato = aceite; dia, hora e
+        profissional errados no texto são reescritos   (event=meeting_confirmation_corrected)
+      ambíguo e candidato fora das opções → sem candidato, meeting_scheduled=false, texto =
+        "Só para confirmar: prefere X ou Y?"            (event=meeting_confirmation_blocked,
+                                                          meeting_scheduled_blocked="ambiguous_options")
+      lead_stated / none → sem alteração
+    rasto em decision_trace.meeting_confirmation_guard
+```
+
+Vale nas três rotas onde a confirmação cai: apresentação, agendamento e **pré-agendamento**
+(num agente de agendamento, "closing" da Mãe volta à categoria atual —
+`_enforce_scheduling_agent_no_closing`). No pré-agendamento o bloco e os campos
+`meeting_datetime_candidate` / `meeting_day_reference` / `meeting_duration_minutes` só entram
+quando há horário proposto; sem isso o prompt fica igual (fluxo de check-in).
 
 ### Horários de atendimento do profissional (`professional_availability`)
 
@@ -560,6 +648,14 @@ Quando o lead pede para cancelar ou remarcar uma reunião já confirmada (`bot_d
 
 Ambas as chamadas passam por `routes/appointments.py` (não pelas rotas de `routes/leads.py`), aplicando automaticamente a limpeza/recriação de jobs e a sincronização com o Google Calendar descritas na secção anterior.
 
-**Conflito de horário no reagendamento:** se o novo horário colidir com outro appointment do mesmo profissional (`409` de `_check_conflict`), o appointment original **não é alterado** — a função devolve uma mensagem de correcção (mesmo padrão de `_generate_conflict_message()`/`MEETING_CONFLICT_MESSAGE` usado em `handle_meeting_scheduled()`) para o caller enviar ao lead.
+**Conferência antes de remarcar (`_apply_meeting_reschedule_guard`, `decision_engine.py`):** corre em `_decide_post_meeting_management` depois de `_apply_meeting_date_guard`, em três passos:
+
+1. **Opção aceite** (`_reschedule_fact`): lê a última proposta do agente (`meeting_proposal.last_proposal` + `accepted_slot` — ver "Turno da confirmação"), sem a opção igual à sessão já marcada ("a sua sessão de terça às 14h mantém-se" não é uma proposta; com ela, um "Pode ser" ficava ambíguo). Se o lead aceitou uma opção ("pode ser", "pode ser às 16h") e o candidato da Filha é outro, o candidato passa a ser a opção aceite e o dia/hora/terapeuta errados no texto são reescritos (`reconcile_confirmation`). Caso real: a Lara propôs quinta às 16h, o lead respondeu "Pode ser às 16h" e a Filha juntou as 16h ao dia da sessão antiga (terça).
+2. **Origem** (`meeting_proposal.reschedule_origin`): `accepted` (a opção aceite) → `lead_stated` (a hora que o lead escreveu nesta mensagem) → senão `counter_proposal` (um horário que só o agente pôs na mesa).
+3. **Disponibilidade:** livre em `calendar_busy_slots` (excluindo o próprio lead) e dentro do horário do profissional (`professional_hours.check`, com a duração do appointment original; sem tabela de horários, só a agenda conta).
+
+Contraproposta, ocupado ou fora do horário → `meeting_reschedule_requested` passa a `false` e o appointment não é tocado: uma contraproposta do agente só é gravada no turno em que o lead a aceita. O texto da Filha segue como está, exceto quando anuncia a remarcação como feita (`meeting_proposal.announces_reschedule`): aí passa a ser "Posso remarcar a sua sessão para <X>? Até confirmar, a sessão de <original> mantém-se." (contraproposta que cabe) ou "Peço desculpa, esse horário já não está disponível. A sua sessão de <original> mantém-se. Que outro horário prefere?" (ocupado/fora do horário). Remarcação que segue com um texto que não a dá como feita (ex.: "Posso confirmar?") → "Combinado! A sua sessão fica remarcada para <dia, dd/mm, às Hh com X>." Rasto: `decision_trace.meeting_reschedule_guard` (`candidate`, `corrected_to`, `origin`, `blocked`, `text_changed`); logs `event=meeting_reschedule_blocked` / `event=meeting_reschedule_corrected`.
+
+**Conflito de horário no reagendamento (409 no CRM — corrida):** o appointment original **não é alterado** e a resposta da Filha (que dava a remarcação como feita) é **substituída** em `decision.message_text` pela mesma frase "esse horário já não está disponível; a sua sessão de <original> mantém-se". A função devolve `None` — o caller não envia uma segunda mensagem (ao contrário de `handle_meeting_scheduled()`, que devolve a mensagem de conflito para ser enviada à parte).
 
 **Sem sinal de cancelamento/reagendamento:** `handle_meeting_cancel_or_reschedule()` é no-op — não faz nenhuma chamada.
