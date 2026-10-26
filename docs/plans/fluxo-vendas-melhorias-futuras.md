@@ -256,3 +256,31 @@ divergente.
 divergência (Mãe retorna `route_to` "atrasado" mas `perceived_category` "adiantado"),
 e decidir se os guardrails devem também corrigir `perceived_category` quando mutam
 `route_to`.
+
+## M14 — Outras Filhas colam o bloco do Fluxo de Venda no fim do prompt
+
+**Prioridade: BAIXA**
+
+Origem: "Ajustes possíveis" da graduação de `feat-temperatura-respostas-ia.md`. Na Recepção, a
+orientação da Fase 0 era ignorada porque o bloco entrava depois do formato JSON; foi movido
+para o meio do prompt. As Filhas de qualificação, apresentação, follow-up e fechamento ainda
+colam `_build_sales_flow_phases_block(...)` no fim. Os prompts delas não proíbem perguntas como
+o da Recepção proibia, por isso não há defeito confirmado.
+
+**O que fazer:** só agir se aparecer uma orientação de outra fase a ser ignorada em teste real;
+aí aplicar o mesmo padrão da Recepção (bloco no meio, com prioridade explícita).
+
+## M15 — Regra de tom "sempre feche com UMA pergunta" contra orientações literais
+
+**Prioridade: MÉDIA**
+
+Origem: testes da Lara (Sensi Vitae) em 26/10/2026, na graduação de
+`feat-temperatura-respostas-ia.md`. `_build_tone_block()` manda "Encerramento: sempre feche com
+UMA pergunta ou UM próximo passo claro", igual para todos os agentes. Com uma orientação "seguir
+à risca" que pede só uma frase de apresentação, o gpt-4o-mini acrescentava "Como posso ajudar?"
+em 5 de 5. Só deixou de o fazer quando o próprio texto da orientação disse "termina em ponto
+final". Noutras respostas, duas perguntas seguidas ("Qual prefere? Posso enviar a tabela?").
+
+**O que fazer:** quando há orientação estrita ativa no turno (`strict_active`), trocar a regra
+de encerramento do bloco de tom por "termine como a instrução do dono pede". Medir antes e
+depois no banco de ensaio da Lara.
