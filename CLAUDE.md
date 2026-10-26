@@ -272,6 +272,8 @@ Configuração via `.env` e `.env.agent1` / `.env.agent2`.
 
 Contexto: o painel admin em `frontend-admin/src/pages/AdminAgents.tsx` consome `GET /admin/agents/overview` e `GET /admin/agents/users/{id}` do backend-crm (montados sem o prefixo `/api/`). O contrato de campos está documentado em `docs/architecture/admin-agents-contract.md`.
 
+**Regra obrigatória — os 3 agentes:** ao mudar a página Tipos de Agentes (`frontend-crm/src/pages/TiposAgentes.tsx`), os presets (`AGENT_PRESETS` em `frontend-crm/src/types/agente.ts`) ou o comportamento de um agente, atualizar o doc dele em `docs/architecture/agentes/` e rever as skills `.claude/skills/agente-0X-*`.
+
 ---
 
 ## Documentação de Arquitetura
@@ -285,6 +287,7 @@ Os arquivos abaixo descrevem a estrutura **atual** de cada área do sistema. Ler
 | [`docs/architecture/followup.md`](docs/architecture/followup.md) | Arquitetura de follow-up: estados, reconciliador, jobs, modal |
 | [`docs/architecture/llm-architecture.md`](docs/architecture/llm-architecture.md) | LLMs Mãe e Filhas, contratos, fluxo de decisão |
 | [`docs/architecture/agents.md`](docs/architecture/agents.md) | Agentes locais e AI Profiles: campos, endpoints, ciclo de vida |
+| [`docs/architecture/agentes/`](docs/architecture/agentes/) | Os 3 agentes da página Tipos de Agentes (01 SDR de Alto Ticket, 02 Vendedor Autônomo, 03 Assistente Comercial): preset, etapas da página ↔ sistema, prometido vs. código. Diagnóstico do agente de um cliente: skill `diagnosticar-agente` ([guia](docs/ops/diagnostico-agentes.md)) |
 | [`docs/architecture/webhooks.md`](docs/architecture/webhooks.md) | Webhook inbound WhatsApp: filtros, fluxo, grupos ignorados |
 | [`docs/architecture/playground-parity.md`](docs/architecture/playground-parity.md) | Paridade Playground ↔ WhatsApp real (ContextBundle) |
 | [`docs/architecture/admin-agents-contract.md`](docs/architecture/admin-agents-contract.md) | Contrato AdminAgents frontend ↔ backend |

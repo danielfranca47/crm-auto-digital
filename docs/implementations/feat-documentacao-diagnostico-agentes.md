@@ -213,9 +213,14 @@ só critérios e cenários) e descrições das 4 skills encurtadas.
 - [ ] As 3 skills de terceiros já não aparecem na lista
 
 ### Cenário P4 — Docs dos agentes
-- [ ] `git grep` sem "campos mínimos" e sem "consultivo" fora de contexto
-- [ ] Amostra de 5 afirmações por doc conferida no código
-- [ ] Sem referências aos caminhos antigos
+- [x] `git grep` sem "campos mínimos" e sem "consultivo" fora de contexto
+- [x] Amostra de 5 afirmações por doc conferida no código
+- [x] Sem referências aos caminhos antigos
+- **Validado em:** 26/10/2026 — "consultivo" só aparece como normalização do Agente 01; conferidos no código:
+  `_compute_system_agent_mode`, `_apply_mode_guardrails`, `apply_closing_bot_disable_side_effect`, arranque do
+  carrinho em `routes/executor.py`, gateways em `webhooks._normalize_payment_payload`, lembretes por template,
+  variantes de follow-up, `_build_child_prompt_closing`, `professional_hours.py`, modal de follow-up; links
+  relativos todos válidos
 
 ### Cenário P5 — Diagnóstico encaminha para os docs
 - [ ] Conversa nova com "o agente da conta X não atende como nestas conversas…" aciona
@@ -243,6 +248,33 @@ Hash da Fase 4: `96e9dd1`.
 - `README.md` da pasta: índice dos 3 docs e tabela de diferenças conferida no código (substitui a tabela
   "Diferenças-chave" do doc antigo, que tinha campos fixos por modo)
 
+Hash da Fase 5: `dface8e`.
+
+### Commits Fase 6
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(este commit)_ | guia do time, CLAUDE.md, skills ligadas aos docs |
+
+**Detalhes:**
+- `docs/ops/diagnostico-agentes.md` (novo) — guia não técnico + secção "Porquê está assim"; linha em `docs/ops/README.md`
+- `CLAUDE.md` — linha `docs/architecture/agentes/` na tabela de arquitetura (com o apontador para a skill e o guia)
+  e "Regra obrigatória — os 3 agentes" (manutenção dos docs e skills quando a página, os presets ou o
+  comportamento mudam)
+- skills `agente-01/02/03` — só critérios e cenários; os factos passam a ser apontador para
+  `docs/architecture/agentes/`; descrições encurtadas; corrigido o erro da Filha de closing do Agente 02
+- `diagnosticar-agente` — descrição encurtada; mapa e passo 3 apontam para os docs; `classificar-processo.md`
+  aponta para `docs/architecture/agentes/README.md`
+- links relativos verificados: 85 nas skills/docs tocados, todos válidos exceto um que já existia no `CLAUDE.md`
+  (`backend-crm/docs/playground-whatsapp-parity.md`)
+
+### Relatório da Fase 6 — o que mudou na prática
+
+**Antes:** não havia guia para o time, e cada skill tinha cópias de factos do sistema que iam desatualizar.
+**Agora:** o time tem um guia simples em `docs/ops/diagnostico-agentes.md`; o CLAUDE.md aponta para os docs dos
+agentes e obriga a mantê-los; as skills ficam só com o que é delas e apontam para os docs.
+**Para validar:** P3, P5 (numa conversa nova), P6.
+
 ### Relatório da Fase 5 — o que mudou na prática
 
 **Antes:** o guia do Agente 03 era o maior (529 linhas), com campos e cadências que já mudaram.
@@ -269,6 +301,8 @@ que o sistema não tem.
   placeholder" (`decision_engine.py`); relacionado com `docs/plans/motor-llm-otimizacoes.md` M5.
 - **Modo do Agente 01 lido de duas formas** — executor passa `sdr_scheduler` a `consultivo` com
   `human_in_loop`/`requires_handoff`; o orquestrador do CRM não.
+- **Link partido no CLAUDE.md** — `backend-crm/docs/playground-whatsapp-parity.md` não existe (o conteúdo está
+  em `docs/architecture/playground-parity.md`); apanhado pela verificação de links desta implementação.
 - **Promessas da página sem código** (Calendly, PagSeguro, multicanal, upsell, NPS, renovação de pacote) —
   decidir se a página muda ou se viram itens de produto (candidato a `docs/discovery/`).
 

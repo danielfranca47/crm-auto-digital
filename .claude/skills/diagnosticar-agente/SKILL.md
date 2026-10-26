@@ -1,6 +1,6 @@
 ---
 name: diagnosticar-agente
-description: Porta de entrada para diagnosticar e afinar o agente de IA de WhatsApp de QUALQUER conta de cliente (qualquer empresa, nicho ou tipo de venda) a partir de conversas reais de referência. Lê as conversas (CRM ou WhatsApp Web), extrai o comportamento esperado, identifica qual dos 3 agentes da página Tipos de Agentes (/agentes-info) corresponde ao processo do cliente — Agente 01 SDR de Alto Ticket, Agente 02 Vendedor Autônomo, Agente 03 Assistente Comercial — e se o lead é inbound ou outbound, compara com o agente configurado e passa o trabalho à skill desse agente (agente-01-sdr-alto-ticket, agente-02-vendedor-autonomo, agente-03-assistente-comercial). Monta uma bancada isolada com cliente simulado por IA, mede cada versão de configuração, testa no Playground de produção e encaminha o que é código para docs/plans e docs/implementations. Use sempre que o utilizador disser que o agente de uma conta "não atende como devia" ou "não performa como na conversa X", pedir para "configurar/afinar o agente do cliente Y com base nestas conversas", der números de telefone de conversas de referência, ou pedir para retomar uma bancada em .claude/agentes/<cliente>/.
+description: Diagnóstico do agente de IA de uma conta de cliente a partir de conversas reais de referência — identifica o tipo de agente (01/02/03 da página Tipos de Agentes), testa numa bancada com cliente simulado, afina a configuração e encaminha o que é código. Usar quando o agente de uma conta "não atende como devia" ou como numa conversa de referência, para configurar o agente de um cliente a partir de conversas (números de telefone), ou para retomar uma bancada em .claude/agentes/<cliente>/.
 ---
 
 # Diagnosticar um agente a partir de conversas reais (skill primária)
@@ -38,7 +38,8 @@ guardrails) fica nos ficheiros da bancada e nos `.md` de plans e implementations
 | [references/triagem.md](references/triagem.md) | classificar cada falha: configuração, código, modelo, dados ou negócio |
 | [references/entregas.md](references/entregas.md) | plans e implementations, quadro de sobreposição, prompts, relatório, retomada |
 | `scripts/` | `preparar_bancada.py`, `simular.py`, `prod_turno.py`, `aplicar_producao.sh`, `wa_extract.js` |
-| skills `agente-01-sdr-alto-ticket`, `agente-02-vendedor-autonomo`, `agente-03-assistente-comercial` | etapas da página → sistema → critérios; cenários; campos; prometido na página vs. código; limites medidos |
+| skills `agente-01-sdr-alto-ticket`, `agente-02-vendedor-autonomo`, `agente-03-assistente-comercial` | critérios de sucesso e cenários de teste de cada agente |
+| [`docs/architecture/agentes/`](../../../docs/architecture/agentes/) | factos do sistema por agente: preset, etapas da página ↔ código, prometido vs. código, limites medidos |
 
 Os scripts são genéricos: tudo o que é próprio de uma conta vive em
 `.claude/agentes/<slug>/bancada.json`.
@@ -100,9 +101,9 @@ Segue [references/classificar-processo.md](references/classificar-processo.md):
    pergunta se muda o agente antes de afinar o resto. Afinar instruções em cima do agente errado é
    trabalho perdido.
 4. **Invoca a skill do agente** (Skill tool): `agente-01-sdr-alto-ticket`,
-   `agente-02-vendedor-autonomo` ou `agente-03-assistente-comercial`. Ela traz as etapas da página
-   ligadas ao que o sistema faz em cada uma, os critérios, os cenários inbound e outbound, os campos e
-   a tabela "prometido na página vs. código". Junta os critérios dela aos da fase 2.
+   `agente-02-vendedor-autonomo` ou `agente-03-assistente-comercial`. Ela traz os critérios e os
+   cenários inbound e outbound, e aponta para o doc do agente em `docs/architecture/agentes/` (etapas
+   da página ↔ sistema, "prometido vs. código"). Junta os critérios dela aos da fase 2.
 5. Se as conversas misturam processos, segue a skill do agente dominante e usa da outra só os cenários
    que se aplicam.
 6. **Análise do sistema em paralelo:** cada etapa da página que o código não cumpre (marcada ❌ ou ❓

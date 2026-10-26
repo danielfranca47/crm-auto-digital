@@ -4,7 +4,9 @@ Fonte de verdade dos nomes e das etapas: a página **Tipos de Agentes**
 (`https://crmapp.danielfranca.pt/agentes-info`, código em `frontend-crm/src/pages/TiposAgentes.tsx`).
 Os presets que ligam cada agente à configuração estão em `AGENT_PRESETS`
 (`frontend-crm/src/types/agente.ts`). Usa sempre estes nomes ao falar com o utilizador e nos documentos.
-Se a página mudar, relê-a e atualiza esta tabela e as skills dos agentes.
+O que o sistema faz em cada agente (fases, fecho, lembretes, follow-up) está em
+[`docs/architecture/agentes/README.md`](../../../../docs/architecture/agentes/README.md); aqui ficam só os
+critérios para classificar. Se a página mudar, relê-a e atualiza esta referência.
 
 ## Os 3 agentes
 
