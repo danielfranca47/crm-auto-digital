@@ -369,3 +369,41 @@ instruções.
 fixa: nome, serviço, duração, profissional); o bloco e a conferência passam a pedir o que faltar.
 Mexe na estrutura da BD (backend-core), nos ecrãs do agente e em
 `docs/architecture/admin-agents-contract.md` — sobe ao utilizador.
+
+---
+
+## M14 — "Pode ser" com duas opções em aberto grava a que a IA escolher
+
+**Prioridade: ALTA**
+
+**Contexto:** visto na bancada Sensi Vitae durante `fix-remarcacao-grava-contraproposta.md`
+(graduado em 26/10/2026), cenário `p-aceita-2a`. A Lara ofereceu "quinta às 16h ou sexta às 11h", o
+cliente respondeu "Pode ser sim, marca aí!", e ficou gravada quinta às 16h. A Lara ainda perguntou
+"Posso confirmar?".
+
+**Estado actual:** `meeting_proposal.reconcile_confirmation`, com a aceitação `ambiguous`, deixa
+passar o candidato da Filha quando ele é uma das opções (`action: ok`). Só bloqueia e pergunta "qual
+prefere?" quando o candidato não é nenhuma delas. O cliente pode aparecer à hora errada.
+
+**O que construir:** com aceitação `ambiguous`, não gravar nunca e perguntar qual opção, mesmo que o
+candidato seja uma delas (o bloco "O LEAD CONFIRMOU, MAS HÁ MAIS DE UMA OPÇÃO EM ABERTO" já pede
+isto à Filha). Confirmar antes que as opções lidas são mesmo alternativas, e não, por exemplo, a
+sessão antiga repetida no texto.
+
+---
+
+## M15 — Conflito no último segundo numa marcação nova manda duas mensagens
+
+**Prioridade: MÉDIA**
+
+**Contexto:** deixado de fora de `fix-remarcacao-grava-contraproposta.md` (graduado em 26/10/2026),
+que resolveu o mesmo problema na remarcação.
+
+**Estado actual:** quando o CRM recusa a criação com 409 (horário ocupado entre a leitura da agenda e
+a gravação), `meeting_scheduler.handle_meeting_scheduled` devolve a mensagem de conflito e o runner
+(e o Playground) envia-a **além** da resposta da Filha, que já dava a marcação como feita. O cliente
+recebe "Experiência Agendada" e logo a seguir "o horário ficou indisponível".
+
+**O que construir:** como em `handle_meeting_cancel_or_reschedule`, substituir `decision.message_text`
+pela mensagem de conflito e devolver `None` — ver `docs/architecture/agenda.md`, "Conflito de horário
+no reagendamento".
