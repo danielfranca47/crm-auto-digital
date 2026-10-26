@@ -79,3 +79,50 @@ def test_pure_greeting_has_no_requeue_action(monkeypatch):
 
     assert trace.get("effective_route_to") == "recepcao"
     assert not (decision.system_actions or [])
+
+
+def _decide_with_child(monkeypatch, child_json: str, message_text: str):
+    monkeypatch.setattr(
+        decision_engine.llm_service,
+        "generate_mother_route",
+        lambda _prompt, **_kwargs: (
+            '{"route_to":"recepcao","perceived_category":null,"confidence":0.9,'
+            '"reason":"saudação composta"}'
+        ),
+    )
+    monkeypatch.setattr(
+        decision_engine.llm_service, "generate_child_result", lambda _route, _prompt, **_kwargs: child_json
+    )
+    return decision_engine.decide(_context(message_text))
+
+
+def test_lead_already_answered_drops_trailing_owner_question(monkeypatch):
+    """Lead já escolheu a opção da pergunta da Fase 0: o código tira a pergunta final que o
+    modelo repetiu, e o pedido continua a ser reenfileirado."""
+    decision = _decide_with_child(
+        monkeypatch,
+        '{"lead_already_answered":"Val","message_text":"Olá! Sou a Lara, atendente do Sensi Vitae. '
+        'Qual terapeuta você tem interesse, a Val ou o Daniel?","confidence":0.95,'
+        '"pending_commercial_text":"gostaria de saber mais sobre as massagens da val"}',
+        "ola, gostaria de saber mais sobre as massagens da val",
+    )
+    assert decision.message_text == "Olá! Sou a Lara, atendente do Sensi Vitae."
+    assert decision.system_actions == [
+        {"type": "requeue_pending_message", "message_text": "gostaria de saber mais sobre as massagens da val"}
+    ]
+
+
+def test_without_lead_already_answered_question_is_kept(monkeypatch):
+    decision = _decide_with_child(
+        monkeypatch,
+        '{"lead_already_answered":null,"message_text":"Olá! Sou a Lara. Val ou Daniel?","confidence":0.95,'
+        '"pending_commercial_text":null}',
+        "olá",
+    )
+    assert decision.message_text == "Olá! Sou a Lara. Val ou Daniel?"
+
+
+def test_drop_trailing_question_keeps_text_when_only_question():
+    assert decision_engine._drop_trailing_question("Val ou Daniel?") == "Val ou Daniel?"
+    assert decision_engine._drop_trailing_question("Olá! Sou a Ana.\nRita ou Paulo?") == "Olá! Sou a Ana."
+    assert decision_engine._drop_trailing_question("Olá! Sou a Ana.") == "Olá! Sou a Ana."

@@ -57,6 +57,28 @@ def test_strict_orientation_keeps_literal_label_inside_owner_block():
     assert owner_at < prompt.index("SEGUIR À RISCA") < prompt.index("Retorne SOMENTE JSON válido")
 
 
+def test_orientation_block_shows_question_already_answered_example():
+    prompt = _build_child_prompt_recepcao(
+        _context(_p0_blocks()), "ola, gostaria de saber mais sobre as massagens da val", _mother(), is_phase_entry=True
+    )
+    owner_at = prompt.index("INSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO")
+    answered_at = prompt.index("Quando a mensagem do lead já responde à pergunta da instrução")
+    assert owner_at < answered_at < prompt.index("Retorne SOMENTE JSON válido")
+    assert '❌ message_text: "Olá! Sou a Ana. Qual profissional você prefere, Rita ou Paulo?"' in prompt
+    assert '"lead_already_answered":' in prompt
+
+
+def test_without_orientation_no_question_already_answered_example():
+    prompt = _build_child_prompt_recepcao(_context([]), "olá", _mother(), is_phase_entry=True)
+    assert "Quando a mensagem do lead já responde à pergunta da instrução" not in prompt
+    assert "lead_already_answered" not in prompt
+
+
+def test_strict_orientation_allows_skipping_question_already_answered():
+    prompt = _build_child_prompt_recepcao(_context(_p0_blocks(strict=True)), "olá", _mother(), is_phase_entry=True)
+    assert "a menos que a mensagem do lead já a responda: aí omita a pergunta" in prompt
+
+
 def test_orientation_not_fired_outside_phase_entry_keeps_default_prompt():
     prompt = _build_child_prompt_recepcao(_context(_p0_blocks()), "olá", _mother(), is_phase_entry=False)
     assert "INSTRUÇÕES DO DONO DO NEGÓCIO" not in prompt

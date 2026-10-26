@@ -89,3 +89,7 @@ class ChildResult(BaseModel):
     # para reenfileiramento como novo job inbound — ver "Saudação composta" em
     # docs/architecture/llm-architecture.md.
     pending_commercial_text: Optional[str] = None
+    # Também só da Recepção, quando há instruções da Fase 0: a opção que o lead já escolheu
+    # na própria mensagem (ex.: "Val" para "Val ou Daniel?"). Com valor, o código tira a
+    # pergunta final da resposta — o modelo identifica a escolha mas tende a perguntar mesmo assim.
+    lead_already_answered: Optional[str] = None

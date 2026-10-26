@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import unicodedata
 from datetime import datetime, timedelta, timezone as _dt_timezone
 from difflib import SequenceMatcher
@@ -1017,11 +1018,25 @@ def _strict_orientation_injection(label: str, content: str) -> str:
         "Escreva a resposta só com o que esta instrução pede, usando as palavras dela o mais "
         "de perto possível. O dono do negócio escreveu este texto do jeito que quer que o lead "
         "o leia: cumprimentos, elogios ou dados (horários, preços, serviços) que não estão aqui "
-        "mudam a mensagem dele. Se a instrução pede uma pergunta, termine nessa pergunta.\n"
+        "mudam a mensagem dele. Se a instrução pede uma pergunta, termine nessa pergunta — a "
+        "menos que a mensagem do lead já a responda: aí omita a pergunta, porque perguntar de "
+        "novo o que o lead acabou de dizer soa como se ninguém tivesse lido a mensagem dele.\n"
         "Exemplo — instrução \"Pergunte se prefere de manhã ou à tarde\":\n"
         "✅ \"Prefere de manhã ou à tarde?\"\n"
-        "❌ \"Que bom falar com você! Temos ótimos horários disponíveis. Prefere de manhã ou à tarde?\""
+        "❌ \"Que bom falar com você! Temos ótimos horários disponíveis. Prefere de manhã ou à tarde?\"\n"
+        "✅ (lead escreveu \"queria marcar de manhã\") a resposta segue sem essa pergunta"
     )
+
+
+_TRAILING_QUESTION_RE = re.compile(r"\s*[^.!?\n]*\?\s*$")
+
+
+def _drop_trailing_question(text: str) -> str:
+    """Remove a frase final terminada em "?". Usada na Recepção quando o lead já respondeu à
+    pergunta das instruções da Fase 0 (`lead_already_answered`): o modelo identifica a
+    escolha mas costuma repetir a pergunta. Se sobrar só a pergunta, devolve o texto original."""
+    stripped = _TRAILING_QUESTION_RE.sub("", text or "").rstrip()
+    return stripped or text
 
 
 def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
@@ -2760,6 +2775,19 @@ def _build_child_prompt_recepcao(
             "Exemplo — instrução \"Apresente-se como Ana e pergunte se é a primeira visita\":\n"
             "✅ \"Olá! Sou a Ana. É a sua primeira visita?\"\n"
             "❌ \"Olá! Seja bem-vindo(a)! Como posso ajudar?\" (ignorou a instrução do dono)\n"
+            "Quando a mensagem do lead já responde à pergunta da instrução, cumpra o resto da\n"
+            "instrução, registre a opção que ele escolheu em lead_already_answered e deixe a\n"
+            "pergunta de fora — o lead já disse, e ouvir a mesma pergunta de volta parece que\n"
+            "ninguém leu. O pedido dele segue em pending_commercial_text.\n"
+            "Exemplo — instrução \"Apresente-se como Ana e pergunte qual profissional: Rita ou Paulo\",\n"
+            "mensagem \"oi, queria saber das sessões da Rita\":\n"
+            "✅ lead_already_answered: \"Rita\" | message_text: \"Olá! Sou a Ana.\" | pending_commercial_text: \"queria saber das sessões da Rita\"\n"
+            "❌ message_text: \"Olá! Sou a Ana. Qual profissional você prefere, Rita ou Paulo?\" (o lead já escolheu a Rita)\n"
+        )
+        _answered_field = (
+            "  \"lead_already_answered\": \"<se a pergunta das INSTRUÇÕES DO DONO oferece opções e a "
+            "mensagem do lead já cita uma delas, a opção citada (ex.: 'quero com a Rita' → 'Rita'); "
+            "senão null>\",\n"
         )
         _question_rule = (
             "- Só faz a pergunta que as instruções do dono pedirem; nenhuma outra\n"
@@ -2771,6 +2799,7 @@ def _build_child_prompt_recepcao(
         _owner_block = ""
         _question_rule = "- Não faz perguntas de qualificação neste turno."
         _message_text_shape = "<cumprimento caloroso — máximo 2-3 linhas>"
+        _answered_field = ""
 
     _recepcao_prompt = f"""{identity_block}
 {tone_block}FASE: recepção (saudação).
@@ -2829,7 +2858,7 @@ EXEMPLOS DE ERRO (❌) — NÃO FAÇA ISTO:
 
 Retorne SOMENTE JSON válido:
 {{
-  "message_text": "{_message_text_shape}",
+{_answered_field}  "message_text": "{_message_text_shape}",
   "should_ask": false,
   "question_text": "",
   "field": null,
@@ -5528,6 +5557,8 @@ def compose_decision_output(
     # tratar tudo no mesmo turno: o próximo ciclo do pipeline roda a Mãe de verdade, sem
     # overrides de rota. Ver "Saudação composta" em docs/architecture/llm-architecture.md.
     if effective_route_to == "recepcao":
+        if str(getattr(child_result, "lead_already_answered", None) or "").strip():
+            decision.message_text = _drop_trailing_question(decision.message_text)
         _pending_text = str(getattr(child_result, "pending_commercial_text", None) or "").strip()
         if _pending_text:
             _sys = list(decision.system_actions or [])

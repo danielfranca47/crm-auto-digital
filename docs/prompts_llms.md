@@ -878,8 +878,8 @@ Blocos que só aparecem no prompt quando certas condições são atendidas:
 | `few_shot_{phase}` (meta) | `generated_prompt_parts.few_shot_{phase}` preenchido | qualification, apresentation, followup |
 | `qualification_phrasing` (meta) | `generated_prompt_parts.qualification_phrasing[current_field]` | qualification |
 | `objection_rewrites` (meta) | `generated_prompt_parts.objection_rewrites` preenchido | apresentation, followup |
-| `INSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO` (Recepção) | há bloco do Fluxo de Venda da Fase 0 a injetar no turno — bloco no meio do prompt + item 4 em "O QUE VOCÊ FAZ" + regra de pergunta e modelo de `message_text` trocados | recepcao |
-| `INSTRUÇÃO [CRÍTICA] DE FLUXO DE VENDA — SEGUIR À RISCA` (`_strict_orientation_injection`) | bloco `orientacao` com `strict=true` disparou neste turno — rótulo literal + motivo + exemplo ✅/❌; também força `temperature=0.2` na chamada da Filha (ver `docs/architecture/sales-flow.md`) | recepcao, qualification, apresentation, followup, closing |
+| `INSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO` (Recepção) | há bloco do Fluxo de Venda da Fase 0 a injetar no turno — bloco no meio do prompt + item 4 em "O QUE VOCÊ FAZ" + regra de pergunta e modelo de `message_text` trocados + exemplo ✅/❌ de pergunta já respondida + campo `lead_already_answered` no JSON (com valor, o código tira a pergunta final) | recepcao |
+| `INSTRUÇÃO [CRÍTICA] DE FLUXO DE VENDA — SEGUIR À RISCA` (`_strict_orientation_injection`) | bloco `orientacao` com `strict=true` disparou neste turno — rótulo literal + motivo + exemplo ✅/❌; "termine nessa pergunta" tem a exceção de a mensagem do lead já a responder; também força `temperature=0.2` na chamada da Filha (ver `docs/architecture/sales-flow.md`) | recepcao, qualification, apresentation, followup, closing |
 | `outreach_scenarios` (meta) | `ai_profile.generated_prompt_parts.outreach_scenarios` | llm.py outreach |
 
 ---
