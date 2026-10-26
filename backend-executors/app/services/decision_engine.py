@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import unicodedata
 from datetime import datetime, timedelta, timezone as _dt_timezone
 from difflib import SequenceMatcher
@@ -366,6 +367,11 @@ _ROUTE_TO_PHASE_ID: Dict[str, str] = {
     "follow-up":        "p4",
     "closing":          "p5",
 }
+
+
+# Rotas cujo builder de prompt da Filha injeta os blocos do Fluxo de Venda
+# (_build_sales_flow_phases_block) — usado para saber se uma orientação estrita entrou no prompt.
+_SALES_FLOW_INJECTING_CHILD_ROUTES = {"recepcao", "qualification", "apresentation", "follow-up", "closing"}
 
 
 def _parse_json_id_set(raw: Any) -> set:
@@ -878,7 +884,13 @@ def _evaluate_sales_flow_phases(
                 if content:
                     priority = (block.get("priority") or "normal").strip().lower()
                     label = "INSTRUÇÃO CRÍTICA DE FLUXO DE VENDA" if priority == "critical" else "INSTRUÇÃO DE FLUXO DE VENDA"
-                    result["prompt_injections"].append(f"{label}:\n{content}")
+                    if block.get("strict"):
+                        # "Seguir à risca": rótulo literal + temperatura baixa na chamada da
+                        # Filha (decide() lê strict_active). Ver sales-flow.md, bloco orientacao.
+                        result["prompt_injections"].append(_strict_orientation_injection(label, content))
+                        result["strict_active"] = True
+                    else:
+                        result["prompt_injections"].append(f"{label}:\n{content}")
                     _oid = (block.get("id") or "").strip()
                     if _oid:
                         _injected_block_ids.add(_oid)
@@ -1008,6 +1020,38 @@ def _evaluate_sales_flow_phases(
         )
 
     return result
+
+
+def _strict_orientation_injection(label: str, content: str) -> str:
+    """Injeção de uma orientação marcada "seguir à risca" (`strict=True`).
+
+    Só no turno em que a orientação dispara — a reinjeção permanente de orientações
+    críticas (segunda passagem) usa o rótulo normal, senão a Filha repetiria a mesma frase
+    literal em todo turno da fase."""
+    return (
+        f"{label} — SEGUIR À RISCA:\n{content}\n"
+        "Escreva a resposta só com o que esta instrução pede, usando as palavras dela o mais "
+        "de perto possível. O dono do negócio escreveu este texto do jeito que quer que o lead "
+        "o leia: cumprimentos, elogios ou dados (horários, preços, serviços) que não estão aqui "
+        "mudam a mensagem dele. Se a instrução pede uma pergunta, termine nessa pergunta — a "
+        "menos que a mensagem do lead já a responda: aí omita a pergunta, porque perguntar de "
+        "novo o que o lead acabou de dizer soa como se ninguém tivesse lido a mensagem dele.\n"
+        "Exemplo — instrução \"Pergunte se prefere de manhã ou à tarde\":\n"
+        "✅ \"Prefere de manhã ou à tarde?\"\n"
+        "❌ \"Que bom falar com você! Temos ótimos horários disponíveis. Prefere de manhã ou à tarde?\"\n"
+        "✅ (lead escreveu \"queria marcar de manhã\") a resposta segue sem essa pergunta"
+    )
+
+
+_TRAILING_QUESTION_RE = re.compile(r"\s*[^.!?\n]*\?\s*$")
+
+
+def _drop_trailing_question(text: str) -> str:
+    """Remove a frase final terminada em "?". Usada na Recepção quando o lead já respondeu à
+    pergunta das instruções da Fase 0 (`lead_already_answered`): o modelo identifica a
+    escolha mas costuma repetir a pergunta. Se sobrar só a pergunta, devolve o texto original."""
+    stripped = _TRAILING_QUESTION_RE.sub("", text or "").rstrip()
+    return stripped or text
 
 
 def _build_sales_flow_phases_block(phases_result: Dict[str, Any]) -> str:
@@ -3123,6 +3167,52 @@ def _build_child_prompt_recepcao(
     lead_name_ctx = f"Nome do lead: {lead_name}." if lead_name else "Nome do lead: desconhecido."
     brand_name = (ai_profile.get("brand_name") or "").strip() or "o negócio"
 
+    # Blocos do Fluxo de Venda (Fase 0) avaliados antes de montar o texto: quando existem,
+    # entram no meio do prompt com prioridade sobre o modelo de boas-vindas e as regras
+    # "só cumprimentar" ficam condicionais — colados no fim, depois do JSON, perdiam sempre
+    # para o prompt fixo. Sem blocos, o prompt é idêntico ao de antes.
+    _sf_block = _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
+    if _sf_block:
+        _owner_step = (
+            "4. Cumpre as INSTRUÇÕES DO DONO DO NEGÓCIO abaixo junto com o cumprimento —\n"
+            "   incluindo apresentar-se como elas pedem ou fazer a pergunta que elas pedem.\n"
+            "   Se a mensagem do lead já responde ao que a instrução pergunta, siga a\n"
+            "   instrução sem repetir a pergunta.\n"
+        )
+        _owner_block = (
+            "\nINSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO (prioridade sobre o modelo de boas-vindas acima):\n"
+            "O dono configurou como quer que o primeiro contato soe — siga estas instruções\n"
+            "no message_text; o cumprimento genérico dos exemplos é só o ponto de partida.\n"
+            f"{_sf_block}"
+            "Exemplo — instrução \"Apresente-se como Ana e pergunte se é a primeira visita\":\n"
+            "✅ \"Olá! Sou a Ana. É a sua primeira visita?\"\n"
+            "❌ \"Olá! Seja bem-vindo(a)! Como posso ajudar?\" (ignorou a instrução do dono)\n"
+            "Quando a mensagem do lead já responde à pergunta da instrução, cumpra o resto da\n"
+            "instrução, registre a opção que ele escolheu em lead_already_answered e deixe a\n"
+            "pergunta de fora — o lead já disse, e ouvir a mesma pergunta de volta parece que\n"
+            "ninguém leu. O pedido dele segue em pending_commercial_text.\n"
+            "Exemplo — instrução \"Apresente-se como Ana e pergunte qual profissional: Rita ou Paulo\",\n"
+            "mensagem \"oi, queria saber das sessões da Rita\":\n"
+            "✅ lead_already_answered: \"Rita\" | message_text: \"Olá! Sou a Ana.\" | pending_commercial_text: \"queria saber das sessões da Rita\"\n"
+            "❌ message_text: \"Olá! Sou a Ana. Qual profissional você prefere, Rita ou Paulo?\" (o lead já escolheu a Rita)\n"
+        )
+        _answered_field = (
+            "  \"lead_already_answered\": \"<se a pergunta das INSTRUÇÕES DO DONO oferece opções e a "
+            "mensagem do lead já cita uma delas, a opção citada (ex.: 'quero com a Rita' → 'Rita'); "
+            "senão null>\",\n"
+        )
+        _question_rule = (
+            "- Só faz a pergunta que as instruções do dono pedirem; nenhuma outra\n"
+            "  pergunta de qualificação neste turno."
+        )
+        _message_text_shape = "<cumprimento + o que as instruções do dono pedem>"
+    else:
+        _owner_step = ""
+        _owner_block = ""
+        _question_rule = "- Não faz perguntas de qualificação neste turno."
+        _message_text_shape = "<cumprimento caloroso — máximo 2-3 linhas>"
+        _answered_field = ""
+
     _recepcao_prompt = f"""{identity_block}
 {tone_block}FASE: recepção (saudação).
 
@@ -3143,14 +3233,14 @@ O QUE VOCÊ FAZ:
    comercial (agendar, preço, horário de funcionamento, disponibilidade,
    serviço, catálogo, etc.) — mesmo fundida na MESMA linha da saudação —
    extrai esse trecho, literal, para o campo "pending_commercial_text".
-
+{_owner_step}
 COMO VOCÊ FAZ:
 {greeting_instruction}
 Extração: releia linha a linha antes de responder. Copie o trecho comercial
 LITERAL (não resuma, não reescreva, não responda a ele) para
 "pending_commercial_text". Se a mensagem for saudação/social pura, sem nenhum
 pedido embutido, retorne "pending_commercial_text": null.
-
+{_owner_block}
 EXEMPLOS DO QUE FAZER (✅):
 1. Mensagem: "Oi"
    → message_text: "Oi! Seja bem-vindo(a)! Como posso ajudar?" | pending_commercial_text: null
@@ -3163,7 +3253,7 @@ O QUE VOCÊ NÃO FAZ:
 - Não responde, não promete verificar, não qualifica o pedido comercial —
   isso é trabalho de outro turno do sistema, não seu.
 - Não menciona preços, tabelas, serviços, imagens, links ou catálogo.
-- Não faz perguntas de qualificação neste turno.
+{_question_rule}
 - Máximo 2-3 linhas, sempre.
 
 EXEMPLOS DE ERRO (❌) — NÃO FAÇA ISTO:
@@ -3180,7 +3270,7 @@ EXEMPLOS DE ERRO (❌) — NÃO FAÇA ISTO:
 
 Retorne SOMENTE JSON válido:
 {{
-  "message_text": "<cumprimento caloroso — máximo 2-3 linhas>",
+{_answered_field}  "message_text": "{_message_text_shape}",
   "should_ask": false,
   "question_text": "",
   "field": null,
@@ -3190,7 +3280,6 @@ Retorne SOMENTE JSON válido:
   "pending_commercial_text": "<trecho literal do pedido comercial, ou null se só houve saudação>"
 }}
 """
-    _recepcao_prompt += _build_sales_flow_phases_block(_evaluate_sales_flow_phases(context, "recepcao", message_text, detected_intents=mother_decision.detected_intents, is_phase_entry=is_phase_entry, branch_selections=mother_decision.branch_selections))
     return _recepcao_prompt
 
 
@@ -5936,6 +6025,8 @@ def compose_decision_output(
     # tratar tudo no mesmo turno: o próximo ciclo do pipeline roda a Mãe de verdade, sem
     # overrides de rota. Ver "Saudação composta" em docs/architecture/llm-architecture.md.
     if effective_route_to == "recepcao":
+        if str(getattr(child_result, "lead_already_answered", None) or "").strip():
+            decision.message_text = _drop_trailing_question(decision.message_text)
         _pending_text = str(getattr(child_result, "pending_commercial_text", None) or "").strip()
         if _pending_text:
             _sys = list(decision.system_actions or [])
@@ -6276,6 +6367,17 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         else:
             child_prompt = _build_child_prompt(context, message_text, mother_decision)
             _prompt_function_used = "_build_child_prompt(generic)"
+        # Orientação "seguir à risca" ativa neste turno → temperatura baixa na Filha. Mesma
+        # avaliação pura que o builder do prompt acabou de fazer (só os builders abaixo
+        # injetam o Fluxo de Venda; pré-agendamento/agendamento não).
+        _strict_orientation_active = False
+        if route_for_child in _SALES_FLOW_INJECTING_CHILD_ROUTES:
+            _strict_orientation_active = bool(_evaluate_sales_flow_phases(
+                context, route_for_child, message_text,
+                detected_intents=mother_decision.detected_intents,
+                is_phase_entry=_is_phase_entry_for_prompt,
+                branch_selections=mother_decision.branch_selections,
+            ).get("strict_active"))
         stage = "child_call"
         child_result: Optional[ChildResult] = None
         validation_errors: list[str] = []
@@ -6288,9 +6390,15 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     f"{child_prompt}\n\nVALIDATION_ERRORS: {json.dumps(validation_errors, ensure_ascii=False)}\n"
                     "Corrija o JSON para field=current_field e reformule a pergunta sem repetir texto anterior."
                 )
-            child_text = llm_service.generate_child_result(
-                route_for_child, prompt_to_use, ai_profile=ai_profile
-            )
+            if _strict_orientation_active:
+                child_text = llm_service.generate_child_result(
+                    route_for_child, prompt_to_use, ai_profile=ai_profile,
+                    temperature_override=llm_service.STRICT_ORIENTATION_TEMPERATURE,
+                )
+            else:
+                child_text = llm_service.generate_child_result(
+                    route_for_child, prompt_to_use, ai_profile=ai_profile
+                )
             stage = "child_parse"
             child_payload = _extract_json_payload(child_text)
             if child_payload is None:

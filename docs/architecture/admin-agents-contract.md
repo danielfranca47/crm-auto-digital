@@ -22,6 +22,7 @@ Origem: tabela `ai_profiles` em `backend-core` (via `GET /admin/agents/users/{us
 | `qualification_price_disclosure` | string | Preço perguntado na qualificação (`after_qualification`\|`on_request`), default `after_qualification` | Aparece no painel de diff (`diff`) quando o usuário muda do default — sem exibição própria no card/drawer |
 | `llm_provider` | string | Provedor de LLM usado nas chamadas de IA (`openai`\|`openrouter`), default `openai` — ver [`llm-architecture.md`](llm-architecture.md) | Badge "OpenRouter" ao lado do seletor de usuário quando `≠ openai`; entra no cálculo de `has_custom_config`/`diff` |
 | `llm_provider_model` | string\|null | Modelo curado do OpenRouter (só relevante quando `llm_provider=openrouter`) | Incluído no texto do badge OpenRouter |
+| `response_creativity` | string\|null | Temperatura da Filha (`creative`\|`balanced`\|`strict`; `null` = padrão do provedor) — ver [`llm-architecture.md`](llm-architecture.md#temperatura-da-filha) | Badge "criatividade: …" quando não é `null`; entra no cálculo de `has_custom_config`/`diff` (default `null`) |
 
 ### Campos obrigatórios de qualificação
 

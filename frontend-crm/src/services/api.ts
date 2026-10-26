@@ -112,6 +112,7 @@ export type AiProfilePayload = {
   calendar_integration?: "none" | "google_calendar" | "calendly" | null;
   payment_gateway?: "hotmart" | "kiwify" | "stripe" | "generico" | null;
   response_style?: "active" | "passive" | null;
+  response_creativity?: "creative" | "balanced" | "strict" | null;
   qualification_price_disclosure?: "after_qualification" | "on_request" | null;
   custom_variables?: Record<string, string> | null;
 };
@@ -1473,6 +1474,7 @@ export const api = {
         timezone:          (profile as any)?.timezone          ?? DEFAULT_AGENT_CONFIG.timezone,
         custom_instructions: (profile as any)?.custom_instructions ?? DEFAULT_AGENT_CONFIG.custom_instructions,
         response_style:      ((profile as any)?.response_style ?? DEFAULT_AGENT_CONFIG.response_style) as 'active' | 'passive',
+        response_creativity: ((profile as any)?.response_creativity ?? DEFAULT_AGENT_CONFIG.response_creativity) as import('../types/agente').AgentConfig['response_creativity'],
         qualification_price_disclosure: ((profile as any)?.qualification_price_disclosure ?? DEFAULT_AGENT_CONFIG.qualification_price_disclosure) as 'after_qualification' | 'on_request',
 
         // Camada 2
@@ -1662,6 +1664,7 @@ export const api = {
         timezone:            config.timezone,
         custom_instructions: config.custom_instructions,
         response_style:      config.response_style,
+        response_creativity: config.response_creativity,
         qualification_price_disclosure: config.qualification_price_disclosure,
         appointment_mode:     config.appointment_mode,
         // presentation_variant acompanha appointment_mode só para agentes de agenda/consultivo;

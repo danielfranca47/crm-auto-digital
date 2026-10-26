@@ -111,6 +111,14 @@ class ResponseStyle(str, Enum):
     passive = "passive"  # agente responde perguntas do cliente antes de qualificar
 
 
+class ResponseCreativity(str, Enum):
+    # Temperatura da Filha — mapa em backend-executors/app/services/llm_service.py.
+    # Ausente (None) = padrão do provedor, comportamento anterior ao campo.
+    creative = "creative"
+    balanced = "balanced"
+    strict = "strict"
+
+
 class QualificationPriceDisclosure(str, Enum):
     after_qualification = "after_qualification"  # preço fica para a apresentação
     on_request = "on_request"                    # responde o preço na qualificação quando perguntado
@@ -231,6 +239,7 @@ class AIProfileBase(BaseModel):
     availability_mode: Optional[str] = "24h"
     meeting_management_enabled: bool = True
     response_style: Optional[ResponseStyle] = ResponseStyle.active
+    response_creativity: Optional[ResponseCreativity] = None
     qualification_price_disclosure: Optional[QualificationPriceDisclosure] = (
         QualificationPriceDisclosure.after_qualification
     )
@@ -314,6 +323,7 @@ class AIProfileUpdate(BaseModel):
     availability_mode: Optional[str] = None
     meeting_management_enabled: Optional[bool] = None
     response_style: Optional[ResponseStyle] = None
+    response_creativity: Optional[ResponseCreativity] = None
     qualification_price_disclosure: Optional[QualificationPriceDisclosure] = None
     qualification_required_fields: Optional[List[str]] = None
     qualification_fields: Optional[List[dict]] = None

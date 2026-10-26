@@ -204,6 +204,7 @@ aberta.
 | `followup_checkin_instructions` | string\|null | Instrução de texto livre injectada no prompt de follow-up quando `followup_variant=client_checkin` |
 | `llm_provider` | string (enum) | Provedor de LLM usado nas chamadas de IA (padrão: `"openai"`). Ver [`llm-architecture.md`](llm-architecture.md#multi-provedor-de-llm-openai-padrão--openrouter-alternativo) |
 | `llm_provider_model` | string\|null | Modelo curado do OpenRouter (só relevante quando `llm_provider="openrouter"`) |
+| `response_creativity` | string\|null | Temperatura da resposta da Filha: `creative` (0.9), `balanced` (0.5), `strict` (0.2); `null` = padrão do provedor. Ver [`llm-architecture.md`](llm-architecture.md#temperatura-da-filha) |
 
 ### Enums
 

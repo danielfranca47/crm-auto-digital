@@ -99,6 +99,7 @@ Em ambos os casos, o turno seguinte roda a Mãe **sem overrides** — `outbound_
 | `signals_structured` | dict\|null | Sinais estruturados (meeting_proposed, checkout_sent, etc.) |
 | `media_keys_to_send` | list[string]\|null | Chaves de `knowledge_media` cujas mídias a filha decidiu anexar neste turno. Só populado na filha de apresentação. Fallback estrito: `null`/`[]` → nenhuma mídia anexada. |
 | `pending_commercial_text` | string\|null | Só populado pela Filha Recepção — trecho literal do pedido comercial embutido na saudação, se houver. Ver "Saudação composta" acima. |
+| `lead_already_answered` | string\|null | Só da Filha Recepção com instruções da Fase 0 — opção que o lead já escolheu na própria mensagem; com valor, o código tira a pergunta final da resposta. Ver "Filha Recepção" abaixo. |
 | `confidence` | 0..1 | Confiança da resposta |
 
 ### Normalização de agent_mode
@@ -161,6 +162,8 @@ Campos adicionados pelo Fluxo de Venda (Camada 7):
 
 ### Filha Recepção (`_build_child_prompt_recepcao`)
 - Instrução restrita: só o cumprimento inicial, sem tratar pedido comercial
+- Com blocos do Fluxo de Venda da Fase 0 ativos no turno, eles entram no meio do prompt (antes dos exemplos e do JSON), sob "INSTRUÇÕES DO DONO DO NEGÓCIO PARA ESTE TURNO", com prioridade sobre o modelo de boas-vindas: a Filha cumpre-os junto com o cumprimento (apresentar-se como pedem, fazer a pergunta que pedem), a regra "não faz perguntas de qualificação" vira "só a pergunta que as instruções pedirem" e o modelo de `message_text` muda. Sem blocos, o prompt é o de cumprimento puro
+- Pergunta já respondida pelo lead: com instruções da Fase 0, o JSON pede primeiro `lead_already_answered` (a opção que o lead já citou na mensagem, ex.: "Val" para "Val ou Daniel?"). Se vier preenchido, `compose_decision_output()` tira a frase final terminada em "?" com `_drop_trailing_question()`. Fica em código porque o modelo identifica a escolha mas, por causa das regras "termine na pergunta" (orientação estrita, tom de voz), tende a repeti-la mesmo assim. O pedido continua a ir para `pending_commercial_text`
 - Extrai qualquer pedido comercial embutido na mensagem para `pending_commercial_text`, sem tentar respondê-lo (ver "Saudação composta" acima)
 
 ### Filha Pré-agendamento (`_build_child_prompt_pre_agendamento`)
@@ -316,6 +319,30 @@ de `llm_service.py`. Retry/backoff (ver abaixo) é idêntico para os dois proved
 Visibilidade admin: `docs/architecture/admin-agents-contract.md` documenta o badge
 "OpenRouter" exibido em `frontend-admin/src/pages/AdminAgents.tsx` quando um usuário está
 fora do padrão.
+
+### Temperatura da Filha
+
+Só a chamada da Filha (`generate_child_result`) envia `temperature`. A Mãe, o
+`field_extractor`, a mensagem de conflito e os geradores do meeting scheduler continuam sem
+o campo (padrão do provedor); temperatura fixa baixa para a Mãe é o item M1 de
+`docs/plans/motor-llm-otimizacoes.md`.
+
+`llm_service.resolve_child_temperature(ai_profile, override)` decide, por chamada:
+
+| Origem | Temperatura |
+|---|---|
+| `override` (orientação "seguir à risca" ativa no turno, ver [`sales-flow.md`](sales-flow.md)) | `STRICT_ORIENTATION_TEMPERATURE` = 0.2 |
+| `ai_profile.response_creativity = "creative"` / `"balanced"` / `"strict"` | 0.9 / 0.5 / 0.2 |
+| ausente / `null` / valor desconhecido ("Padrão") | não envia `temperature` |
+
+`_build_payload(..., temperature=)` põe o campo na raiz do payload nos dois provedores
+(Responses API e Chat Completions) só quando não é `None`. Cada chamada com temperatura
+gera o log `event=llm_child_temperature route=<rota> temperature=<valor>`.
+
+`response_creativity` é campo do AI Profile (`backend-core`: coluna nullable, enum
+`ResponseCreativity`), editado no card "Criatividade das respostas" da Camada Identidade
+(`CamadaIdentidade.tsx`, `ModalCriatividade`). Chega ao executor dentro de
+`context["ai_profile"]` sem passar por `enrich_context_bundle()`, como `llm_provider`.
 
 ---
 
