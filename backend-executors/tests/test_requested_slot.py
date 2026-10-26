@@ -72,6 +72,14 @@ def test_compromisso_que_colide_marca_ocupado():
     assert "colide com um compromisso já marcado (10h30–11h30)" in block
 
 
+def test_evento_do_google_sem_fuso_e_lido_como_utc():
+    # eventos importados do Google entram em calendar_busy_slots com lead_id=None
+    busy = [{"start_at": "2026-10-31T10:30:00", "end_at": "2026-10-31T11:30:00", "lead_id": None}]
+    slot = _slot("Pode ser sábado às 11h?", busy=busy)
+    assert slot.free is False
+    assert "(10h30–11h30)" in build_agenda_fact_block(slot)
+
+
 def test_compromisso_do_proprio_lead_nao_conta():
     busy = [{"start_at": "2026-10-29T15:00:00+00:00", "end_at": "2026-10-29T16:00:00+00:00", "lead_id": 7}]
     slot = find_requested_slot(

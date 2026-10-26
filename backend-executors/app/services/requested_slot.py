@@ -16,7 +16,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from app.services import meeting_date_guard
-from app.services.meeting_scheduler import _has_conflict
+from app.services.meeting_scheduler import _ensure_aware, _has_conflict
 
 # "11h", "11 h", "14h30", "15:00". Duração ("de 1h", "1h30 de massagem") e limites
 # ("depois das 19h", "a partir das 15h") não são um horário pedido.
@@ -120,9 +120,10 @@ def find_requested_slot(
     for slot in slots:
         if _has_conflict([slot], start, end, exclude_lead_id=exclude_lead_id):
             try:
+                # sem fuso = UTC, como em _has_conflict (eventos importados do Google podem vir assim)
                 conflicts.append((
-                    datetime.fromisoformat(str(slot.get("start_at"))).astimezone(tz),
-                    datetime.fromisoformat(str(slot.get("end_at"))).astimezone(tz),
+                    _ensure_aware(datetime.fromisoformat(str(slot.get("start_at"))), "UTC").astimezone(tz),
+                    _ensure_aware(datetime.fromisoformat(str(slot.get("end_at"))), "UTC").astimezone(tz),
                 ))
             except (TypeError, ValueError):
                 continue
