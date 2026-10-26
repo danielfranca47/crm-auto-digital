@@ -173,6 +173,12 @@ A bancada (código de `backend-executors` da worktree copiado para `ambiente/cod
 | `docs/architecture/pipeline-phases.md` | "Resolução de datas relativas e nomes de dia da semana" reescrita |
 | `docs/prompts_llms.md` | 1.4.4 e mapa de injeções |
 
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `0c14b78` | ajustes do guardrail e do bloco revelados pela bancada + docs de arquitetura |
+
 **Resultados (contagem por script sobre os `.json` das tentativas):**
 
 | | Antes (PROD02+PROD03, `main`) | Depois (F3c+F3d, código final menos a última regra / final) |
