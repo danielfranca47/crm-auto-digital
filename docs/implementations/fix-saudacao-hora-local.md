@@ -158,3 +158,31 @@ no `ai_profile` do ContextBundle.
 - Hora local também nas fases que não cumprimentam (ajudaria "ainda hoje", "amanhã de manhã") — ficou fora
   por minimalismo.
 - A abertura do dono é texto livre: se escrever literalmente "Boa tarde!", a IA pode mantê-lo apesar da linha AGORA.
+
+---
+
+## Fase 2 — Diagnóstico: promessa na receção em produção (26/10/2026)
+
+### Problema identificado
+
+Merge `52ad519` em `main` + deploy às 21h40. Os testes com `--prod` deram o cumprimento certo ("Boa noite!") em
+p-manha, p-micas e p-ruben, mas, quando o cliente não cumprimenta e faz um pedido, a receção passou a juntar uma
+promessa ao cumprimento. A seguir, a 2.ª decisão pergunta "Posso enviar a tabela?":
+
+- 3/3 no 1.º turno com "Gostaria de mais informações sobre as Massagens" (Playground de produção, em paralelo):
+  "Vou ajudar com as informações que precisa." / "Vou passar as suas perguntas para a nossa equipa." /
+  "Vou passar as informações sobre as massagens para você."
+- Não aconteceu em nenhuma das 10 corridas anteriores (PROD04–PROD07, B1, B2, PROD-B) nem na bancada local com o
+  mesmo código.
+- "Vou passar as suas perguntas para a nossa equipa" não foi o fallback de handoff (`FALLBACK_DECISION`): esse
+  substitui a resposta inteira e aqui veio depois do cumprimento, por isso foi escrito pela própria Filha.
+- Suspeita: o exemplo ✅ 4 novo usa quase a mesma frase do cliente real e mostra uma segunda frase depois do
+  cumprimento ("Obrigado pelo contato."); o modelo de produção (OpenRouter / Llama 3.3 70B) preenche essa
+  segunda frase com uma resposta ao pedido.
+
+**Ação:** revert `7416c79` em `main` (com o "sim" do utilizador); produção voltou ao comportamento anterior.
+
+### Correção
+
+A definir em Plan Mode. Antes de voltar a juntar, medir 3x em paralelo no Playground de produção, ou
+localmente com o mesmo modelo que a produção usa.
