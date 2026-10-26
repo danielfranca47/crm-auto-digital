@@ -112,18 +112,38 @@ da sessão dele. Marcações feitas à mão na Agenda continuam a poder ficar co
   presos no Windows); o schema expõe `session_buffer_minutes` em `AIProfileOut` e `AIProfileUpdate`.
   Frontends sem `node_modules` nesta máquina — `tsc` não corrido.
 
+> Setup usado (26/10/2026): código da worktree copiado para `ambiente/codigo` (backup das versões
+> antigas em `ambiente/codigo_backup_20261026-212213`); coluna criada no arranque do core local;
+> `session_buffer_minutes=15` no perfil local 5. Como o `simular.py` limpa a agenda no arranque, o
+> ocupado do P1 foi inserido por um wrapper depois dessa limpeza (evento `lead_id` NULL, user 15).
+
 ### Cenário P1 — Bancada local: sessões seguidas com margem
-- [ ] Na conta local da bancada (`.claude/agentes/sensi-vitae/`), aplicar `session_buffer_minutes=15`
-- [ ] `python simular.py p-seguidas M1`
-- [ ] Confirmar: a IA propõe 16h15 (ou o horário seguinte válido) em vez de 16h
+- [x] Na conta local da bancada (`.claude/agentes/sensi-vitae/`), aplicar `session_buffer_minutes=15`
+- [x] `python simular.py p-seguidas M1` (ocupado ter 27/10 15:00–16:00)
+- [x] Confirmar: a IA propõe 16h15 (ou o horário seguinte válido) em vez de 16h
+- **Validado em:** 26/10/2026 — "O horário que pediram para amanhã às 16h já está ocupado. Podemos agendar
+  com o Daniel às 16h15"; cliente aceitou; gravado 27/10 16:15–17:15 (60 min, sem alargar).
+  Tentativa: `tentativas/20261026-2125-M1-p-seguidas.md`
 
 ### Cenário P2 — Regressão: remarcação mantém a duração
-- [ ] `python simular.py pos-marcacao M1` com a margem 15
-- [ ] Confirmar: a sessão remarcada tem a mesma duração da original
+- [x] `python simular.py pos-marcacao M1` com a margem 15
+- [x] Confirmar: a sessão remarcada tem a mesma duração da original
+- **Validado em:** 26/10/2026 — 1.ª corrida (M1): a IA não sinalizou a remarcação
+  (`meeting_reschedule_requested=false`) e nada foi remarcado — variação do modelo, a agenda nem foi
+  consultada. Repetido 2x com margem 0 e 2x com margem 15: as 4 remarcaram para qui 29/10 15:00–16:00
+  (60 min, igual à original). Em M1b a mensagem saiu como marcação nova ("Como se chama?") apesar de
+  remarcar — texto da IA, igual com ou sem margem.
 
 ### Cenário P3 — Regressão: pedido das 17h com a Val
-- [ ] `python simular.py p-val-17h M1` com a margem 15
-- [ ] Confirmar: comportamento igual ao de antes (sem regressão)
+- [x] `python simular.py p-val-17h M1` com a margem 15
+- [x] Confirmar: comportamento igual ao de antes (sem regressão)
+- **Validado em:** 26/10/2026 — 17h recusada ("fora do horário de atendimento da Val"), propôs 16h,
+  gravado qui 29/10 16:00–17:00. Tentativa: `tentativas/20261026-2128-M1-p-val-17h.md`
+
+### Cenário P4 — Ecrã do agente (frontend)
+- [ ] `npm install` no `frontend-crm` da worktree e abrir o ecrã do agente (Camada Apresentação)
+- [ ] Card "Intervalo entre sessões" mostra "Sem intervalo"; mudar para 15 min e gravar
+- [ ] Recarregar: o card mostra "15 min"; no painel admin aparece o badge "intervalo entre sessões: 15 min"
 
 ### Cenário C1 — Produção (`--prod`), depois do merge e deploy
 - [ ] Com o "sim" do utilizador: merge + deploy; margem 15 na conta de produção (com confirmação)
