@@ -258,6 +258,18 @@ def _latest_lead_day_word(lead_messages: List[str]) -> Optional[str]:
     return None
 
 
+def latest_day_word(messages: List[str]) -> Optional[str]:
+    """Última palavra de dia ("amanhã", "sábado", "30/10"…) nas mensagens, da mais recente
+    para a mais antiga. "segunda" sozinho não conta (pode ser "segunda opção")."""
+    return _latest_lead_day_word(messages)
+
+
+def resolve_day_reference(reference: str, today: date) -> Optional[date]:
+    """Data de uma palavra de dia: hoje/amanhã/depois de amanhã exatos; dia da semana → a
+    próxima ocorrência (amanhã…+7); dd/mm → essa data."""
+    return _resolve_reference(reference, today, today - timedelta(days=1))
+
+
 def reconcile_meeting_date(
     candidate: Optional[str],
     message_text: str,
