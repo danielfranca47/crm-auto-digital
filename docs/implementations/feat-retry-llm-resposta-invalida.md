@@ -87,6 +87,21 @@ decide()  (orçamento do turno: 40s)
 | `backend-executors/tests/test_response_creativity_temperature.py` | o mock de `_post_with_retry` aceita os kwargs novos |
 | `docs/architecture/llm-architecture.md` | secção "Falhas da IA e novas tentativas (Mãe/Filha)" |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `c376664` | Novas tentativas por etapa com orçamento de tempo, alias `apresentacao`, testes e doc |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** se a IA devolvesse uma resposta mal formada (o que aconteceu em ~1 de cada 100 turnos no Playground),
+o cliente recebia logo a mensagem de handoff. Só falhas de rede tinham uma 2.ª tentativa.
+**Agora:** a parte que falhou (Mãe ou Filha) é repetida até 4 vezes no total, seja falha de rede ou resposta
+mal formada, e só a 4.ª falha leva ao handoff. Tudo isto cabe em 40s por mensagem. A grafia "apresentacao" deixa
+de ser um erro.
+**Para validar:** Cenários T1 e T2 (feitos) e C1, depois do deploy.
+
 ### Fase 2 — Não desligar o bot em tentativas do job que ainda vão ser repetidas
 
 **Objetivo:** no worker, o handoff (desligar o bot, registar o handoff) só acontece na última tentativa do job.
@@ -102,15 +117,17 @@ decide()  (orçamento do turno: 40s)
 ## Checks de Validação
 
 ### Cenário T1 — Cliente de IA simulado a falhar 1, 2, 3 e 4 vezes (automático)
-- [ ] `python -m pytest tests/test_llm_stage_retry.py tests/test_llm_service_retry.py -q` em `backend-executors`
-- [ ] Mãe e Filha: 1, 2 e 3 falhas → resposta normal (2, 3 e 4 chamadas); 4 falhas → handoff `llm_failure` com 4 chamadas
-- [ ] Falha só na Filha → a Mãe é chamada uma única vez
-- [ ] 400 → sem nova tentativa; orçamento curto → para antes das 4
+- [x] `python -m pytest tests/test_llm_stage_retry.py tests/test_llm_service_retry.py -q` em `backend-executors`
+- [x] Mãe e Filha: 1, 2 e 3 falhas → resposta normal (2, 3 e 4 chamadas); 4 falhas → handoff `llm_failure` com 4 chamadas
+- [x] Falha só na Filha → a Mãe é chamada uma única vez
+- [x] 400 → sem nova tentativa; orçamento curto → para antes das 4
+- **Validado em:** 26/10/2026 — 14 testes novos em `test_llm_stage_retry.py` e 6 em `test_llm_service_retry.py`, todos a passar
 
 ### Cenário T2 — Regressão da suíte do backend-executors
-- [ ] `python -m pytest tests -q` → só as 2 falhas que já existem em `main`
+- [x] `python -m pytest tests -q` → só as 2 falhas que já existem em `main`
   (`test_recepcao_sales_flow_pending.py::test_p0_trigger_already_fired_advances_normally` e
   `::test_no_sequential_trigger_in_p0_behaves_like_baseline`, que não têm a ver com esta implementação)
+- **Validado em:** 26/10/2026 — 513 passam, 2 falham (as mesmas de `main` antes da mudança: 493 passam, 2 falham)
 
 ### Cenário T3 — Fase 2: tentativa de job não final não desliga o bot (automático)
 - [ ] Teste do runner/decide: `llm_failure_final=False` → nenhuma chamada a `set_lead_bot_disabled`/`log_handoff_requested`
