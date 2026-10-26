@@ -539,9 +539,26 @@ só quando a mensagem do lead traz uma hora inequívoca (`requested_slot.find_re
 Diz o que o lead pediu e quando a sessão acabaria, e o veredicto decidido em código: agenda
 (`calendar_busy_slots`) e horário de atendimento (tabela lida do texto do perfil por
 `professional_hours.get_hours`). Livre e cabe → aceitar sem oferecer outro horário; fora → dizer
-o motivo e propor o início mais próximo que cabe (com o profissional); ocupado → dizer que está
-ocupado. Sem tabela de horários, só afirma a agenda livre e pede à Filha que confira o horário de
-atendimento. Detalhes em `docs/architecture/pipeline-phases.md` ("Verificação do horário pedido").
+o motivo e propor o início mais próximo que cabe; ocupado → dizer que está ocupado e propor o
+início mais próximo que cabe. Nos dois últimos, a alternativa é calculada em código
+(`professional_hours.nearest_free_start`: mesmo dia, livre na agenda e dentro do horário de
+atendimento, com o profissional) e a Filha recebe "proponha <hora> com <profissional> … proponha
+exatamente este"; sem nenhuma nesse dia, "proponha outro dia". Sem tabela de horários: livre →
+afirma a agenda livre e pede à Filha que confira o horário de atendimento; ocupado → "proponha o
+horário livre mais próximo que caiba no horário de atendimento" (conta da Filha). Detalhes em
+`docs/architecture/pipeline-phases.md` ("Verificação do horário pedido").
+
+**Regras de remarcação na gestão pós-marcação** (`_build_child_prompt_meeting_management`, junto
+da regra "CONFIRME DIRETAMENTE"): com a verificação a dizer ocupado/fora do horário, a Filha diz
+isso, propõe como pergunta o horário indicado, diz que a sessão marcada se mantém e deixa
+`meeting_reschedule_requested=false` / `meeting_datetime_candidate=null` (exemplo ✅ no prompt);
+quando o lead aceita um horário que ela propôs ("pode ser", "sim, às 16h"), confirma já com
+`meeting_reschedule_requested=true` e o candidato. A regra "só hora, sem dia → mesmo dia da sessão
+marcada" tem a exceção "se essa hora é de um horário que você propôs na mensagem anterior, use o dia
+dessa proposta" — na bancada a Filha ainda a ignora às vezes, e é o guardrail que corrige. O
+guardrail de código
+`_apply_meeting_reschedule_guard` garante o mesmo independentemente do que a Filha devolva (ver
+`docs/architecture/agenda.md`, "Cancelamento e reagendamento via IA").
 
 **Prompt auxiliar** (`professional_hours._EXTRACTION_PROMPT`, `llm_service.generate_professional_hours`,
 JSON): converte o texto do perfil (`professional_availability` + `custom_instructions`) em

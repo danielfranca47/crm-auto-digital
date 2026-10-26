@@ -434,3 +434,54 @@ def reconcile_confirmation(
         return ConfirmationCheck(None, ask_which_text(accepted.options), blocked=True, trace={**trace, "action": "blocked"})
 
     return ConfirmationCheck(candidate, text, trace={**trace, "action": "skip"})
+
+
+# Texto que anuncia a remarcação como feita ("remarquei", "fica marcado para quinta").
+_RESCHEDULED_TEXT_RE = re.compile(
+    r"remarcad|remarquei|reagendad|reagendei|alterad[ao]\s+para|mudad[ao]\s+para|"
+    r"\b(?:fica|ficou|est[aá])\s+(?:\w+\s+){0,2}(?:marcad|agendad|confirmad)",
+    re.IGNORECASE,
+)
+
+
+def announces_reschedule(text: str) -> bool:
+    return bool(_RESCHEDULED_TEXT_RE.search(text or ""))
+
+
+def reschedule_origin(
+    candidate: Optional[str], inbound_now: str, accepted: AcceptedSlot, *, tz_name: Optional[str]
+) -> str:
+    """De quem é o horário que a Filha quer gravar na remarcação.
+
+    - `accepted`: a opção da última proposta que o cliente aceitou ("pode ser", "sim, às 16h");
+    - `lead_stated`: a hora que o cliente escreveu nesta mensagem, sem ser uma opção aceite (o dia
+      confere o date guard);
+    - `counter_proposal`: um horário que só o agente pôs na mesa — em teste real a marcação foi
+      mudada para a contraproposta da Lara antes de o cliente responder;
+    - `none`: sem candidato."""
+    current = _local(candidate, tz_name)
+    if current is None:
+        return "none"
+    if accepted.option is not None and accepted.option.start.replace(tzinfo=None) == current.replace(tzinfo=None):
+        return "accepted"
+    wanted = requested_slot.requested_time(inbound_now)
+    if wanted is not None and current.time().replace(second=0, microsecond=0) == wanted:
+        return "lead_stated"
+    return "counter_proposal"
+
+
+def _kept_text(original: Optional[ProposedOption]) -> str:
+    return f" A sua sessão de {describe(original)} mantém-se." if original else ""
+
+
+def reschedule_unavailable_text(original: Optional[ProposedOption]) -> str:
+    return f"Peço desculpa, esse horário já não está disponível.{_kept_text(original)} Que outro horário prefere?"
+
+
+def reschedule_done_text(option: ProposedOption) -> str:
+    return f"Combinado! A sua sessão fica remarcada para {describe(option)}."
+
+
+def reschedule_confirm_text(option: ProposedOption, original: Optional[ProposedOption]) -> str:
+    kept = f" Até confirmar, a sessão de {describe(original)} mantém-se." if original else ""
+    return f"Posso remarcar a sua sessão para {describe(option)}?{kept}"

@@ -122,10 +122,7 @@ def test_reschedule_calls_reschedule_appointment_and_keeps_bot_disabled():
     assert client.bot_disabled_calls == []
 
 
-def test_reschedule_conflict_returns_correction_message(monkeypatch):
-    monkeypatch.setattr(
-        meeting_scheduler.llm_service, "generate_conflict_message", lambda _prompt, **_kwargs: ""
-    )
+def test_reschedule_conflict_replaces_reply_instead_of_second_message():
     client = ConflictCRMClient()
     future = (datetime.now(timezone.utc) + timedelta(days=15)).replace(
         hour=15, minute=0, second=0, microsecond=0
@@ -145,7 +142,9 @@ def test_reschedule_conflict_returns_correction_message(monkeypatch):
         context, decision, client=client
     )
 
-    assert result == meeting_scheduler.MEETING_CONFLICT_MESSAGE
+    assert result is None
+    assert decision.message_text.startswith("Peço desculpa, esse horário já não está disponível.")
+    assert "A sua sessão de segunda-feira, 10/08, às 12h mantém-se." in decision.message_text
 
 
 def test_no_signal_is_noop():

@@ -16,7 +16,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from app.services import llm_service
 
@@ -158,3 +158,40 @@ def check(hours: Hours, start: datetime, end: datetime, professional: Optional[s
             verdict.suggestion = time(best[1] // 60, best[1] % 60)
             verdict.suggestion_for = best[2]
     return verdict
+
+
+_STEP_MINUTES = 15
+
+
+def nearest_free_start(
+    hours: Hours,
+    start: datetime,
+    end: datetime,
+    is_free: Callable[[datetime, datetime], bool],
+    professional: Optional[str] = None,
+) -> Optional[Tuple[time, str]]:
+    """Início mais próximo de `start`, no mesmo dia, em que a sessão cabe no horário de atendimento
+    E a agenda está livre (`is_free`). Inícios de 15 em 15 min desde a abertura, mais o último
+    possível; empate → o mais tarde. None quando nesse dia não há nenhum.
+
+    Com o horário pedido ocupado, a IA fazia esta conta sozinha e errava (teste real: propôs
+    16h15 com a Val, cuja sessão de 60 min tem de começar até às 16h)."""
+    wanted = start.hour * 60 + start.minute
+    duration = int((end - start).total_seconds() // 60)
+    names = [professional] if professional in hours else list(hours)
+    best: Optional[Tuple[int, int, str]] = None
+    for name in names:
+        for a, b in hours[name].get(start.weekday(), []):
+            if b - a < duration:
+                continue
+            for minute in sorted(set(range(a, b - duration + 1, _STEP_MINUTES)) | {b - duration}):
+                candidate = start.replace(hour=minute // 60, minute=minute % 60)
+                if not is_free(candidate, candidate + (end - start)):
+                    continue
+                key = (abs(minute - wanted), -minute, name)
+                if best is None or key < best:
+                    best = key
+    if best is None:
+        return None
+    minute = -best[1]
+    return time(minute // 60, minute % 60), best[2]
