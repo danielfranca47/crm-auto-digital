@@ -26,8 +26,9 @@
 ## Quadro de sobreposição
 
 Trabalho já existente que entra no quadro:
-- **W1 — worktree `fix+disponibilidade-campo-duplo-sentido`** (Em andamento desde 04/10, 92 commits atrás
-  de `main`; junta sem conflito de código — só o próprio `.md`; falta o check C1, que só se faz em produção).
+- **W1 — worktree `fix+disponibilidade-campo-duplo-sentido`** — ✅ graduada e em `main` em 26/10/2026 (C1 pulado:
+  coberto pela simulação local P5; a mensagem real fica para depois do deploy). Ver `docs/architecture/humanization.md`
+  e `agenda.md`. Sobras em `agentes-agenda-melhorias-futuras.md` M20–M21.
 - **W2 — worktree `feat+temperatura-respostas-ia`** (Em andamento, 3 checks por validar; junta com conflito
   só em `docs/architecture/sales-flow.md`).
 - **M12 em `main`** (`fix-horario-livre-recusado`: `professional_hours.py`, `requested_slot.py`,
@@ -74,7 +75,7 @@ Trabalho já existente que entra no quadro:
 
 | Passo | O quê | Porquê nesta posição | Pode correr em paralelo com |
 |---|---|---|---|
-| 0a | Fechar **W1** (disponibilidade) — validar o C1 em produção e juntar | Destrava a c14 (horários dos terapeutas no campo próprio, sem o truque "ignore o bloco 08–22") e tem de entrar antes de B e M14 | A, D-preparação |
+| 0a | ✅ Feito (26/10/2026) — Fechar **W1** (disponibilidade) — validar o C1 em produção e juntar | Destrava a c14 (horários dos terapeutas no campo próprio, sem o truque "ignore o bloco 08–22") e tem de entrar antes de B e M14 | A, D-preparação |
 | 0b | Fechar **W2** (temperatura) — validar os 3 checks e juntar | Tem de entrar antes de D e M14 | A, B |
 | 1 | **A** — conflito comparado como texto + 409 | O mais urgente: bloqueia sessões seguidas e, no WhatsApp real, derruba o envio de mensagens de todas as contas. Não toca em instruções da IA | B, 0a, 0b |
 | 2 | **B** — confirmação grava proposta antiga | Grava marcações no dia/terapeuta errado. Depois de W1 (mesmo construtor) | A |
