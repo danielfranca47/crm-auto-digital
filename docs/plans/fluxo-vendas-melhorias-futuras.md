@@ -261,7 +261,9 @@ e decidir se os guardrails devem também corrigir `perceived_category` quando mu
 
 ## M14 — Pré-agendamento e Agendamento ignoram as orientações do Fluxo de Venda
 
-**Prioridade: ALTA**
+**Prioridade:** promovido (era ALTA) — 26/10/2026, para
+[`docs/implementations/fix-agendamento-le-fluxo-de-venda.md`](../implementations/fix-agendamento-le-fluxo-de-venda.md)
+(`Autonomia: manual`, fora da fila da noite). Remover esta secção quando essa implementação for graduada.
 
 **Contexto:** configuração do agente Sensi Vitae (25/10/2026) — um bloco `orientacao` na fase
 p3b (formato fixo da mensagem de confirmação) nunca chegou à IA.
