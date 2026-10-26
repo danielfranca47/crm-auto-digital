@@ -197,6 +197,12 @@ primeira ronda, 1 de 3 com um gatilho mais explícito): o modelo fazia logo perg
 `anthropic-skills:skill-creator` concorre pelo mesmo pedido. A descrição passa a começar por "Skill de
 escrita de skills e docs deste projeto — carregar logo, antes de fazer perguntas ao utilizador".
 
+Hash da Fase 7: `3962856`.
+
+**Relatório da Fase 7 — o que mudou na prática.** Antes, quem dizia "estou a escrever uma skill" recebia
+perguntas genéricas sem as regras do projeto. Agora a descrição pede para carregar a skill antes de perguntar.
+**Para validar:** P3 ponto 3.
+
 ---
 
 ## Checks de Validação
@@ -220,7 +226,7 @@ escrita de skills e docs deste projeto — carregar logo, antes de fazer pergunt
 - [x] As 3 skills de terceiros já não aparecem na lista
 - **Validado em:** 26/10/2026 — `claude -p --permission-mode plan` na worktree, 2 rondas: frases 1 e 2 abriram a
   referência certa nas duas (a auditoria também lê escrever-para-agentes, como o router manda); frase 3 falhou →
-  Fase 7. A ronda da Fase 7 parou no limite de uso (429), por correr às 21:20
+  Fase 7. A ronda da Fase 7 parou no limite de uso do plano (429); repetir depois de o limite voltar
 
 ### Cenário P4 — Docs dos agentes
 - [x] `git grep` sem "campos mínimos" e sem "consultivo" fora de contexto
