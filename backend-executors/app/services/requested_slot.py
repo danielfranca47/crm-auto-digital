@@ -184,10 +184,18 @@ def _hours_verdict_block(slot: RequestedSlot, verdict, asked: str, ends: str) ->
     )
 
 
-def build_agenda_fact_block(slot: Optional[RequestedSlot], hours_verdict=None) -> str:
+def build_agenda_fact_block(
+    slot: Optional[RequestedSlot],
+    hours_verdict=None,
+    *,
+    alternative: Optional[Tuple[time, str]] = None,
+    hours_known: bool = False,
+) -> str:
     """Bloco para o FIM do prompt da Filha (vence instruções anteriores mais vagas).
     `hours_verdict` (professional_hours.check) quando o horário de atendimento foi lido; sem
-    ele, a Filha confere o horário de atendimento sozinha."""
+    ele, a Filha confere o horário de atendimento sozinha. Com o horário ocupado e o horário de
+    atendimento lido (`hours_known`), `alternative` (professional_hours.nearest_free_start) é o
+    horário a propor — None quando nesse dia não há nenhum."""
     if slot is None:
         return ""
     weekday = meeting_date_guard.WEEKDAY_NAMES_PT[slot.start.weekday()]
@@ -218,6 +226,24 @@ def build_agenda_fact_block(slot: Optional[RequestedSlot], hours_verdict=None) -
             "(pedir o dado que falta ou resumir a marcação), sem oferecer outro horário.\n"
         )
     busy = "; ".join(f"{_fmt_hour(s)}–{_fmt_hour(e)}" for s, e in slot.conflicts)
+    if hours_known:
+        if alternative is not None:
+            start, who = alternative
+            proposal = (
+                f"proponha {_fmt_hour(datetime.combine(slot.start.date(), start))} com {who} — o início "
+                "livre mais próximo que cabe no horário de atendimento, calculado pelo sistema: proponha "
+                "exatamente este"
+            )
+        else:
+            proposal = (
+                "nesse dia não há outro início livre que caiba no horário de atendimento: proponha "
+                "outro dia"
+            )
+        return (
+            "\nVERIFICAÇÃO DO HORÁRIO PEDIDO (feita pelo sistema — é um facto, não volte a deduzir):\n"
+            f"O lead pediu {asked}; {ends}. Esse horário colide com um compromisso já marcado ({busy}).\n"
+            f"→ Diga que esse horário já está ocupado e {proposal}.\n"
+        )
     return (
         "\nVERIFICAÇÃO DO HORÁRIO PEDIDO (o sistema verificou a agenda):\n"
         f"O lead pediu {asked}; {ends}. Esse horário colide com um compromisso já marcado ({busy}). "

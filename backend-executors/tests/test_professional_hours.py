@@ -150,3 +150,46 @@ def test_bloco_dia_sem_atendimento():
     block = build_agenda_fact_block(slot, professional_hours.check(HOURS, slot.start, slot.end))
     assert "domingo não há atendimento (Val nem Daniel)" in block
     assert "proponha outro dia" in block
+
+
+def _livre_menos(*ocupados):
+    """is_free com os intervalos (início, fim) ocupados."""
+    return lambda start, end: not any(s < end and start < e for s, e in ocupados)
+
+
+def test_alternativa_livre_mais_proxima_dentro_do_horario():
+    # quinta 29/10: Val 11h–17h, 15h–16h ocupado, sessão de 60 min pedida às 15h
+    start, end = _at(29, 15)
+    ocupado = _at(29, 15)
+    assert professional_hours.nearest_free_start(HOURS, start, end, _livre_menos(ocupado), "Val") == (
+        datetime(2026, 10, 29, 16, 0).time(),
+        "Val",
+    )
+
+
+def test_alternativa_nunca_passa_do_fim_do_horario():
+    # 16h ocupado: a Val já não tem início que caiba depois (16h15 acabaria às 17h15)
+    start, end = _at(29, 16)
+    ocupado = (_at(29, 15)[0], _at(29, 17)[0])
+    alt = professional_hours.nearest_free_start(HOURS, start, end, _livre_menos(ocupado), "Val")
+    assert alt == (datetime(2026, 10, 29, 14, 0).time(), "Val")
+
+
+def test_sem_alternativa_nesse_dia():
+    start, end = _at(31, 12)  # sábado: só a Val, 11h–17h
+    dia_todo = (_at(31, 11)[0], _at(31, 17)[0])
+    assert professional_hours.nearest_free_start(HOURS, start, end, _livre_menos(dia_todo)) is None
+
+
+def test_bloco_ocupado_com_alternativa_calculada():
+    start, end = _at(29, 15)
+    slot = RequestedSlot(start=start, end=end, free=False, conflicts=[_at(29, 15)], duration_known=True)
+    block = build_agenda_fact_block(slot, alternative=(datetime(2026, 10, 29, 16, 0).time(), "Val"), hours_known=True)
+    assert "já está ocupado" in block
+    assert "proponha 16h com Val" in block
+
+
+def test_bloco_ocupado_sem_alternativa_pede_outro_dia():
+    start, end = _at(31, 12)
+    slot = RequestedSlot(start=start, end=end, free=False, conflicts=[_at(31, 12)], duration_known=True)
+    assert "proponha outro dia" in build_agenda_fact_block(slot, alternative=None, hours_known=True)

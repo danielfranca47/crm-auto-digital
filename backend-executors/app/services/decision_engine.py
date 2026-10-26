@@ -2139,13 +2139,27 @@ def _build_agenda_fact_block(context: Dict[str, Any], message_text: str) -> str:
         exclude_lead_id=(context.get("lead") or {}).get("id"),
         lead_messages=lead_messages[1:],
     )
-    verdict = None
-    if slot is not None and slot.free:
-        hours = professional_hours.get_hours(ai_profile)
-        if hours:
-            verdict = professional_hours.check(
-                hours, slot.start, slot.end, professional_hours.mentioned_professional(hours, lead_messages)
-            )
+    if slot is None:
+        return ""
+    hours = professional_hours.get_hours(ai_profile)
+    if not hours:
+        return requested_slot.build_agenda_fact_block(slot)
+    professional = professional_hours.mentioned_professional(hours, lead_messages)
+    lead_id = (context.get("lead") or {}).get("id")
+    busy_slots = context.get("calendar_busy_slots") or []
+    # alternativa livre na agenda E dentro do horário de atendimento — calculada aqui, não pela IA
+    alternative = professional_hours.nearest_free_start(
+        hours,
+        slot.start,
+        slot.end,
+        lambda start, end: not _has_conflict(busy_slots, start, end, exclude_lead_id=lead_id),
+        professional,
+    )
+    if not slot.free:
+        return requested_slot.build_agenda_fact_block(slot, alternative=alternative, hours_known=True)
+    verdict = professional_hours.check(hours, slot.start, slot.end, professional)
+    if not verdict.fits:
+        verdict.suggestion, verdict.suggestion_for = alternative or (None, None)
     return requested_slot.build_agenda_fact_block(slot, verdict)
 
 
@@ -4876,6 +4890,16 @@ def _build_child_prompt_meeting_management(context: Dict[str, Any], message_text
         "PROIBIDO responder de forma hesitante ('vou verificar', 'vou confirmar', 'um momento') "
         "quando dia e horário já foram informados — isso obriga outro turno e o lead fica sem "
         "resposta real; confirme já, como nas REGRAS acima para cancelamento.\n"
+        "- Se a VERIFICAÇÃO DO HORÁRIO PEDIDO (fim deste prompt) disser que o horário pedido está "
+        "ocupado ou fora do horário de atendimento: diga isso, proponha como pergunta o horário que "
+        "ela indica e diga que a sessão já marcada se mantém até o lead responder. Deixe "
+        "meeting_reschedule_requested=false e meeting_datetime_candidate=null — a remarcação só é "
+        "gravada no turno em que o lead aceitar, para ele nunca ficar com uma sessão que não "
+        "escolheu. Ex.: ✅ 'Quinta às 15h já está ocupado. Pode ser quinta às 16h? A sua sessão de "
+        "terça às 14h mantém-se até me dizer.'\n"
+        "- Se o lead aceitar um horário que você propôs para remarcar (ex.: 'pode ser', 'sim, às "
+        "16h'): confirme já a remarcação para esse horário — preencha "
+        "meeting_reschedule_requested=true e meeting_datetime_candidate com esse dia e hora.\n"
         + _MEETING_DAY_REFERENCE_RULE
         +
         "- Se a mensagem propuser SÓ UM HORÁRIO diferente do já confirmado, SEM mencionar um novo "
