@@ -68,6 +68,30 @@ Cada tipo de conhecimento num só sítio:
 | `docs/ops/local-dev.md` | cópias dos comandos → apontadores para os ficheiros |
 | `docs/discovery/README.md` | deixa de dizer que os comandos não são versionados |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `297f834` | `.gitignore` com exceções, `.gitattributes`, 4 skills, 9 comandos, cópias de `local-dev.md` → tabela |
+
+**Detalhes do commit `297f834`:**
+- `.gitignore` — `.claude/` → `.claude/*` + `!settings.json`, `!skills/`, `!commands/`
+- `.gitattributes` (novo) — `*.sh text eol=lf`: o repositório usa `core.autocrlf=true` e o bash falha com CRLF
+  (`aplicar_producao.sh` é o único `.sh`)
+- `docs/ops/local-dev.md` — as 9 cópias dos comandos foram comparadas com os ficheiros reais (todas
+  idênticas) antes de darem lugar à tabela
+- referências a "Comandos slash locais" atualizadas em 5 ficheiros; a de
+  `feat-fila-turno-do-dia-avaliador.md` fica (registo histórico de outra implementação)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** as skills de diagnóstico e os comandos `/statusdev`, `/discovery-*` e afins existiam só neste
+computador; noutra máquina, outra pessoa ou uma sessão na cloud não os tinha, e o `local-dev.md` guardava
+cópias deles para os recriar à mão.
+**Agora:** fazem parte do repositório e chegam a qualquer cópia dele; as conversas reais dos clientes
+continuam fora.
+**Para validar:** P1, P2 (feitos), P6 no fim.
+
 ### Fase 2 — Skill `documentacao-projeto`
 
 **Objetivo:** uma skill nossa, em PT-PT, que substitui as 3 de terceiros.
@@ -81,6 +105,31 @@ Cada tipo de conhecimento num só sítio:
 | `.../CREDITOS.md` | licenças (MIT ×2, Apache-2.0), origem, data, o que mudou |
 
 Fora do repositório: remover as 3 skills globais de terceiros.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(este commit)_ | skill `documentacao-projeto` (router + 3 referências + créditos) |
+
+**Detalhes:**
+- `SKILL.md` — router de 3 casos; uma única descrição sempre carregada em vez de 3
+- `references/registar-decisoes.md` — sem `docs/decisions/`: o porquê vive em discovery → implementations →
+  secção "Porquê está assim" em `docs/architecture/` na graduação, sem histórico
+- `references/auditar-claude-md.md` — rubrica de 100 pontos + regras próprias (o CLAUDE.md é índice e regras;
+  as secções obrigatórias nunca se cortam sem o utilizador)
+- `CREDITOS.md` — MIT (Matt Pocock, Addy Osmani) e Apache-2.0 (Anthropic), com o que mudou em cada ficheiro
+- fora do repositório: `npx skills remove … -g` das 3 skills de terceiros (confirmado: só ficam
+  `extrair-conversa`, `find-skills`, `fluxo-implementacao` em `~/.claude/skills/`)
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** havia 3 skills de terceiros que se podiam atualizar sozinhas e que, numa parte, mandavam
+organizar as decisões de forma diferente da do projeto.
+**Agora:** há uma só skill nossa, `documentacao-projeto`, em português, que abre a parte certa conforme o
+pedido (escrever skills e o CLAUDE.md, registar decisões, auditar o CLAUDE.md) e segue as regras deste
+projeto.
+**Para validar:** P3.
 
 ### Fases 3, 4, 5 — Docs dos agentes (um por fase)
 
@@ -97,13 +146,16 @@ só critérios e cenários) e descrições das 4 skills encurtadas.
 ## Checks de Validação
 
 ### Cenário P1 — Regras do `.gitignore`
-- [ ] `git check-ignore -v`: `.claude/skills/**` e `.claude/commands/*` não ignorados
-- [ ] `.claude/agentes/`, `.claude/worktrees/`, `.claude/settings.local.json` continuam ignorados
-- [ ] `git status` sem dados de clientes
+- [x] `git check-ignore -v`: `.claude/skills/**` e `.claude/commands/*` não ignorados
+- [x] `.claude/agentes/`, `.claude/worktrees/`, `.claude/settings.local.json` continuam ignorados
+- [x] `git status` sem dados de clientes
+- **Validado em:** 26/10/2026 — também `.claude/scheduled_tasks.lock` e `__pycache__/` ignorados
 
 ### Cenário P2 — Skills chegam a uma cópia nova do repositório
-- [ ] Worktree nova a partir da branch tem `.claude/skills/` e `.claude/commands/`
-- [ ] `grep` sem emails ou telefones de clientes nas skills
+- [x] A árvore do commit tem `.claude/skills/` (4 skills, references, scripts) e `.claude/commands/` (9)
+- [x] `grep` sem emails ou telefones de clientes nas skills
+- **Validado em:** 26/10/2026 — `git ls-tree -r HEAD -- .claude`; `aplicar_producao.sh` com `eol=lf`; só o nome
+  da empresa Sensi Vitae aparece como exemplo (já presente noutros docs versionados)
 
 ### Cenário P3 — `documentacao-projeto` abre a parte certa
 - [ ] "regista esta decisão" → registar-decisoes
@@ -122,7 +174,8 @@ só critérios e cenários) e descrições das 4 skills encurtadas.
       `docs/architecture/agentes/…`
 
 ### Cenário P6 — Portão da fila
-- [ ] `python scripts/fila/categorias_que_sobem.py` → só `seguranca_agente` (esperado) → merge com o "sim"
+- [ ] `python scripts/fila/categorias_que_sobem.py` → `seguranca_agente` + `instrucoes_ia` (o prompt do
+      cliente simulado em `simular.py`) — ambas esperadas → merge com o "sim"
 
 ---
 
