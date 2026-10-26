@@ -23,6 +23,8 @@ _OPTIONAL_ENUM_FIELDS: dict[str, frozenset[str]] = {
 _ROUTE_TO_ALIASES: dict[str, str] = {
     "presentation": "apresentation",  # typo recorrente: falta o "a-" do enum em PT
     "qualificacao": "qualification",  # grafia PT sem cedilha, observado em produção 23/08/2026
+    "apresentacao": "apresentation",  # grafia PT, observado no Playground em 26/10/2026
+    "apresentação": "apresentation",
 }
 
 

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     llm_api_key: Optional[str] = None
     llm_model: str = "gpt-4o-mini"
     llm_timeout_seconds: int = 20
+    # Teto de tempo das novas tentativas da Mãe/Filha num turno (decision_engine): cabe nos
+    # 60s com que o Playground espera pelo executors e folga nos 300s do lease do worker.
+    llm_decision_budget_seconds: int = 40
     openrouter_api_base: str = "https://openrouter.ai/api/v1/chat/completions"
     openrouter_api_key: Optional[str] = None
     qualification_heuristic_fallback: int = 1
