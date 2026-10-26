@@ -14,11 +14,12 @@
 
 | # | Problema | Onde está a causa | Destino |
 |---|---|---|---|
-| A | Sessão que começa quando outra acaba = "conflito"; 409 não tratado → 502 no Playground e queda do worker no WhatsApp real | Código: comparação de datas como texto em 6 sítios do backend-crm; `handle_meeting_scheduled` sem tratamento do 409 | [`fix-conflito-horario-comparado-como-texto.md`](../implementations/fix-conflito-horario-comparado-como-texto.md) |
+| A | Sessão que começa quando outra acaba = "conflito"; 409 não tratado → 502 no Playground e queda do worker no WhatsApp real | Código: comparação de datas como texto em 6 sítios do backend-crm; `handle_meeting_scheduled` sem tratamento do 409 | ✅ Feito e graduado em 26/10/2026 (`fix-conflito-horario-comparado-como-texto`) — ver `docs/architecture/agenda.md` |
 | A2 | Margem entre sessões (preparar a sala) | Não existe | [`feat-margem-entre-sessoes.md`](../implementations/feat-margem-entre-sessoes.md) — depois de A |
 | B | Na confirmação grava uma proposta antiga | Código: a Filha escolhe o horário sozinha; nada guarda a última proposta; a proteção de datas só confere "dia já falado" | [`fix-confirmacao-grava-proposta-antiga.md`](../implementations/fix-confirmacao-grava-proposta-antiga.md) (inclui "grava sem tipo/duração/nome") |
 | C | Assume o tipo de massagem, "relaxante só 60 min", ignora perguntas múltiplas | Metade configuração (c14, abaixo); metade código: pré-agendamento/agendamento não leem o Fluxo de Venda (M14) e o roteiro fixo do pré-agendamento compete com as instruções | c14 + [`fix-agendamento-le-fluxo-de-venda.md`](../implementations/fix-agendamento-le-fluxo-de-venda.md) |
 | D | "Boa tarde" às 10h55 | Código: nenhum prompt recebe a hora local; os exemplos fixos da receção dizem todos "Boa tarde!" | [`fix-saudacao-hora-local.md`](../implementations/fix-saudacao-hora-local.md) (+ paliativo na c14) |
+| E | Remarcação grava a contraproposta do agente sem o cliente aceitar (e fora do horário do terapeuta) | Código: a Filha de gestão pós-marcação põe a sua sugestão em `meeting_datetime_candidate`; `handle_meeting_cancel_or_reschedule` aplica sem conferir | [`fix-remarcacao-grava-contraproposta.md`](../implementations/fix-remarcacao-grava-contraproposta.md) — achado na graduação de A |
 
 ---
 
@@ -125,7 +126,7 @@ Validar a c14 na bancada: `python simular.py p-relax-sem-tipo c14`, `p-varias-pe
 
 ## Prompts de início (colar numa conversa nova, um por implementação)
 
-### P1 — A: horários comparados como texto
+### P1 — A: horários comparados como texto (✅ feito em 26/10/2026 — prompt mantido só como registo)
 ```
 Lê CLAUDE.md, docs/implementations/_guia-documentar-implementacao.md e
 docs/implementations/fix-conflito-horario-comparado-como-texto.md (já tem o diagnóstico da

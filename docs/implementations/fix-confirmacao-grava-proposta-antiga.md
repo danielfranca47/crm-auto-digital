@@ -96,3 +96,21 @@ várias opções e nenhuma bate → não gravar e perguntar qual prefere.
 - Fase 2: `python simular.py p-fora-horario B2` → pergunta o tipo/duração antes de gravar.
 - Regressão: `python simular.py p-micas B1`, `python simular.py p-ricardo B1` (aceites à primeira
   continuam a gravar no turno certo). Depois do deploy, os mesmos com `--prod`.
+
+## Evidência adicional — confirmação que não grava nada (26/10/2026)
+
+Vinda da graduação de `fix-conflito-horario-comparado-como-texto.md` ("Ajuste possível", juntado aqui por
+decisão do utilizador): no turno da confirmação a Mãe marca `meeting_scheduled=true` e a Filha escreve
+"Experiência Agendada", mas **não** devolve `meeting_datetime_candidate` → o executor regista
+`event=meeting_datetime_source source=none_child_no_candidate` e `missing_start_at`, e **nada é gravado** —
+o cliente fica a achar que tem marcação.
+
+- Bancada local, `p-val-17h` (`tentativas/20261026-1208-A1-ocupado-p-val-17h.md`): 3.º turno ("Sim, pode
+  confirmar!"), rota `pre-agendamento`, `reason=…|scheduling_agent_closing_disabled:pre-agendamento`.
+- Produção, `pos-marcacao` (`tentativas/20261026-1234-PROD-A1-pos-marcacao.md`): 2.º turno ("Sim, confirmo")
+  em `pre-agendamento`, sem evento de agenda.
+
+Mesmo turno e mesmo bloco ("MARCAÇÃO JÁ GRAVADA" / candidato da Filha) que este item já vai reescrever —
+incluir no Plan Mode um check: "confirmação com `meeting_scheduled=true` sem candidato nunca responde
+'Experiência Agendada'".
+
