@@ -16,10 +16,10 @@
 |---|---|---|---|
 | A | Sessão que começa quando outra acaba = "conflito"; 409 não tratado → 502 no Playground e queda do worker no WhatsApp real | Código: comparação de datas como texto em 6 sítios do backend-crm; `handle_meeting_scheduled` sem tratamento do 409 | ✅ Feito e graduado em 26/10/2026 (`fix-conflito-horario-comparado-como-texto`) — ver `docs/architecture/agenda.md` |
 | A2 | Margem entre sessões (preparar a sala) | Não existe | [`feat-margem-entre-sessoes.md`](../implementations/feat-margem-entre-sessoes.md) — depois de A |
-| B | Na confirmação grava uma proposta antiga | Código: a Filha escolhe o horário sozinha; nada guarda a última proposta; a proteção de datas só confere "dia já falado" | [`fix-confirmacao-grava-proposta-antiga.md`](../implementations/fix-confirmacao-grava-proposta-antiga.md) (inclui "grava sem tipo/duração/nome") |
+| B | Na confirmação grava uma proposta antiga | Código: a Filha escolhe o horário sozinha; nada guarda a última proposta; a proteção de datas só confere "dia já falado" | ✅ Feito e graduado em 26/10/2026 (`fix-confirmacao-grava-proposta-antiga`) — ver `docs/architecture/agenda.md`, "Turno da confirmação". Entrou antes de W1 (decisão do utilizador): W1 resolve o conflito em `_build_child_prompt_agendamento` ao juntar. Sobras em `agentes-agenda-melhorias-futuras.md` M11–M13 |
 | C | Assume o tipo de massagem, "relaxante só 60 min", ignora perguntas múltiplas | Metade configuração (c14, abaixo); metade código: pré-agendamento/agendamento não leem o Fluxo de Venda (M14) e o roteiro fixo do pré-agendamento compete com as instruções | c14 + [`fix-agendamento-le-fluxo-de-venda.md`](../implementations/fix-agendamento-le-fluxo-de-venda.md) |
 | D | "Boa tarde" às 10h55 | Código: nenhum prompt recebe a hora local; os exemplos fixos da receção dizem todos "Boa tarde!" | [`fix-saudacao-hora-local.md`](../implementations/fix-saudacao-hora-local.md) (+ paliativo na c14) |
-| E | Remarcação grava a contraproposta do agente sem o cliente aceitar (e fora do horário do terapeuta) | Código: a Filha de gestão pós-marcação põe a sua sugestão em `meeting_datetime_candidate`; `handle_meeting_cancel_or_reschedule` aplica sem conferir | [`fix-remarcacao-grava-contraproposta.md`](../implementations/fix-remarcacao-grava-contraproposta.md) — achado na graduação de A |
+| E | Remarcação grava a contraproposta do agente sem o cliente aceitar (e fora do horário do terapeuta) | Código: a Filha de gestão pós-marcação põe a sua sugestão em `meeting_datetime_candidate`; `handle_meeting_cancel_or_reschedule` aplica sem conferir | [`fix-remarcacao-grava-contraproposta.md`](../implementations/fix-remarcacao-grava-contraproposta.md) — achado na graduação de A; reutilizar `meeting_proposal.last_proposal` / `accepted_slot` (de B) |
 
 ---
 
@@ -138,7 +138,7 @@ próprio cenário), p-val-17h e pos-marcacao; depois do deploy os mesmos com --p
 Toca no runner do WhatsApp (envio real): só se junta a main com o meu "sim".
 ```
 
-### P2 — B: confirmação grava proposta antiga
+### P2 — B: confirmação grava proposta antiga (✅ feito em 26/10/2026 — prompt mantido só como registo)
 ```
 Lê CLAUDE.md, docs/implementations/_guia-documentar-implementacao.md e
 docs/implementations/fix-confirmacao-grava-proposta-antiga.md (diagnóstico pronto de 26/10/2026).

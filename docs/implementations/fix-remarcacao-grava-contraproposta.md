@@ -43,5 +43,12 @@ sessão que não pode dar.
 
 ## Relação com outros itens
 
-- Mexe no mesmo ficheiro que `fix-confirmacao-grava-proposta-antiga.md` (B), noutro bloco — combinar a
-  ordem no Plan Mode.
+- B (`fix-confirmacao-grava-proposta-antiga`) já está em `main` (26/10/2026) e deixou a leitura
+  pronta para reutilizar: `backend-executors/app/services/meeting_proposal.py` —
+  `last_proposal(history, inbound)` dá as opções que o agente propôs por último (ou a hora que o
+  cliente disse) e `accepted_slot(inbound, proposal)` diz se o cliente aceitou alguma. Aqui a
+  pergunta é "o candidato da Filha é uma opção da proposta deste turno, que o cliente ainda não
+  aceitou?". A conferência de B (`_apply_meeting_confirmation_guard`) não corre na gestão
+  pós-marcação (`_build_child_prompt_meeting_management`, chamada a `_apply_meeting_date_guard`
+  em `_decide_post_meeting_management`) — é lá que entra a deste item. Ver `docs/architecture/agenda.md`,
+  "Turno da confirmação".
