@@ -49,6 +49,12 @@ Rules That LLMs Cannot Bypass", dev.to/aws.)
 - `field_extractor.py` — filtro de confiança fail-closed: um campo extraído
   só é aceito se `confidence[key] >= threshold`; sem essa checagem em código,
   qualquer menção tangencial vira campo preenchido.
+- Filha Recepção — `_drop_trailing_question()` e `_drop_promise_sentences()` em
+  `compose_decision_output()`: tiram a pergunta da Fase 0 que o lead já respondeu
+  e a promessa ("Vou passar as informações…") quando o pedido segue para a 2.ª
+  decisão. Nos dois casos o prompt já pedia o comportamento e o modelo falhava; na
+  promessa, um exemplo ❌ a mais no prompt fez o modelo copiá-lo (ver
+  [`llm-architecture.md`](llm-architecture.md), "Filha Recepção").
 
 **Gap conhecido:** os blocos "PROIBIÇÕES" e "VALIDAÇÃO — VERIFICAR ANTES DE
 RETORNAR" nos prompts de Filha (ex.: "se `checkout_sent=true` →
