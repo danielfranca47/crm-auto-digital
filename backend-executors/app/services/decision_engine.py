@@ -24,6 +24,7 @@ from app.services import (
     handoff_policy,
     llm_service,
     meeting_date_guard,
+    meeting_proposal,
     professional_hours,
     requested_slot,
 )
@@ -1827,14 +1828,58 @@ _MEETING_DAY_REFERENCE_RULE = (
 )
 
 
-def _build_meeting_already_booked_block() -> str:
+def _professional_names(ai_profile: Dict[str, Any]) -> List[str]:
+    hours = professional_hours.get_hours(ai_profile) if professional_hours.source_text(ai_profile) else None
+    return [name for name in (hours or {}) if name != "Profissional"]
+
+
+def _confirmation_fact(context: Dict[str, Any]) -> meeting_proposal.AcceptedSlot:
+    """Horário que o lead aceitou nesta mensagem: a última proposta lida do histórico. Ver
+    meeting_proposal.py."""
+    ai_profile = context.get("ai_profile") or {}
+    tz_name = ai_profile.get("timezone")
+    inbound_now = _extract_message_text(context)
+    names = _professional_names(ai_profile)
+    proposal = meeting_proposal.last_proposal(
+        context.get("history") or [], inbound_now, tz_name=tz_name, professionals=names
+    )
+    return meeting_proposal.accepted_slot(inbound_now, proposal, tz_name=tz_name, professionals=names)
+
+
+def _build_meeting_already_booked_block(accepted: Optional[meeting_proposal.AcceptedSlot] = None) -> str:
     """Quando a Mãe dá meeting_scheduled=true, a marcação é gravada neste turno — a Filha tem
     de enviar a confirmação final, não o resumo + "Posso confirmar?" que as instruções da
     conta pedem antes de o lead aceitar (em teste real o lead ficava sem a confirmação).
 
+    `accepted` (de _confirmation_fact) diz qual foi o horário aceite: sem ele a Filha escolhia
+    sozinha e, em teste real, confirmou a 1.ª proposta, já recusada, em vez da 2.ª. Com várias
+    opções em aberto e nenhuma escolhida, o bloco manda perguntar qual em vez de confirmar.
+
     Só entra quando o lead NÃO está a entrar na fase neste turno: na entrada,
     meeting_scheduler.handle_meeting_scheduled adia a criação (gate M3) e uma confirmação
     final aqui anunciaria uma marcação que não existe."""
+    if accepted is not None and accepted.source == "ambiguous":
+        options = "; ".join(meeting_proposal.describe(o) for o in accepted.options)
+        return (
+            "\nO LEAD CONFIRMOU, MAS HÁ MAIS DE UMA OPÇÃO EM ABERTO (prevalece sobre o passo de pedir "
+            "confirmação das instruções personalizadas):\n"
+            f"A última proposta tinha estas opções: {options}. A mensagem do lead não diz qual "
+            "escolheu. Pergunte numa frase curta qual delas prefere, citando as opções, e deixe "
+            "meeting_datetime_candidate=null: a marcação só é gravada quando ele escolher.\n"
+        )
+    if accepted is not None and accepted.option is not None:
+        option = accepted.option
+        return (
+            "\nMARCAÇÃO JÁ GRAVADA NESTE TURNO (prevalece sobre o passo de pedir confirmação das "
+            "instruções personalizadas):\n"
+            f"O lead aceitou o horário da última proposta: {meeting_proposal.describe(option)}. O "
+            "sistema grava a marcação com meeting_datetime_candidate assim que você responder. "
+            "Escreva já a mensagem de confirmação final com exatamente este dia, esta hora e este "
+            "profissional — no formato das instruções personalizadas, se houver um — e termine sem "
+            "pedir confirmação: o lead já confirmou, e perguntar de novo faz parecer que nada ficou "
+            f"marcado. Preencha meeting_datetime_candidate=\"{meeting_proposal.candidate_iso(option)}\" "
+            f"e meeting_day_reference=\"{meeting_date_guard.WEEKDAY_NAMES_PT[option.start.weekday()]}\".\n"
+        )
     return (
         "\nMARCAÇÃO JÁ GRAVADA NESTE TURNO (prevalece sobre o passo de pedir confirmação das "
         "instruções personalizadas):\n"
@@ -2099,6 +2144,50 @@ def _apply_meeting_date_guard(
         result.trace.get("reference"),
         result.trace.get("reference_source"),
         result.trace.get("text_changed"),
+    )
+
+
+def _apply_meeting_confirmation_guard(
+    decision: DecisionOutput, context: Dict[str, Any], logger: Optional[logging.Logger] = None
+) -> None:
+    """No turno da confirmação, o candidato tem de ser o horário que o lead aceitou.
+
+    Corre depois de _apply_meeting_date_guard e antes do meeting_scheduler: corrige (ou preenche,
+    quando a Filha não o devolveu) o candidato com a opção aceite; com várias opções em aberto e
+    um candidato que não é nenhuma, não grava e pergunta qual. Ver meeting_proposal.py."""
+    trace = decision.decision_trace or {}
+    if trace.get("meeting_scheduled") is not True or trace.get("is_phase_entry"):
+        return
+    ai_profile = context.get("ai_profile") or {}
+    signals = trace.get("child_signals_structured")
+    signals = dict(signals) if isinstance(signals, dict) else {}
+    result = meeting_proposal.reconcile_confirmation(
+        signals.get("meeting_datetime_candidate"),
+        decision.message_text or "",
+        _confirmation_fact(context),
+        tz_name=ai_profile.get("timezone"),
+        professionals=_professional_names(ai_profile),
+    )
+    trace["meeting_confirmation_guard"] = result.trace
+    decision.decision_trace = trace
+    action = result.trace.get("action")
+    if action in ("ok", "skip"):
+        return
+    signals["meeting_datetime_candidate"] = result.candidate
+    if result.candidate:
+        signals["meeting_proposed"] = True
+    trace["child_signals_structured"] = signals
+    decision.message_text = result.message_text
+    if result.blocked:
+        trace["meeting_scheduled"] = False
+        trace["meeting_scheduled_blocked"] = "ambiguous_options"
+    (logger or logging.getLogger(__name__)).warning(
+        "event=meeting_confirmation_%s from=%s to=%s source=%s text_changed=%s",
+        "blocked" if result.blocked else "corrected",
+        result.trace.get("candidate_from"),
+        result.candidate,
+        result.trace.get("accepted_source"),
+        result.trace.get("text_changed", result.blocked),
     )
 
 
@@ -3617,7 +3706,7 @@ def _build_child_prompt_apresentation(
     # Fora do modo recibo, o bloco "marcação já gravada" vai no FIM do prompt (ver abaixo):
     # no meio, a regra sales "peça confirmação" e as instruções da conta vinham depois e venciam.
     _already_booked_block = (
-        _build_meeting_already_booked_block()
+        _build_meeting_already_booked_block(_confirmation_fact(context))
         if _apres_meeting_scheduled
         and not _booking_confirmation_block
         and not _compute_is_phase_entry(context, "apresentation")
@@ -4394,6 +4483,22 @@ def _build_child_prompt_pre_agendamento(
         + _build_knowledge_reference_block(context)
         + _build_agenda_fact_block(context, message_text)
     )
+    # A confirmação também cai aqui: num agente de agendamento, quando a Mãe diz "closing",
+    # _enforce_scheduling_agent_no_closing devolve a rota à categoria atual. Sem candidato no
+    # schema a Filha escrevia "Experiência Agendada" e nada ficava gravado.
+    if _extract_meeting_scheduled_signal(mother_decision) and not _compute_is_phase_entry(
+        context, "pre-agendamento"
+    ):
+        accepted = _confirmation_fact(context)
+        if accepted.option is not None or accepted.source == "ambiguous":
+            _pre_prompt += (
+                "\nSINAIS DA MARCAÇÃO (neste turno, em vez de checkin_at_iso): signals_structured = "
+                '{"meeting_datetime_candidate": "YYYY-MM-DDTHH:MM:SS" | null, "meeting_day_reference": '
+                '"..." | null, "meeting_duration_minutes": inteiro | null} — candidato em ISO naive no fuso '
+                "de ai_profile.timezone; duração em minutos só se foi dita na conversa.\n"
+                + _MEETING_DAY_REFERENCE_RULE
+                + _build_meeting_already_booked_block(accepted)
+            )
     return _pre_prompt
 
 
@@ -4583,7 +4688,7 @@ def _build_child_prompt_agendamento(
         + _build_knowledge_reference_block(context, exclude_categories=("service_pricing_table",))
         + _build_agenda_fact_block(context, message_text)
         + (
-            _build_meeting_already_booked_block()
+            _build_meeting_already_booked_block(_confirmation_fact(context))
             if _extract_meeting_scheduled_signal(mother_decision)
             and not _compute_is_phase_entry(context, "agendamento")
             else ""
@@ -5563,6 +5668,7 @@ def compose_decision_output(
     if decision.decision_trace is None:
         decision.decision_trace = {}
     decision.decision_trace["is_phase_entry"] = _is_phase_entry
+    _apply_meeting_confirmation_guard(decision, context)
     _phases_result = _evaluate_sales_flow_phases(
         context, effective_route_to, _extract_message_text(context),
         detected_intents=mother_decision.detected_intents,
