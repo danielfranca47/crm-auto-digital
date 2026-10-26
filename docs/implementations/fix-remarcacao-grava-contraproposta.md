@@ -83,6 +83,35 @@ cabe no horário do terapeuta; o 409 deixa de gerar mensagem duplicada.
 | `backend-executors/tests/test_meeting_reschedule_guard.py` | testes novos |
 | `backend-executors/tests/test_meeting_cancel_reschedule_action.py` | teste do 409 atualizado |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `8c3a364` | Conferência da remarcação (origem + agenda + horário do profissional) e 409 sem 2.ª mensagem |
+
+**Detalhes do commit `8c3a364`:**
+- `meeting_proposal.py` — `reschedule_origin` (`lead_stated` / `accepted` / `counter_proposal`),
+  `announces_reschedule`, `reschedule_unavailable_text`, `reschedule_confirm_text`
+- `decision_engine.py` — `_apply_meeting_reschedule_guard` + `_current_meeting`, chamados em
+  `_decide_post_meeting_management` depois do date guard
+- `meeting_scheduler.py` — 409 em `handle_meeting_cancel_or_reschedule` escreve a frase em
+  `decision.message_text` e devolve `None`
+- `docs/architecture/agenda.md` — "Cancelamento e reagendamento via IA"
+- Testes: 448 passam em `backend-executors/tests` (9 novos em `test_meeting_reschedule_guard.py`)
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** quando o cliente pedia para remarcar para um horário ocupado, a Lara propunha outro horário
+e a marcação era logo mudada para essa proposta, mesmo fora do horário da terapeuta e antes de o cliente
+responder. Se o CRM recusasse, o cliente recebia duas mensagens a explicar a mesma coisa.
+**Agora:** a marcação só muda quando o cliente pediu ou aceitou aquele horário, e só se ele estiver livre
+e couber no horário da terapeuta. Enquanto isso, a sessão antiga continua de pé. Se o CRM recusar à
+última hora, sai uma só mensagem: "esse horário já não está disponível; a sua sessão de … mantém-se".
+A Lara ainda pode **propor** um horário fora do horário da terapeuta (isso trata a Fase 2), mas esse
+horário já não é gravado.
+**Para validar:** Cenários P1 (sem evento `rescheduled` nem "[auto]") e P2, abaixo. O P1 "propõe um
+horário que cabe" só fica garantido depois da Fase 2.
+
 ### Fase 2 — Sugestão calculada + prompt
 
 **Objetivo:** com o horário pedido ocupado, a Lara propõe um horário que cabe (calculado em código) e
