@@ -153,20 +153,80 @@ responde "pode ser", remarca. Isto vale também para marcações novas com o hor
 
 ---
 
+## Fase 3 — Diagnóstico + Correção (26/10/2026)
+
+### Problema identificado
+
+O teste P2 na bancada (`tentativas/20261026-1718-E1-pos-remarca-aceita.md`) mostrou que a Lara propôs
+**quinta** às 16h, o cliente respondeu "Pode ser às 16h", e a sessão foi remarcada para **terça** às 16h,
+o dia da sessão antiga. A resposta ainda perguntava "Posso confirmar?".
+
+Causas:
+1. A Filha seguiu a regra do prompt "só hora, sem dia → mesmo dia da sessão marcada".
+   `reschedule_origin` olhava primeiro para "a hora que o cliente escreveu" e por isso deixou passar
+   terça às 16h, embora `accepted_slot` desse quinta às 16h como aceite.
+2. A frase da Fase 2 "A sua sessão de terça às 14h mantém-se" era lida por `last_proposal` como mais
+   uma opção. Com um "Pode ser" sozinho, a aceitação ficaria ambígua e a remarcação seria bloqueada.
+
+### Correção
+
+| Arquivo | Mudança |
+|---|---|
+| `backend-executors/app/services/decision_engine.py` | `_reschedule_fact` (proposta sem a sessão já marcada) + `_meeting_start`; `_apply_meeting_reschedule_guard`: opção aceite → candidato corrigido com `reconcile_confirmation`; remarcação que segue com texto que não a dá como feita → `reschedule_done_text`; prompt: exceção à regra "só hora → mesmo dia" |
+| `backend-executors/app/services/meeting_proposal.py` | `reschedule_origin`: `accepted` antes de `lead_stated`; `reschedule_done_text` |
+| `backend-executors/tests/test_meeting_reschedule_guard.py` | 3 casos novos |
+| `docs/architecture/agenda.md`, `docs/prompts_llms.md` | conferência em três passos |
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `512ebfc` | Remarcação aceite grava o dia da proposta; texto "fica remarcada" |
+
+**Detalhes do commit `512ebfc`:** ver tabela acima. Testes: 456 passam em `backend-executors/tests`.
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** quando o cliente aceitava a proposta da Lara dizendo só a hora ("pode ser às 16h"), a sessão
+podia ir para o dia antigo em vez do dia proposto. Às vezes a Lara ainda pedia confirmação quando a
+remarcação já estava feita.
+**Agora:** quando o cliente aceita uma proposta, a sessão é remarcada para o dia e a hora dessa
+proposta, e a Lara confirma numa frase: "Combinado! A sua sessão fica remarcada para quinta-feira,
+29/10, às 16h com Val." Um "Pode ser" sozinho também funciona. Na bancada a IA ainda escreveu terça
+nas duas corridas, e foi o código que corrigiu.
+**Para validar:** P2 e P2b, abaixo.
+
+---
+
 ## Checks de Validação (*)
 
-Bancada `.claude/agentes/sensi-vitae` (código desta worktree), com evento ocupado qui 29/10 15–16h.
+Bancada `.claude/agentes/sensi-vitae`: core e CRM de `ambiente/codigo`, backend-executors desta
+worktree na porta 8102 (com o `.env` da bancada) e evento ocupado qui 29/10 15–16h. O evento é
+inserido pelo script `simular_ocupado.py`, porque o `simular.py` apaga as marcações no arranque.
 
-### Cenário P1 — Remarcação para horário ocupado (`python simular.py pos-marcacao E1`)
-- [ ] Turno 4: a Lara diz que quinta 15h está ocupado e propõe um horário que cabe (com a Val, até às 16h)
-- [ ] Turno 4: **nenhum** evento `rescheduled` e nenhuma mensagem "[auto]"
-- [ ] Turno 5: a marcação continua ter 27/10 14h
+### Cenário P1 — Remarcação para horário ocupado (`pos-marcacao`)
+- [x] Turno 4: a Lara diz que quinta 15h está ocupado e propõe um horário que cabe (com a Val, até às 16h)
+- [x] Turno 4: **nenhum** evento `rescheduled` e nenhuma mensagem "[auto]"
+- [x] Turno 5: a marcação continua ter 27/10 14h
+- **Validado em:** 26/10/2026 — `E1` (Fase 2) e `E2` (Fase 3): "quinta às 15h já está ocupado. Pode ser
+  quinta às 16h com a Val? A sua sessão de terça às 14h mantém-se"; sem evento; turno 5 "a sua sessão
+  de amanhã às 14h mantém-se".
 
-### Cenário P2 — Cliente aceita a contraproposta (cenário novo `pos-remarca-aceita`)
-- [ ] O cliente responde "Pode ser às 16h" → evento `rescheduled` para qui 29/10 16h
+### Cenário P2 — Cliente aceita a contraproposta (`pos-remarca-aceita`, "Pode ser às 16h")
+- [x] Evento `rescheduled` para qui 29/10 16h; resposta "fica remarcada para quinta-feira, 29/10, às 16h"
+- **Validado em:** 26/10/2026 — `E1` falhou (remarcou para terça às 16h → Fase 3); `E2` ✅. A Filha
+  devolveu terça às 16h e o guardrail corrigiu (`event=meeting_reschedule_corrected`).
+
+### Cenário P2b — Cliente aceita só com "Pode ser" (`pos-remarca-pode-ser`)
+- [x] Evento `rescheduled` para qui 29/10 16h
+- **Validado em:** 26/10/2026 — `E2` ✅ (corrigido pelo guardrail, como no P2).
 
 ### Cenário P3 — Regressão marcação nova (`p-aceita-2a`, `p-cedo-tarde`)
-- [ ] Marcação gravada no horário aceite; sugestões dentro do horário do terapeuta
+- [x] Marcação gravada no horário aceite; sugestões dentro do horário do terapeuta
+- **Validado em:** 26/10/2026 — `E1` e `E2`: p-cedo-tarde propõe 18h30 com o Daniel (último início),
+  depois grava sexta 11h ou quinta 18h30, conforme o aceite; p-aceita-2a grava quinta 16h/17h.
+  Observação fora do âmbito: em `E1` p-aceita-2a, com duas opções e "Pode ser sim", ficou gravada a
+  1.ª. É a regra de `fix-confirmacao-grava-proposta-antiga` (candidato que é uma das opções passa).
 
 ### Cenário C1 — Playground de produção (`--prod`, depois do deploy)
 - [ ] P1 e P3 com `--prod`, com o mesmo resultado
@@ -177,3 +237,9 @@ Bancada `.claude/agentes/sensi-vitae` (código desta worktree), com evento ocupa
 
 - `handle_meeting_scheduled` (marcação nova) continua a enviar a mensagem de conflito **além** do texto
   da Filha no 409 — a mesma duplicação pode acontecer numa marcação nova numa corrida.
+- A Filha de gestão pós-marcação ignorou a exceção nova do prompt ("hora da sua proposta → dia da
+  proposta") nas 2 corridas; quem garante o dia certo é o guardrail. Se a Filha deixar
+  `meeting_reschedule_requested=false` num "Pode ser" (aceitação sem pedido de remarcação), nada é
+  remarcado — o guardrail não preenche o sinal.
+- Com duas opções em aberto e um "Pode ser sim" ambíguo, a marcação nova grava a opção que a Filha
+  escolher (regra de `fix-confirmacao-grava-proposta-antiga`).
