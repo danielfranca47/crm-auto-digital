@@ -119,14 +119,64 @@ português. O erro fica guardado na conta para o ecrã o mostrar (o ecrã vem na
 | `frontend-crm/src/components/agente/CamadaApresentacao.tsx` | Estado da ligação ao escolher Google Calendar + link para Minha Conta |
 | `frontend-crm/src/services/api.ts` | Tipo do `getStatus` com `last_error` |
 
+Decisão: no AI Profile não há segundo botão de ligar — a ligação é da conta e vive só em Minha
+Conta; o modal mostra o estado real e aponta para lá (evita dois fluxos OAuth).
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `4aef104` | Avisos de ligação recusada / último erro em Minha Conta, mensagem real no erro da Agenda, estado da ligação no AI Profile |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** uma ligação falhada dava só um aviso rápido genérico ("Erro ao conectar") que desaparecia;
+uma conta ligada sem acesso ao calendário aparecia como "Conectado" sem mais nada; no AI Profile,
+escolher "Google Calendar" dava a ideia de que o calendário ficava ligado.
+**Agora:** Minha Conta mostra um aviso que fica no ecrã a explicar o motivo (ex.: "A Google não deu
+acesso ao seu calendário") com o botão "Ligar de novo"; se a conta está ligada mas a Google recusa,
+aparece um aviso amarelo com "Voltar a ligar"; o erro do "Sincronizar Google" diz o motivo real; e
+no AI Profile, ao escolher Google Calendar, aparece se a conta está mesmo ligada e um link para
+Minha Conta.
+**Para validar:** Cenário P3 (browser, local).
+
 ### Fase 3 — Agenda do Google visível ao agente sem clique (M1)
 
 | Arquivo | O que muda |
 |---|---|
-| `backend-crm/services/ai_orchestrator/orchestrator.py` | `_load_calendar_busy_slots` sincroniza antes (cache 3 min, nunca bloqueia) |
+| `backend-crm/services/ai_orchestrator/orchestrator.py` | `_load_calendar_busy_slots` sincroniza antes (cache 3 min, timeout 5 s, nunca bloqueia); ignora eventos Google "Disponível" |
+| `backend-crm/services/google_calendar_sync.py` | Guarda `transparency` do evento em `google_transparency` |
+| `backend-crm/database.py` | `ensure_column` `appointments.google_transparency` (depois da reconstrução de `_migrate_appointments_lead_nullable`) |
+| `backend-crm/routes/appointments.py`, `backend-crm/routes/leads.py` | `_check_conflict` ignora eventos Google "Disponível" |
 | `frontend-crm/src/pages/Agenda.tsx` | Sync automático do mês ao abrir |
-| `docs/architecture/google-calendar.md`, `docs/architecture/playground-parity.md` | Estado atual |
-| `docs/plans/google-calendar-melhorias-pos-etapa-10-2.md` | Retirar M1 e M4 |
+| `backend-crm/tests/*` | TTL/falha da sync antes dos ocupados; transparency na sync e no conflito; coluna nova nos esquemas de teste |
+| `docs/architecture/agenda.md`, `google-calendar.md`, `playground-parity.md`, `_overview.md` | Estado atual |
+| `docs/plans/google-calendar-melhorias-pos-etapa-10-2.md` | Retirar M1 e M4; nota de consentimento para M2 |
+
+Decisões:
+- **Sob demanda, não job periódico:** a sync corre quando o agente precisa (dentro de
+  `enrich_context_bundle`, só `agent_mode == "agenda"`) e ao abrir a Agenda. Sem agendador novo
+  (o backend-crm não tem um) e sem chamadas à Google para contas paradas.
+- **Só "Ocupado" bloqueia** (decisão do utilizador em 26/10/2026): com a sync automática, um
+  aniversário de dia inteiro (no Google é "Disponível" por defeito) bloquearia o dia todo. Eventos
+  "Disponível" continuam na Agenda mas não contam no agente nem no `_check_conflict`.
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `6d7ffaf` | Sync do Google antes dos ocupados do agente, "Disponível" não bloqueia, sync ao abrir a Agenda, docs |
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o agente só sabia das sessões marcadas pelo CRM ou importadas por alguém que tivesse
+clicado "Sincronizar Google" — uma sessão marcada só no Google podia ser oferecida a outro cliente.
+**Agora:** sempre que o agente vai propor ou confirmar horários, o CRM vai primeiro buscar ao Google
+os próximos 30 dias (no máximo de 3 em 3 minutos por conta). Se a Google falhar, o agente responde
+na mesma com o que já sabe. Eventos marcados no Google como "Disponível" (ex.: aniversários)
+aparecem na Agenda mas não ocupam horário. A Agenda também vai buscar o mês ao Google sozinha
+quando é aberta.
+**Para validar:** Cenário P4 (testes automáticos — validados) e C1 (produção, depois do deploy).
 
 ---
 
@@ -148,12 +198,26 @@ português. O erro fica guardado na conta para o ecrã o mostrar (o ecrã vem na
 - [ ] "Sincronizar Google" com erro → toast com a mensagem do backend
 - [ ] AI Profile → Calendário → Google Calendar mostra se a conta está ligada
 
+### Cenário P4 — Sync antes dos ocupados e "Disponível" (testes automáticos)
+- [x] Sync da janela antes de ler os ocupados, com timeout de 5 s; 2ª chamada dentro de 3 min não sincroniza; depois de 3 min sincroniza
+- [x] Falha da Google (ou erro inesperado) não bloqueia e devolve o que está na tabela
+- [x] Evento Google "Disponível" fica guardado, não conta como ocupado nem como conflito
+- [x] Migração: `init_db` 2x numa base nova cria `google_transparency` sem perder `user_id`/`source`
+- **Validado em:** 26/10/2026 — suite backend-crm 259 verdes; migração verificada com base temporária
+
 ### Cenário C1 — Agente vê o Google sem clique (produção, bancada `.claude/agentes/sensi-vitae/`)
+
+Só testável depois do deploy (merge em `main` → Railway).
+
 - [ ] `prod_turno.py` ação `sync` → 200
-- [ ] Evento criado só no Google (hora livre) → turno `chat` de agendamento sem clicar em sincronizar → o agente não oferece essa hora
+- [ ] Evento criado só no Google (hora livre, marcado como Ocupado) → turno `chat` de agendamento sem clicar em sincronizar → o agente não oferece essa hora
+- [ ] Evento de dia inteiro "Disponível" nesse dia → o agente continua a oferecer horários desse dia
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
 - Imagem da página de consentimento do calendário no aviso de Minha Conta (captar ligando uma conta Google de teste que nunca autorizou a app).
+- Contas já ligadas sem `calendar.events` antes deste deploy só ficam sinalizadas depois do primeiro erro (sync, Agenda aberta ou mensagem do agente) — não há verificação retroativa.
+- Formato das datas do Google: `start_at` fica com o offset do calendário (`+00:00`/`+01:00`) ou só a data (dia inteiro), e a limpeza compara texto com ISO UTC. Nas bordas da janela, um evento pode ser apagado e reimportado na sync seguinte; normalizar para UTC se causar problema visível.
+- Cache da sync é por processo: com vários workers, uma conta pode ter algumas sincronizações a mais em 3 min.
