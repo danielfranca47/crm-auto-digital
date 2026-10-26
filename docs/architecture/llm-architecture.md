@@ -51,7 +51,7 @@ whatsapp_worker
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `route_to` | `recepcao\|qualification\|apresentation\|pre-agendamento\|agendamento\|follow-up\|closing` | Rota decidida. `pre-agendamento`/`agendamento` só fazem sentido para templates de agendamento (`_SCHEDULING_AGENT_TEMPLATES` — ver [`pipeline-phases.md`](pipeline-phases.md)). Campo obrigatório, sem tolerância genérica de enum (ao contrário de `perceived_category`, que degrada para `None`) — mas `_normalize_route_to_alias()` (`orchestrator_models.py`) corrige uma lista fechada de aliases conhecidos e recorrentes da LLM antes da validação (`_ROUTE_TO_ALIASES`: hoje `"presentation"→"apresentation"`, `"qualificacao"→"qualification"`). Qualquer valor fora dessa lista continua a levantar `ValidationError` e cai no fallback/retry existente — comportamento intencional, para não mascarar erros genuinamente desconhecidos. |
+| `route_to` | `recepcao\|qualification\|apresentation\|pre-agendamento\|agendamento\|follow-up\|closing` | Rota decidida. `pre-agendamento`/`agendamento` só fazem sentido para templates de agendamento (`_SCHEDULING_AGENT_TEMPLATES` — ver [`pipeline-phases.md`](pipeline-phases.md)). Campo obrigatório, sem tolerância genérica de enum (ao contrário de `perceived_category`, que degrada para `None`) — mas `_normalize_route_to_alias()` (`orchestrator_models.py`) corrige uma lista fechada de aliases conhecidos e recorrentes da LLM antes da validação (`_ROUTE_TO_ALIASES`: hoje `"presentation"`/`"apresentacao"`/`"apresentação"`→`"apresentation"`, `"qualificacao"→"qualification"`). Qualquer valor fora dessa lista continua a levantar `ValidationError` e cai nas novas tentativas / fallback — comportamento intencional, para não mascarar erros genuinamente desconhecidos. |
 | `perceived_category` | mesmos valores + null | Categoria percebida |
 | `confidence` | 0..1 | Confiança da decisão |
 | `reason` | string | Justificativa textual |
@@ -354,12 +354,38 @@ gera o log `event=llm_child_temperature route=<rota> temperature=<valor>`.
 `backend-executors/app/services/llm_service.py` — helper partilhado `_post_with_retry()`,
 usado pelas seis funções públicas (`generate_mother_route`, `generate_decision_text`,
 `generate_child_result`, `generate_conflict_message`, `generate_appointment_reminder_message`,
-`generate_appointment_title_message`): até 2 tentativas, com 1s de backoff entre elas, antes de
-propagar a excepção final. Cobre falhas transitórias de rede (`httpx.RequestError`) e
-status HTTP retryable (429/500/502/503/504). Aplica-se tanto ao fluxo real (WhatsApp,
-via fila de jobs) quanto ao Playground (chamada síncrona, sem fila) — antes desta
-camada, o Playground não tinha nenhum retry e qualquer falha transitória caía
-directo no fallback `reason="llm_failure"` (`message_text=""`).
+`generate_appointment_title_message`): por omissão até 2 tentativas, com 1s de backoff entre
+elas, antes de propagar a excepção final. Cobre falhas transitórias de rede
+(`httpx.RequestError`) e status HTTP retryable (429/500/502/503/504) — a mesma regra que
+`is_retryable_http_error()` expõe. `max_attempts` e `timeout_seconds` são parâmetros: a Mãe e
+a Filha de `decide()` chamam com `max_attempts=1`, porque repetem a etapa inteira (ver abaixo).
+
+### Falhas da IA e novas tentativas (Mãe/Filha)
+
+`decision_engine._run_llm_stage()` envolve cada etapa — Mãe (chamada → JSON →
+`MotherDecision`) e cada chamada da Filha (chamada → JSON → `ChildResult`) — e repete **só
+essa etapa** (a Mãe já validada não é refeita quando a Filha falha):
+
+- **Até 4 tentativas por etapa** (`LLM_STAGE_MAX_ATTEMPTS`), um contador único para todos os
+  motivos repetíveis: `request_error` (rede/timeout), `status_429/5xx`, `invalid_json`,
+  `validation_error` (Pydantic) e `invalid_output` (resposta sem texto). Espera 1s, 2s, 4s.
+- **Não repete** 4xx não-retryable (400/401/403/422) nem exceções de código — outra
+  tentativa não resolveria.
+- **Orçamento de tempo do turno:** `settings.llm_decision_budget_seconds` (40s, env
+  `LLM_DECISION_BUDGET_SECONDS`), partilhado pela Mãe e pela Filha. Cada chamada usa
+  `timeout = min(llm_timeout_seconds, tempo restante)`, e não se começa outra tentativa com
+  menos de 5s restantes. Cabe nos 60s com que o Playground (`backend-crm/routes/playground.py`)
+  espera pelo executors e folga nos 300s do lease do job do worker.
+- Mesmo prompt em cada tentativa (sem texto de correção — não mexe nas instruções da IA). O
+  laço da Filha `qualification` com `VALIDATION_ERRORS` continua por cima, só para desvio de
+  conteúdo (campo errado, pergunta vazia ou repetida).
+- Logs: `event=llm_stage_retry stage=mother|child attempt=N/4 reason=...` em cada nova
+  tentativa; `event=llm_stage_exhausted ... limit=max_attempts|budget` quando desiste — a
+  seguir vem o `event=llm_orchestrator_error` do `except` de `decide()`.
+
+Medição que motivou (26/10/2026, Playground, 355 turnos): 4 handoffs por `llm_failure`, todos
+`ValidationError` (`route_to="apresentacao"`; `confidence` em falta na Filha); o único timeout
+recuperou com o retry HTTP.
 
 As últimas quatro (`generate_conflict_message`, `generate_appointment_reminder_message`,
 `generate_appointment_title_message`) devolvem texto puro (sem `text.format=json_object`)
@@ -370,22 +396,29 @@ prompt e nunca propaga excepção — qualquer falha (sem `LLM_API_KEY`, erro de
 timeout, resposta vazia) devolve `None` e o caller cai num fallback fixo.
 
 Não interfere com o retry de job da fila (`app/runners/whatsapp.py`, backoff
-global 60s/180s) — são camadas independentes: o retry de `llm_service.py` é interno a uma
-única chamada HTTP; o retry de job é externo, reagenda o job inteiro quando
-`llm_failure` persiste mesmo após as tentativas internas. O job
+global 60s/180s) — são camadas independentes: as tentativas acima são internas a um turno;
+o retry de job é externo, reagenda o job inteiro quando `llm_failure` persiste mesmo após
+elas (o Playground não tem esta segunda camada). O job
 `whatsapp.appointment.reminder` tem um override deste backoff global — ver
 [`agenda.md`](agenda.md#lembrete-de-reunião-gerado-por-ia).
 
 ### Fallback final: falha da LLM Mãe sempre vira handoff
 
-Se a chamada à LLM Mãe (ou o parsing/validação do payload) falhar mesmo após o retry de
-`llm_service.py`, o `except Exception` de `decide()` cai sempre em
+Se a Mãe ou a Filha (chamada, parsing ou validação) falhar mesmo após as novas tentativas
+acima, o `except Exception` de `decide()` cai sempre em
 `handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)` — independente de quantos
 turnos a conversa já teve. `handoff_policy.apply()` lê `ai_profile.handoff_custom_text` (ou o
 template padrão por `identity_mode`, ver [`agents.md`](agents.md)) e envia essa mensagem ao
 lead, seguindo a política configurada (`keep_active_notify` notifica o time; `disable_bot`
 pausa o bot para aquele lead). Não existe caminho de falha da Mãe que devolva resposta vazia
 sem handoff — nem mesmo nos primeiros turnos de uma conversa nova.
+
+**Exceção — tentativa do job que ainda vai ser repetida (worker):** antes do `decide()`, o
+runner (`runners/whatsapp.py`) põe `context["llm_failure_final"] = not _llm_failure_will_retry(attempt)`.
+Com `False`, o `except` devolve o `FALLBACK_DECISION` cru (sem `handoff_policy.apply`) — nada de
+desligar o bot nem `log_handoff_requested` — e o runner reagenda o job (`event=llm_failure_retry`).
+Só a última tentativa (`attempt >= JOB_MAX_ATTEMPTS`) aplica o handoff. Sem a chave (Playground,
+pré-geração de follow-up) o handoff é imediato.
 
 ---
 

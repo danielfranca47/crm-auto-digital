@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 import unicodedata
 from datetime import datetime, timedelta, timezone as _dt_timezone
 from difflib import SequenceMatcher
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, TypeVar
 from zoneinfo import ZoneInfo
+
+from pydantic import ValidationError
 
 from app.contracts.qualification_contract import (
     SIGNALS_SCHEMA,
@@ -5233,6 +5236,83 @@ def _extract_json_payload(text: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+# Novas tentativas da Mãe/Filha antes do handoff por llm_failure: cada etapa repete só
+# a si mesma (chamada + parse + validação), até 4 tentativas no total, sem passar o
+# orçamento de tempo do turno (settings.llm_decision_budget_seconds).
+LLM_STAGE_MAX_ATTEMPTS = 4
+# Abaixo disto não compensa começar outra chamada — viraria timeout quase certo.
+_LLM_STAGE_MIN_CALL_SECONDS = 5.0
+
+_T = TypeVar("_T")
+
+
+class _InvalidLlmJson(ValueError):
+    pass
+
+
+def _llm_stage_failure_reason(exc: BaseException) -> Optional[str]:
+    """Motivo da falha quando vale tentar de novo; None = erro que outra tentativa não resolve."""
+    if isinstance(exc, ValidationError):
+        return "validation_error"
+    if isinstance(exc, _InvalidLlmJson):
+        return "invalid_json"
+    if llm_service.is_retryable_http_error(exc):
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        return f"status_{status}" if status else "request_error"
+    if isinstance(exc, ValueError):
+        return "invalid_output"
+    return None
+
+
+def _run_llm_stage(
+    stage_name: str,
+    call: Callable[[float], str],
+    parse: Callable[[str], _T],
+    *,
+    deadline: float,
+    logger: Optional[logging.Logger] = None,
+) -> _T:
+    """Corre `parse(call(timeout))` repetindo em falha passageira ou resposta inválida.
+
+    A última exceção sobe para o `except` de decide(), que aplica o FALLBACK_DECISION.
+    """
+    attempt = 1
+    while True:
+        started = time.monotonic()
+        timeout_seconds = max(min(float(settings.llm_timeout_seconds), deadline - started), 1.0)
+        try:
+            return parse(call(timeout_seconds))
+        except Exception as exc:
+            reason = _llm_stage_failure_reason(exc)
+            if reason is None:
+                raise
+            backoff = float(2 ** (attempt - 1))
+            remaining = deadline - time.monotonic()
+            if attempt >= LLM_STAGE_MAX_ATTEMPTS or remaining - backoff < _LLM_STAGE_MIN_CALL_SECONDS:
+                if logger:
+                    logger.warning(
+                        "event=llm_stage_exhausted stage=%s attempts=%s/%s reason=%s limit=%s",
+                        stage_name,
+                        attempt,
+                        LLM_STAGE_MAX_ATTEMPTS,
+                        reason,
+                        "max_attempts" if attempt >= LLM_STAGE_MAX_ATTEMPTS else "budget",
+                    )
+                raise
+            if logger:
+                logger.warning(
+                    "event=llm_stage_retry stage=%s attempt=%s/%s reason=%s elapsed=%.1fs exc=%s",
+                    stage_name,
+                    attempt + 1,
+                    LLM_STAGE_MAX_ATTEMPTS,
+                    reason,
+                    time.monotonic() - started,
+                    _truncate_snip(str(exc), 200),
+                )
+            time.sleep(backoff)
+            attempt += 1
+
+
 def _truncate_snip(text: Optional[str], limit: int = 300) -> str:
     if not text:
         return ""
@@ -6155,17 +6235,31 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
     qualification_retry_count = 0
     qualification_validation_status = "n/a"
     qualification_repeated_similarity = 0.0
+    llm_deadline = time.monotonic() + settings.llm_decision_budget_seconds
     try:
         mother_prompt = _build_mother_prompt(context, message_text)
-        stage = "mother_call"
-        mother_text = llm_service.generate_mother_route(mother_prompt, ai_profile=ai_profile)
-        stage = "mother_parse"
-        mother_payload = _extract_json_payload(mother_text)
-        if mother_payload is None:
-            raise ValueError("llm returned invalid mother json")
-        mother_payload = _normalize_null_strings(mother_payload)
-        stage = "mother_validate"
-        mother_decision = MotherDecision.model_validate(mother_payload)
+
+        def _call_mother(timeout_seconds: float) -> str:
+            nonlocal stage, mother_text
+            stage = "mother_call"
+            mother_text = llm_service.generate_mother_route(
+                mother_prompt, ai_profile=ai_profile, max_attempts=1, timeout_seconds=timeout_seconds
+            )
+            return mother_text
+
+        def _parse_mother(text: str) -> MotherDecision:
+            nonlocal stage
+            stage = "mother_parse"
+            mother_payload = _extract_json_payload(text)
+            if mother_payload is None:
+                raise _InvalidLlmJson("llm returned invalid mother json")
+            mother_payload = _normalize_null_strings(mother_payload)
+            stage = "mother_validate"
+            return MotherDecision.model_validate(mother_payload)
+
+        mother_decision = _run_llm_stage(
+            "mother", _call_mother, _parse_mother, deadline=llm_deadline, logger=logger
+        )
         mode_ctx_forced_route = _build_mode_contract_context(context, mother_decision)
         mother_decision = _enforce_qualification_route_when_missing(
             mother_decision,
@@ -6465,6 +6559,35 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
         stage = "child_call"
         child_result: Optional[ChildResult] = None
         validation_errors: list[str] = []
+        prompt_to_use = child_prompt
+
+        def _call_child(timeout_seconds: float) -> str:
+            nonlocal stage, child_text
+            stage = "child_call"
+            child_kwargs: Dict[str, Any] = {
+                "ai_profile": ai_profile,
+                "max_attempts": 1,
+                "timeout_seconds": timeout_seconds,
+            }
+            if _strict_orientation_active:
+                child_kwargs["temperature_override"] = llm_service.STRICT_ORIENTATION_TEMPERATURE
+            child_text = llm_service.generate_child_result(route_for_child, prompt_to_use, **child_kwargs)
+            return child_text
+
+        def _parse_child(text: str) -> ChildResult:
+            nonlocal stage
+            stage = "child_parse"
+            child_payload = _extract_json_payload(text)
+            if child_payload is None:
+                raise _InvalidLlmJson("llm returned invalid child json")
+            child_payload = _normalize_null_strings(child_payload)
+            if "question_text" not in child_payload and "message_text" in child_payload:
+                child_payload["question_text"] = child_payload.get("message_text")
+            stage = "child_validate"
+            return ChildResult.model_validate(child_payload)
+
+        # O laço de qualification repete por conteúdo (campo errado, pergunta repetida) com
+        # VALIDATION_ERRORS no prompt; formato inválido já é repetido dentro de _run_llm_stage.
         attempts = 2 if route_for_child == "qualification" else 1
         for attempt_index in range(attempts):
             qualification_retry_count = attempt_index
@@ -6474,26 +6597,9 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                     f"{child_prompt}\n\nVALIDATION_ERRORS: {json.dumps(validation_errors, ensure_ascii=False)}\n"
                     "Corrija o JSON para field=current_field e reformule a pergunta sem repetir texto anterior."
                 )
-            if _strict_orientation_active:
-                child_text = llm_service.generate_child_result(
-                    route_for_child, prompt_to_use, ai_profile=ai_profile,
-                    temperature_override=llm_service.STRICT_ORIENTATION_TEMPERATURE,
-                )
-            else:
-                child_text = llm_service.generate_child_result(
-                    route_for_child, prompt_to_use, ai_profile=ai_profile
-                )
-            stage = "child_parse"
-            child_payload = _extract_json_payload(child_text)
-            if child_payload is None:
-                validation_errors = ["invalid_json"]
-                qualification_validation_status = "invalid_json"
-                continue
-            child_payload = _normalize_null_strings(child_payload)
-            if "question_text" not in child_payload and "message_text" in child_payload:
-                child_payload["question_text"] = child_payload.get("message_text")
-            stage = "child_validate"
-            child_result = ChildResult.model_validate(child_payload)
+            child_result = _run_llm_stage(
+                "child", _call_child, _parse_child, deadline=llm_deadline, logger=logger
+            )
             if route_for_child != "qualification":
                 break
 
@@ -6735,4 +6841,10 @@ def decide(context: Dict[str, Any], logger: Optional[logging.Logger] = None) -> 
                 FALLBACK_DECISION.next_action,
                 FALLBACK_DECISION.reason,
             )
+        # O worker marca False quando o job ainda vai ser repetido: o handoff (desligar o bot,
+        # registar) fica para a última tentativa. Ausente (Playground) = handoff já.
+        if context.get("llm_failure_final") is False:
+            if logger:
+                logger.info("decision llm_failure handoff_deferred=job_retry")
+            return FALLBACK_DECISION.model_copy(deep=True)
         return handoff_policy.apply(context, FALLBACK_DECISION, logger=logger)

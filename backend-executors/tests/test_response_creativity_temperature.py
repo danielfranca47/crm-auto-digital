@@ -49,7 +49,7 @@ def test_override_wins_over_profile_level():
 def test_generate_child_result_sends_profile_temperature(monkeypatch):
     sent = {}
 
-    def _fake_post(payload, *, api_base, api_key):
+    def _fake_post(payload, *, api_base, api_key, **_kwargs):
         sent.update(payload)
         return {"output_text": "{}"}
 
