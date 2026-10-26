@@ -27,9 +27,12 @@ uma única skill nossa, adaptada ao projeto.
    que não são versionados.
 3. **Docs dos agentes desatualizados e fora do sítio:** `docs/agente-1-sdr-alto-ticket.md`,
    `docs/agente-2-closer-agressivo.md`, `docs/agente-3-hibrido.md` (último commit 31/05/2026) — campos
-   obrigatórios fixos por modo, `requires_handoff`/`human_in_loop` a normalizar para "consultivo" (o motor
-   não lê esses campos), nomes diferentes dos da página `/agentes-info`. Já pedido em
-   `docs/plans/docs-qualificacao-campos-obrigatorios-melhorias-futuras.md` M2.
+   obrigatórios fixos por modo, nomes diferentes dos da página `/agentes-info`. Já pedido em
+   `docs/plans/docs-qualificacao-campos-obrigatorios-melhorias-futuras.md` M2. (Correção ao diagnóstico do
+   Plan Mode: `requires_handoff`/`human_in_loop` **são** lidos — `decision_engine._compute_system_agent_mode`
+   passa `sdr_scheduler` a `consultivo` quando algum está ligado; o doc antigo estava certo nesse ponto. Mas
+   `orchestrator._normalize_agent_mode_for_bundle` normaliza `sdr_scheduler` sempre como `agenda`, sem os ler —
+   incoerência a registar no doc do Agente 01.)
 4. **Factos do sistema duplicados nas skills:** as skills de agente têm tabelas de fases, campos e
    lembretes que vão desatualizar.
 5. **Skills de documentação de terceiros:** atualizam-se sozinhas com `npx skills update`, parte do
@@ -130,6 +133,36 @@ organizar as decisões de forma diferente da do projeto.
 pedido (escrever skills e o CLAUDE.md, registar decisões, auditar o CLAUDE.md) e segue as regras deste
 projeto.
 **Para validar:** P3.
+
+### Commits Fase 2 — hash
+
+`fad3b6f`
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(este commit)_ | os 3 docs movidos para `docs/architecture/agentes/`; Agente 01 reescrito |
+
+**Detalhes:**
+- `git mv` de `docs/agente-1/2/3-*.md` para `docs/architecture/agentes/agente-01-sdr-alto-ticket.md`,
+  `agente-02-vendedor-autonomo.md`, `agente-03-assistente-comercial.md` (o 02 e o 03 reescrevem-se nas Fases 4 e 5)
+- Agente 01: de 404 para ~100 linhas — os prompts deixam de ser copiados (apontador para
+  `docs/prompts_llms.md`); acrescentadas a dupla normalização do modo (executor vs. CRM), os guardrails de
+  modo, as etapas da página ↔ sistema e "prometido vs. código"; cada afirmação conferida no código
+- referências: `docs/ops/analise-qualificacao-ai-profile.md` (nota com o caminho novo),
+  `docs/plans/docs-qualificacao-campos-obrigatorios-melhorias-futuras.md` M2 (os 3 guias dados como tratados)
+
+**Achados para as próximas fases:** existe Filha de closing especializada (`_build_child_prompt_closing`,
+`decision_engine.py:4274`) — `pipeline-phases.md` ("usa `_build_child_prompt` genérica") e a skill do Agente 02
+estão errados; corrigir nas Fases 4 e 6.
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** o guia do Agente 01 tinha 5 meses, nomes diferentes dos da página e regras que já não existem.
+**Agora:** está junto da restante arquitetura, com o nome da página, conferido no código, e diz claramente o
+que a página promete e o sistema ainda não faz (Calendly, sequência multicanal, NPS).
+**Para validar:** P4.
 
 ### Fases 3, 4, 5 — Docs dos agentes (um por fase)
 

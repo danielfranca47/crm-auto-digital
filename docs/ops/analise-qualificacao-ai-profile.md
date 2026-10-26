@@ -23,6 +23,10 @@ Os demais campos do AI Profile (tom de voz, niche, offer pack, follow-up, etc.) 
 
 ## 2 — O que o documento `agente-1-sdr-alto-ticket.md` diz é verdade?
 
+> Esse documento foi reescrito contra o código em 26/10/2026 e está agora em
+> [`docs/architecture/agentes/agente-01-sdr-alto-ticket.md`](../architecture/agentes/agente-01-sdr-alto-ticket.md).
+> A análise abaixo refere-se à versão de maio.
+
 **Parcialmente verdadeiro — o documento está desatualizado em relação ao código atual.**
 
 ### O que ainda é verdade

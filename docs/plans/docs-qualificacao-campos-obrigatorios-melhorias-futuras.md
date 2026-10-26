@@ -25,9 +25,8 @@ vazio significa nenhum.
 - `docs/guia-campos-ai-profile.md`, linha 75 ("Determina os campos
   obrigatórios de qualificação") e linha 242 ("Os 4 campos padrão do modo
   `agenda`").
-- `docs/agente-1-sdr-alto-ticket.md`, linhas 80 e 383.
-- `docs/agente-2-closer-agressivo.md`, linhas 99 a 112, 298 e 434.
-- `docs/agente-3-hibrido.md`, linhas 97 a 110 e 484.
+- Os três guias de agentes já foram tratados: reescritos contra o código em
+  `docs/architecture/agentes/` (implementação `feat-documentacao-diagnostico-agentes`, 26/10/2026).
 
 **A fazer:** rever cada passagem contra o que existe hoje — a sugestão inicial
 ao criar o perfil (`_DEFAULT_QUAL_FIELDS`, `backend-core/app/api/ai_profiles.py`)
