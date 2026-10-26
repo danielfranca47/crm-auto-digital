@@ -18,7 +18,15 @@ from app.contracts.qualification_contract import (
 from app.clients import crm_client
 from app.core.config import settings
 from app.schemas.decision import DecisionOutput
-from app.services import fast_path, field_extractor, handoff_policy, llm_service, meeting_date_guard, requested_slot
+from app.services import (
+    fast_path,
+    field_extractor,
+    handoff_policy,
+    llm_service,
+    meeting_date_guard,
+    professional_hours,
+    requested_slot,
+)
 from app.services.meeting_scheduler import _resolve_default_duration_minutes
 from app.services.orchestrator_models import ChildResult, MotherDecision
 
@@ -2036,7 +2044,7 @@ def _build_agenda_fact_block(context: Dict[str, Any], message_text: str) -> str:
     """Horário pedido na mensagem + resultado da verificação da agenda, como facto para a Filha.
     Vazio quando a mensagem não traz uma hora inequívoca. Ver requested_slot.py."""
     ai_profile = context.get("ai_profile") or {}
-    _inbound, _lead, earlier_messages = _recent_conversation(context)
+    _inbound, lead_messages, earlier_messages = _recent_conversation(context)
     slot = requested_slot.find_requested_slot(
         message_text,
         earlier_messages[1:],
@@ -2044,8 +2052,16 @@ def _build_agenda_fact_block(context: Dict[str, Any], message_text: str) -> str:
         busy_slots=context.get("calendar_busy_slots") or [],
         duration_minutes=_resolve_default_duration_minutes(ai_profile),
         exclude_lead_id=(context.get("lead") or {}).get("id"),
+        lead_messages=lead_messages[1:],
     )
-    return requested_slot.build_agenda_fact_block(slot)
+    verdict = None
+    if slot is not None and slot.free:
+        hours = professional_hours.get_hours(ai_profile)
+        if hours:
+            verdict = professional_hours.check(
+                hours, slot.start, slot.end, professional_hours.mentioned_professional(hours, lead_messages)
+            )
+    return requested_slot.build_agenda_fact_block(slot, verdict)
 
 
 def _apply_meeting_date_guard(
@@ -4376,6 +4392,7 @@ def _build_child_prompt_pre_agendamento(
         + _build_custom_instructions_block(ai_profile)
         + _build_business_info_block(context)
         + _build_knowledge_reference_block(context)
+        + _build_agenda_fact_block(context, message_text)
     )
     return _pre_prompt
 

@@ -113,32 +113,75 @@ Mensagem do lead (fase de agendamento ou remarcação)
 | `backend-executors/app/services/decision_engine.py` | `_recent_conversation()` (partilhado com `_apply_meeting_date_guard`); `_build_agenda_fact_block()` no fim dos prompts de agendamento e de gestão pós-marcação |
 | `backend-executors/tests/test_requested_slot.py` | Novo: frases reais das transcrições + ligação aos prompts |
 
-### Fase 2 — Nova tentativa quando a IA recusa um horário livre
+### Commits Fase 1
 
-**Objetivo:** só se a bancada da Fase 1 ainda mostrar recusas de horário livre — depois da Filha,
-se o horário pedido estava livre e a resposta o recusa sem motivo de horário de atendimento,
-chamar a Filha uma vez mais com a correção explícita.
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `f3046bd` | `requested_slot.py` + bloco "agenda livre" nos prompts de agendamento e gestão pós-marcação |
 
-### Fase 3 — Validação na bancada + docs de arquitetura
+### Fase 2 — Nova tentativa quando a IA recusa um horário livre — [⏭️] não necessária
 
-**Objetivo:** medir na bancada (`p-ricardo`, `p-relax90`, `pos-marcacao` expõem o erro; `p-val-17h` e
-`p-cedo-tarde` têm de continuar a recusar) e atualizar `docs/prompts_llms.md` e
-`docs/architecture/pipeline-phases.md`.
+Ficou condicionada à bancada: com o veredicto completo da Fase 3 (agenda + horário de
+atendimento decididos em código) houve 0 recusas erradas, por isso não se acrescentou a chamada
+extra.
+
+### Fase 3 — Horário de atendimento decidido em código + validação na bancada + docs
+
+A bancada mostrou que só a agenda não chega:
+
+| Rodada (15 conversas) | O que a Filha recebia | Horário livre recusado | Fora do horário aceite |
+|---|---|---|---|
+| Antes (PROD05+PROD06, produção) | nada | 8 de 22 | 1 de 4 |
+| M12a | "a agenda está livre; aceite se cabe no horário de atendimento" | 2 de 15 | **3 de 3** (Val às 17h para 1h) |
+| M12b | "confira primeiro o horário de atendimento (a sessão acabaria às X)" | 8 de 24 | 0 de 9 |
+| **M12c** | veredicto completo, decidido em código | **0 de 19** | **0 de 7** |
+
+Com o prompt sozinho era uma gangorra: empurrar para aceitar fazia aceitar fora do horário;
+pedir para conferir o horário fazia a IA errar a conta ("não temos sessões aos sábados"; "a sessão
+de 90 min terminará às 15h30", e recusava com a Val até às 17h). Decisão do utilizador (26/10/2026):
+a IA lê o texto dos horários uma vez e o código decide.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/professional_hours.py` | Novo: lê o horário de atendimento do texto do perfil numa tabela (1 chamada por texto, cache em memória), `check()` cabe / não cabe + início sugerido |
+| `backend-executors/app/services/llm_service.py` | `generate_professional_hours()` |
+| `backend-executors/app/services/requested_slot.py` | Duração dita pelo lead (`requested_duration`); bloco com veredicto (livre e cabe / fora / dia sem atendimento) e o texto sem tabela como recurso |
+| `backend-executors/app/services/decision_engine.py` | `_build_agenda_fact_block` consulta a tabela; bloco também no pré-agendamento (era de lá a recusa que sobrava no M12a) |
+| `backend-executors/tests/conftest.py` | Nos testes nunca há chamada real para ler horários |
+| `backend-executors/tests/test_professional_hours.py`, `test_requested_slot.py` | Tabela da Sensi Vitae, 17h/21h/9h/domingo, cache, falhas, ligação ao prompt |
+| `docs/architecture/pipeline-phases.md`, `docs/prompts_llms.md` | "Verificação do horário pedido"; 1.4.5 e mapa de injeções |
+
+Tabela lida pela IA na bancada (texto de produção, c13): Val seg–sáb 11h–17h, Daniel seg–sex
+11h–19h30 — igual às instruções. Uma única leitura em toda a rodada M12c.
+
+### Relatório da Fase 3 — o que mudou na prática
+
+**Antes:** com serviço + dia + hora na mesma mensagem, a Lara dizia "esse horário não está
+disponível" em cerca de metade dos pedidos, com a agenda vazia; e às vezes aceitava uma sessão que
+acabava depois de a Val sair.
+**Agora:** o sistema lê uma vez os horários da Val e do Daniel a partir das instruções da conta e,
+a cada pedido com dia e hora, decide sozinho se está livre e se cabe. A Lara recebe a decisão
+pronta: em 15 conversas simuladas aceitou todos os 19 pedidos válidos e recusou os 7 inválidos
+(Val às 17h, 21h, 9h) com o motivo certo e uma alternativa que cabe.
+**Para validar:** Cenários P1 e P2 (marcados abaixo); C1 no Playground de produção depois do merge.
 
 ---
 
 ## Checks de Validação
 
 ### Cenário U1 — Testes unitários
-- [ ] `pytest backend-executors/tests` passa
+- [x] `pytest backend-executors/tests` passa
+- **Validado em:** 26/10/2026 — 401 passed
 
 ### Cenário P1 — Horário livre pedido de uma vez é aceite (bancada local)
-- [ ] `p-ricardo`, `p-relax90`, `pos-marcacao` ×3 com o código da worktree
-- [ ] Confirmar: nenhum "não está disponível / sem vaga / ocupado" para um horário livre dentro do horário do terapeuta (antes: ~metade)
+- [x] `p-ricardo`, `p-relax90`, `pos-marcacao` ×3 com o código da worktree (perfil local = c13 de produção)
+- [x] Confirmar: nenhum "não está disponível / sem vaga / ocupado" para um horário livre dentro do horário do terapeuta (antes: ~metade)
+- **Validado em:** 26/10/2026 — rodada M12c: 0 de 19 pedidos válidos recusados (antes 8 de 22)
 
 ### Cenário P2 — Recusas corretas continuam
-- [ ] `p-val-17h` (Val às 17h para 1h) e `p-cedo-tarde` (21h) ×3
-- [ ] Confirmar: continua a recusar, com o motivo do horário de atendimento
+- [x] `p-val-17h` (Val às 17h para 1h) e `p-cedo-tarde` (21h) ×3
+- [x] Confirmar: continua a recusar, com o motivo do horário de atendimento
+- **Validado em:** 26/10/2026 — rodada M12c: 7 de 7 recusados com "fora do horário de atendimento" e alternativa que cabe (16h com a Val; 18h30 com o Daniel)
 
 ### Cenário C1 — Playground de produção depois do merge
 - [ ] Mesmos cenários com `--prod`
@@ -150,5 +193,9 @@ chamar a Filha uma vez mais com a correção explícita.
 - As instruções da conta entram 3 vezes no prompt da Filha de agendamento (identidade,
   `ai_profile` em JSON e bloco "INSTRUÇÕES PERSONALIZADAS") — ~25 KB por chamada; tirar a cópia do
   JSON reduziria custo e ruído.
-- Com o horário de atendimento num formato estruturado (por profissional), o código poderia
-  verificar também "cabe no horário" e a IA deixaria de decidir sozinha.
+- O horário de atendimento é lido do texto por IA (uma vez por texto). Um campo estruturado por
+  profissional no AI Profile tiraria essa leitura e o risco de uma tabela mal lida.
+- A agenda continua a ser uma só por conta: um compromisso da Val bloqueia o mesmo horário do
+  Daniel (plans: agentes-agenda M1).
+- A cache da tabela de horários é por processo: cada arranque do backend-executors volta a ler o
+  texto uma vez.

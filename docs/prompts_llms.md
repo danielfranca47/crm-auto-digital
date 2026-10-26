@@ -520,6 +520,23 @@ a pré-agendamento recebe só a tabela.
   formato das instruções da conta, sem voltar a pedir confirmação. Na entrada da fase não entra
   (o `meeting_scheduler` adia a criação — gate M3).
 
+#### 1.4.5 `VERIFICAÇÃO DO HORÁRIO PEDIDO` — veredicto da agenda e do horário de atendimento
+
+Fim do prompt de pré-agendamento, agendamento e gestão pós-marcação (`_build_agenda_fact_block`),
+só quando a mensagem do lead traz uma hora inequívoca (`requested_slot.find_requested_slot`).
+Diz o que o lead pediu e quando a sessão acabaria, e o veredicto decidido em código: agenda
+(`calendar_busy_slots`) e horário de atendimento (tabela lida do texto do perfil por
+`professional_hours.get_hours`). Livre e cabe → aceitar sem oferecer outro horário; fora → dizer
+o motivo e propor o início mais próximo que cabe (com o profissional); ocupado → dizer que está
+ocupado. Sem tabela de horários, só afirma a agenda livre e pede à Filha que confira o horário de
+atendimento. Detalhes em `docs/architecture/pipeline-phases.md` ("Verificação do horário pedido").
+
+**Prompt auxiliar** (`professional_hours._EXTRACTION_PROMPT`, `llm_service.generate_professional_hours`,
+JSON): converte o texto do perfil (`professional_availability` + `custom_instructions`) em
+`{"professionals": [{"name", "days": {"mon": [["HH:MM", "HH:MM"]]}}]}`, fim = hora em que a sessão
+tem de acabar, ignorando o horário em que o assistente responde mensagens. Uma chamada por texto
+diferente (cache em memória).
+
 ### 1.5 `_build_child_prompt_follow_up()` — Filha Follow-up
 
 > **Arquivo:** `decision_engine.py` — função `_build_child_prompt_follow_up()`
@@ -888,6 +905,7 @@ Blocos que só aparecem no prompt quando certas condições são atendidas:
 | `COMMERCIAL INJECTION` | `template_key=hybrid_scheduler` + qualif recém-aprovada + `appointment_mode=commercial` | apresentation |
 | `_booking_confirmation_block` | `meeting_scheduled=True` + `presentation_variant=scheduler` | apresentation |
 | `MARCAÇÃO JÁ GRAVADA NESTE TURNO` (`_build_meeting_already_booked_block`) | `meeting_scheduled=True` (na apresentação, só quando `presentation_variant≠scheduler`) | apresentation, agendamento |
+| `VERIFICAÇÃO DO HORÁRIO PEDIDO` (`_build_agenda_fact_block`) | mensagem do lead com uma hora inequívoca + dia reconhecível, no futuro | pre-agendamento, agendamento, meeting_management (fim do prompt) |
 | `standard_knowledge_block` | narrativas com conteúdo novo, nota de pagamento do modo comercial ou categoria de referência com mídia | apresentation |
 | `followup_knowledge_block` | `social_proof` ainda não mostrada | followup |
 | `_build_knowledge_reference_block` ("BASE DE CONHECIMENTO DO NEGÓCIO" + "COMO USAR") | `context["knowledge_reference"]` não vazio (menos as categorias excluídas pela fase — ver `knowledge-base.md`) | qualification (sem preço/oferta), apresentation (sem categorias com mídia), followup, closing, pre-agendamento, agendamento (sem a tabela, já em "SERVIÇOS E DURAÇÕES") — sempre ao lado de `business_info` |
