@@ -1,7 +1,7 @@
 # Saudação pelo período do dia errada ("Boa tarde" às 10h55)
 
-**Branch:** (a criar)
-**Status:** Aguardando Plan Mode
+**Branch:** `worktree-fix+saudacao-hora-local`
+**Status:** Em andamento
 **Autonomia:** manual
 **Origem:** bateria PROD07 do agente Sensi Vitae (26/10/2026), problema D — "Boa tarde" às 10h55 em
 todos os cenários. Investigação em `.claude/agentes/sensi-vitae/README.md`, secção "PROD07".
@@ -76,3 +76,72 @@ receção/abertura.
 - Bancada: `python simular.py p-manha D1` antes das 12h de Lisboa (esperado "Bom dia") e outra vez depois
   das 20h (esperado "Boa noite"); `python simular.py p-micas D1` de manhã (o cliente não cumprimenta).
 - Depois do deploy: `python simular.py p-manha D1 --prod` de manhã.
+
+---
+
+## Problemas Identificados (estado anterior)
+
+Confirmado em `main` a 26/10/2026, já com `feat-temperatura-respostas-ia` e `fix-recepcao-ignora-pergunta-extra`
+(as linhas mudaram desde a investigação):
+
+1. **Nenhum prompt recebe a hora local** — `decision_engine.py` só tem a tabela de dias
+   (`_calendar_lookup_table_pt`), sem horas, e ela não entra na receção.
+2. **Exemplos da receção só com "Boa tarde!"** — `_build_child_prompt_recepcao`, exemplos ✅ 2 e 3. Em ambos o
+   lead também diz "boa tarde"; não havia exemplo de lead que não diz período (`p-micas`, `p-ruben`), e a IA
+   preenchia com o "Boa tarde" que via.
+3. **Cabeçalho de saudação da apresentação com "Boa noite!" fixo** nos exemplos.
+4. Qualificação (abertura de 1.º contacto), follow-up e closing (cabeçalho de saudação) mandam cumprimentar
+   sem saber a hora.
+
+## Abordagem
+
+O código calcula o período no fuso do perfil e passa-o à Filha como facto:
+
+```
+ai_profile.timezone → meeting_date_guard.local_now() → _greeting_for_hour()
+  → linha "AGORA (hora local do negócio): segunda-feira, 26/10, 10h55 — manhã. Ao cumprimentar
+     pelo período do dia, use "Bom dia"; se o lead já cumprimentou com um período, devolva o dele."
+  ├─ Recepção: sempre + exemplo ✅ 4 (lead sem período → cumprimento calculado)
+  ├─ Apresentação: no cabeçalho de saudação (exemplos com o cumprimento calculado) ou na abertura de 1.º contacto
+  └─ Qualificação / follow-up / closing: só quando já mandam cumprimentar
+```
+
+Decisões aprovadas no Plan Mode (26/10/2026): limites 05h–12h / 12h–20h / 20h–05h, iguais para PT e BR;
+se o lead diz um período, devolve-se o dele; a hora fica fora das fases que não cumprimentam.
+Paridade Playground ↔ WhatsApp automática: o decision_engine corre no executor nos dois casos e o fuso já vem
+no `ai_profile` do ContextBundle.
+
+## Plano de Implementação
+
+### Fase 1 — Hora local nos prompts que cumprimentam
+
+**Objetivo:** a Filha sabe a hora local e cumprimenta pelo período certo.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/meeting_date_guard.py` | `local_now(tz_name, now_utc)` novo; `local_today` passa a usá-lo |
+| `backend-executors/app/services/decision_engine.py` | `_greeting_for_hour`, `_local_greeting`, `_local_time_fact_line`; linha AGORA na receção, qualificação (abertura), apresentação (saudação/abertura), follow-up e closing (saudação); exemplo ✅ 4 da receção; exemplos do cabeçalho da apresentação com o cumprimento calculado |
+| `backend-executors/tests/test_saudacao_hora_local.py` | Testes com relógio fixo (Lisboa manhã/tarde/noite, limites 05h/12h/20h, São Paulo, fuso inválido, prompts) |
+| `docs/prompts_llms.md`, `docs/architecture/llm-architecture.md` | Linha AGORA documentada |
+
+## Checks de Validação
+
+### Cenário T1 — Testes automáticos
+- [ ] `pytest backend-executors/tests/test_saudacao_hora_local.py` passa (12 testes)
+- [ ] Suite completa sem falhas novas (2 falhas em `test_recepcao_sales_flow_pending.py` já existiam em `main`)
+
+### Cenário P1 — Bancada local `.claude/agentes/sensi-vitae`
+- [ ] `python simular.py p-manha D1` antes das 12h de Lisboa → "Bom dia"
+- [ ] `python simular.py p-manha D1` depois das 20h de Lisboa → "Boa noite"
+- [ ] `python simular.py p-micas D1` de manhã (cliente não cumprimenta) → "Bom dia"
+- [ ] Regressão `python simular.py p-ruben D1`: a pergunta junto com o cumprimento continua a seguir para o turno seguinte
+
+### Cenário C1 — Produção (depois do "sim" e do deploy)
+- [ ] `p-manha D1 --prod` de manhã → "Bom dia"
+- [ ] `p-micas D1 --prod` e `p-ruben D1 --prod` sem regressão
+
+## Ajustes Possíveis Pós-Implementação
+
+- Hora local também nas fases que não cumprimentam (ajudaria "ainda hoje", "amanhã de manhã") — ficou fora
+  por minimalismo.
+- A abertura do dono é texto livre: se escrever literalmente "Boa tarde!", a IA pode mantê-lo apesar da linha AGORA.
