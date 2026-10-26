@@ -311,3 +311,61 @@ nenhuma outra conta.
 **Decisão:** não corrigir agora — aguardando decisão do utilizador sobre prioridade. Revisitar
 antes de qualquer venda real do agente demo "Lara" (`agente-demo.md`), já que o próprio doc de
 marketing assume que os guardrails de saúde/handoff cobrem o maior risco de reputação do nicho.
+
+---
+
+## M11 — Ler mais formatos de hora no turno da confirmação
+
+**Prioridade: MÉDIA**
+
+**Contexto:** deixado de fora de `fix-confirmacao-grava-proposta-antiga.md` (graduado em
+26/10/2026). Ver `docs/architecture/agenda.md`, "Turno da confirmação".
+
+**Estado actual:** `meeting_proposal.py` lê as horas com o `_TIME_RE` de `requested_slot.py`
+("11h", "14h30", "15:00"). Horas por extenso ("ao meio-dia", "às onze", "às três da tarde") não
+são lidas: nesse caso não há proposta lida e a conferência do candidato não actua (o
+comportamento fica como antes da correção — decide a Filha).
+
+**O que precisaria existir:** reconhecer as formas por extenso mais comuns em PT-PT/PT-BR na
+leitura de horas partilhada (`requested_slot` + `meeting_proposal`), com testes de não-regressão
+para durações ("uma hora") e intervalos ("das onze às cinco").
+
+---
+
+## M12 — Perguntas da conferência da marcação no tom da conta
+
+**Prioridade: MÉDIA**
+
+**Contexto:** deixado de fora de `fix-confirmacao-grava-proposta-antiga.md` (graduado em
+26/10/2026).
+
+**Estado actual:** quando `_apply_meeting_confirmation_guard` bloqueia a gravação, a resposta ao
+cliente é um texto fixo do código (`meeting_proposal.ask_which_text` / `ask_duration_text`):
+"Só para confirmar: prefere X ou Y?" e "Para fechar a marcação de X: que serviço e que duração
+prefere (20, 30, 45, 60 ou 90 min)?". Sem o tom de voz da conta, com o profissional sem artigo
+("com Val") e, em tabelas grandes, uma lista de durações longa. Só aparece quando a Filha ignora
+o bloco e confirma na mesma (1 vez em 6 corridas na bancada).
+
+**O que precisaria existir:** gerar a pergunta no tom da conta (ex.: chamada curta à IA como a de
+`meeting_scheduler._generate_conflict_message`, com o texto fixo como fallback) e agrupar as
+durações por serviço quando a tabela tiver muitas.
+
+---
+
+## M13 — Dados obrigatórios antes de gravar configuráveis no AI profile
+
+**Prioridade: MÉDIA**
+
+**Contexto:** deixado de fora de `fix-confirmacao-grava-proposta-antiga.md` (graduado em
+26/10/2026).
+
+**Estado actual:** com `meeting_scheduled=true`, o código só exige a duração (quando a tabela de
+serviços tem várias e ninguém a disse — `meeting_proposal.missing_duration`). O resto do que a
+conta quer saber antes de marcar (nome do cliente, tipo de serviço, profissional) só existe em
+texto livre nas instruções personalizadas, e o bloco "MARCAÇÃO JÁ GRAVADA" vence essas
+instruções.
+
+**O que precisaria existir:** campo no AI profile com os dados exigidos antes de gravar (lista
+fixa: nome, serviço, duração, profissional); o bloco e a conferência passam a pedir o que faltar.
+Mexe na estrutura da BD (backend-core), nos ecrãs do agente e em
+`docs/architecture/admin-agents-contract.md` — sobe ao utilizador.
