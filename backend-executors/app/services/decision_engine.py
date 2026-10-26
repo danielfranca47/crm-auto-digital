@@ -1867,6 +1867,36 @@ def _calendar_lookup_table_pt(days_ahead: int = 14, tz_name: Optional[str] = Non
     return "\n".join(lines)
 
 
+def _greeting_for_hour(hour: int) -> Tuple[str, str]:
+    """(cumprimento, período) para a hora local: 05h–12h manhã, 12h–20h tarde, 20h–05h noite."""
+    if 5 <= hour < 12:
+        return "Bom dia", "manhã"
+    if 12 <= hour < 20:
+        return "Boa tarde", "tarde"
+    return "Boa noite", "noite"
+
+
+def _local_greeting(ai_profile: Dict[str, Any], now_utc: Optional[datetime] = None) -> str:
+    return _greeting_for_hour(meeting_date_guard.local_now(ai_profile.get("timezone"), now_utc).hour)[0]
+
+
+def _local_time_fact_line(ai_profile: Dict[str, Any], now_utc: Optional[datetime] = None) -> str:
+    """Hora local do negócio para os prompts que cumprimentam.
+
+    Sem isto a IA não sabe que horas são e copia o período dos exemplos ("Boa tarde" às 10h55 em
+    PROD07). Se o lead já disse um período, devolve-se o dele — pode estar noutro fuso, e corrigir
+    o cumprimento soa mal.
+    """
+    now = meeting_date_guard.local_now(ai_profile.get("timezone"), now_utc)
+    greeting, period = _greeting_for_hour(now.hour)
+    return (
+        f"AGORA (hora local do negócio): {_WEEKDAY_NAMES_PT[now.weekday()]}, {now.strftime('%d/%m')}, "
+        f"{now.strftime('%Hh%M')} — {period}. Ao cumprimentar pelo período do dia, use \"{greeting}\"; "
+        "se o lead já cumprimentou com um período (bom dia / boa tarde / boa noite), devolva o mesmo "
+        "que ele usou.\n"
+    )
+
+
 _MEETING_DAY_REFERENCE_RULE = (
     "  * meeting_day_reference: sempre que preencher meeting_datetime_candidate, escreva aqui as "
     "palavras que identificam o dia escolhido, tal como foram ditas na conversa: 'hoje', 'amanhã', "
@@ -3166,6 +3196,8 @@ def _build_child_prompt_recepcao(
 
     lead_name_ctx = f"Nome do lead: {lead_name}." if lead_name else "Nome do lead: desconhecido."
     brand_name = (ai_profile.get("brand_name") or "").strip() or "o negócio"
+    local_time_line = _local_time_fact_line(ai_profile)
+    local_greeting = _local_greeting(ai_profile)
 
     # Blocos do Fluxo de Venda (Fase 0) avaliados antes de montar o texto: quando existem,
     # entram no meio do prompt com prioridade sobre o modelo de boas-vindas e as regras
@@ -3217,7 +3249,7 @@ def _build_child_prompt_recepcao(
 {tone_block}FASE: recepção (saudação).
 
 {lead_name_ctx}
-Mensagem recebida: {message_text}
+{local_time_line}Mensagem recebida: {message_text}
 
 IDENTIDADE:
 Você é a Recepção de {brand_name} — a primeira pessoa que o lead encontra ao
@@ -3248,6 +3280,10 @@ EXEMPLOS DO QUE FAZER (✅):
    → message_text: "Boa tarde! Obrigado pelo contato." | pending_commercial_text: "gostaria de agendar para hoje às 17:30"
 3. Mensagem: "oi\\nboa tarde\\ntudo bem?\\nqual o preço da massagem e horários disponíveis?"
    → message_text: "Boa tarde! Agradeço o contato, estou aqui para ajudar." | pending_commercial_text: "qual o preço da massagem e horários disponíveis?"
+   (o lead disse "boa tarde": devolve-se o período dele)
+4. Mensagem: "Gostaria de mais informações sobre as massagens"
+   → message_text: "{local_greeting}! Obrigado pelo contato." | pending_commercial_text: "Gostaria de mais informações sobre as massagens"
+   (o lead não disse período: usa-se o de AGORA)
 
 O QUE VOCÊ NÃO FAZ:
 - Não responde, não promete verificar, não qualifica o pedido comercial —
@@ -3546,7 +3582,8 @@ def _build_child_prompt_qualification(
         f"ABERTURA OBRIGATÓRIA — PRIMEIRO CONTATO:\n"
         f"Este é o PRIMEIRO contacto do lead. Use o texto abaixo como BASE da tua resposta.\n"
         f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
-        f"{origin_opener}\n\n"
+        f"{origin_opener}\n"
+        f"{_local_time_fact_line(ai_profile)}\n"
         if (is_first_contact and origin_opener.strip())
         else ""
     )
@@ -3706,10 +3743,13 @@ def _build_child_prompt_apresentation(
     # objetivo do estágio (agendamento, aquecimento ou pitch). Sem alterar roteamento.
     _mother_hint_apres = (mother_decision.next_action_hint or "").strip().lower()
     _is_greeting_apres = _mother_hint_apres == "greet"
+    _local_greeting_apres = _local_greeting(ai_profile)
     _greeting_apres_header = (
         "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação como primeira mensagem.\n"
-        "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar com um cumprimento caloroso e natural "
-        "(ex.: 'Boa noite!', 'Olá, boa noite!', 'Oi, boa noite! Tudo bem?'). "
+        + _local_time_fact_line(ai_profile)
+        + "INSTRUÇÃO OBRIGATÓRIA: A tua resposta DEVE começar com um cumprimento caloroso e natural "
+        f"(ex.: '{_local_greeting_apres}!', 'Olá, {_local_greeting_apres.lower()}!', "
+        f"'Oi, {_local_greeting_apres.lower()}! Tudo bem?'). "
         "O cumprimento deve ser breve e proporcional à saudação recebida.\n"
         "DEPOIS do cumprimento, de forma fluida e natural na MESMA mensagem, "
         "executa o objetivo do estágio atual (agendamento, aquecimento ou apresentação).\n"
@@ -3729,7 +3769,9 @@ def _build_child_prompt_apresentation(
         f"ABERTURA OBRIGATÓRIA — PRIMEIRO CONTATO:\n"
         f"Este é o PRIMEIRO contacto do lead. Use o texto abaixo como BASE da tua resposta.\n"
         f"Adapte ao WhatsApp e ao tom de voz, mas preserve a essência:\n"
-        f"{origin_opener_apres}\n\n"
+        f"{origin_opener_apres}\n"
+        + ("" if _is_greeting_apres else _local_time_fact_line(ai_profile))
+        + "\n"
         if (is_first_contact_apres and origin_opener_apres.strip())
         else ""
     )
@@ -4442,7 +4484,8 @@ def _build_child_prompt_follow_up(
     _is_greeting_fu = _mother_hint_fu == "greet"
     _greeting_fu_header = (
         "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação.\n"
-        "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o follow-up.\n"
+        + _local_time_fact_line(ai_profile)
+        + "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o follow-up.\n"
         "DEPOIS, de forma fluida na MESMA mensagem, executa o objetivo do estágio de follow-up.\n\n"
         if _is_greeting_fu
         else ""
@@ -4570,7 +4613,8 @@ def _build_child_prompt_closing(
     _is_greeting_closing = _mother_hint_closing == "greet"
     _greeting_closing_header = (
         "ATENÇÃO — SAUDAÇÃO DO LEAD: O lead enviou uma saudação.\n"
-        "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o fechamento.\n"
+        + _local_time_fact_line(ai_profile)
+        + "INSTRUÇÃO OBRIGATÓRIA: Começa com um cumprimento natural e breve antes de continuar o fechamento.\n"
         "DEPOIS, de forma fluida na MESMA mensagem, executa o objetivo do estágio de closing.\n\n"
         if _is_greeting_closing
         else ""
