@@ -307,3 +307,35 @@ final". Noutras respostas, duas perguntas seguidas ("Qual prefere? Posso enviar 
 **O que fazer:** quando há orientação estrita ativa no turno (`strict_active`), trocar a regra
 de encerramento do bloco de tom por "termine como a instrução do dono pede". Medir antes e
 depois no banco de ensaio da Lara.
+
+## M17 — A Recepção antecipa a pergunta do roteiro
+
+**Prioridade: MÉDIA**
+
+Origem: graduação de `fix-recepcao-promessa-apos-cumprimento.md` (26/10/2026). Com um pedido no
+1.º turno ("Olá, queria saber os preços"), a Filha Recepção escreve às vezes no `message_text` a
+pergunta da fase seguinte ("Posso enviar a nossa tabela de preços?"), e a 2.ª decisão faz a mesma
+pergunta logo a seguir. Medido localmente: 2/6 com a orientação atual da Sensi Vitae e quase
+sempre com a orientação anterior ("…por isso não acrescente mais nada."). No Playground de
+produção, depois do guardrail de promessas, 0/6. Não é promessa, por isso
+`_drop_promise_sentences()` não a corta.
+
+**O que fazer:** com `pending_commercial_text` preenchido, tirar a pergunta final da Recepção,
+como `_drop_trailing_question()` já faz com `lead_already_answered`. Exceção: a pergunta pedida
+pelas instruções da Fase 0 (ex.: "Val ou Daniel?"). Distinguir as duas é a parte frágil: medir na
+bancada antes de decidir.
+
+## M18 — Simplificar a orientação da Fase 0 da Sensi Vitae
+
+**Prioridade: MÉDIA**
+
+Origem: graduação de `fix-recepcao-promessa-apos-cumprimento.md` (26/10/2026). A orientação
+`sv-p0-ola` da conta ("…numa única frase curta que termina em ponto final. A resposta ao pedido
+do cliente segue noutra mensagem logo a seguir.", com `strict`) foi a que mais puxou a promessa
+"Vou passar as informações…". O guardrail em código já a corta, por isso deixou de causar o
+defeito. A frase sobre a resposta seguinte já não é precisa.
+
+**O que fazer:** configuração da conta, não código. Testar na bancada
+`.claude/agentes/sensi-vitae` uma versão só com "Cumprimente e apresente-se como Lara, do Sensi
+Vitae, numa frase curta que termina em ponto final.", 1.º turno 6x com pedido e com "Olá" sozinho,
+e aplicar em produção com `aplicar_producao.sh` se não piorar.
