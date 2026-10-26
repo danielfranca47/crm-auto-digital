@@ -187,3 +187,71 @@ def test_agendamento_bloco_diz_qual_horario_foi_aceite():
     prompt = _build_child_prompt_agendamento(_context(), "Pode ser sim, marca aí!", booked)
     assert "O lead aceitou o horário da última proposta:" in prompt
     assert f'meeting_datetime_candidate="{_iso(2, "11:00")}"' in prompt
+
+
+# --- Fase 2: duração por saber ------------------------------------------------------------------
+
+# formato em que o orchestrator do CRM entrega a tabela (structured_v1 já renderizado)
+TABELA = "- Massagem Relaxante — 60min: 75 €\n- Massagem Relaxante — 90min: 95 €\n- Massagem Terapêutica — 60min: 75 €"
+FORA_HORARIO = [
+    {"model": "outbound", "body": "A Val atende das 11h às 17h. Posso agendar para segunda-feira às 11h?"},
+]
+
+
+def test_missing_duration_so_quando_a_tabela_tem_varias_e_ninguem_disse():
+    assert mp.missing_duration(["11h na segunda tá bom!"], "Posso agendar para segunda às 11h?", TABELA) == [60, 90]
+    assert mp.missing_duration(["Quero terapêutica de 1h"], "", TABELA) is None
+    assert mp.missing_duration(["Sim"], "Posso agendar a massagem de 90 min na segunda às 11h?", TABELA) is None
+    assert mp.missing_duration(["Sim"], "", "Massagem — 60 min 75€") is None
+    assert mp.missing_duration(["Sim"], "", "") is None
+
+
+def test_duracao_por_saber_nao_grava_e_pergunta_quando_a_filha_confirmou():
+    accepted = _accepted(FORA_HORARIO, "Ok, 11h na segunda tá bom! Pode marcar.")
+    result = mp.reconcile_confirmation(
+        "2026-11-02T11:00:00", "Experiência Agendada ✨\nMassagem Relaxante - 60 min", accepted,
+        tz_name=TZ, now_utc=NOW, professionals=PROS, missing_durations=[60, 90],
+    )
+    assert result.blocked and result.candidate is None
+    assert result.trace["action"] == "blocked_duration"
+    assert result.message_text == (
+        "Para fechar a marcação de segunda-feira, 02/11, às 11h: que serviço e que duração "
+        "prefere (60 ou 90 min)?"
+    )
+
+
+def test_duracao_por_saber_mantem_a_pergunta_da_filha():
+    accepted = _accepted(FORA_HORARIO, "Pode marcar.")
+    pergunta = "Ótimo! Prefere a relaxante ou a terapêutica, e de 60 ou 90 minutos?"
+    result = mp.reconcile_confirmation(
+        None, pergunta, accepted, tz_name=TZ, now_utc=NOW, professionals=PROS, missing_durations=[60, 90]
+    )
+    assert result.blocked
+    assert result.message_text == pergunta
+
+
+def _context_tabela():
+    context = _context(inbound="Pode ser sim, marca aí!")
+    context["history"] = [{"model": "outbound", "body": "Tenho depois de amanhã às 11h. Pode ser?"}]
+    context["knowledge_items"] = {"service_pricing_table": TABELA}
+    return context
+
+
+def test_guard_com_tabela_de_varias_duracoes_desliga_meeting_scheduled():
+    decision = _decision(_iso(2, "11:00"))
+    _apply_meeting_confirmation_guard(decision, _context_tabela())
+    assert decision.decision_trace["meeting_scheduled"] is False
+    assert decision.decision_trace["meeting_scheduled_blocked"] == "missing_duration"
+    assert decision.decision_trace["child_signals_structured"]["meeting_datetime_candidate"] is None
+
+
+def test_bloco_pede_servico_e_duracao_em_vez_de_confirmar():
+    from app.services.decision_engine import _build_child_prompt_agendamento
+
+    booked = MotherDecision(
+        route_to="agendamento", perceived_category="agendamento", confidence=0.9, reason="ok",
+        signals={"meeting_scheduled": True},
+    )
+    prompt = _build_child_prompt_agendamento(_context_tabela(), "Pode ser sim, marca aí!", booked)
+    assert "FALTA SABER O SERVIÇO E A DURAÇÃO" in prompt
+    assert "MARCAÇÃO JÁ GRAVADA NESTE TURNO" not in prompt

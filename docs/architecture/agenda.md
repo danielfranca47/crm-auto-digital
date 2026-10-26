@@ -393,12 +393,20 @@ history + mensagem atual
     | ambiguous (várias, nenhuma escolhida) | lead_stated (hora nova — não é aceitação) | none
   → prompt: _build_meeting_already_booked_block(accepted) diz à Filha o horário aceite e o
     candidato a devolver; ambíguo → manda perguntar qual
+  → duração por saber? missing_duration(): a tabela de serviços (service_pricing_table, já
+    renderizada pelo CRM como "— 60min") tem mais de uma duração e nem o lead nem a proposta
+    aceite a disseram → o bloco passa a "FALTA SABER O SERVIÇO E A DURAÇÃO" (perguntar,
+    candidato null)
   → depois da resposta: _apply_meeting_confirmation_guard (decision_engine.py, logo após o
     trace ganhar is_phase_entry, antes do meeting_scheduler)
+      duração por saber → sem candidato, meeting_scheduled=false
+        (meeting_scheduled_blocked="missing_duration"); se a Filha confirmou mesmo assim, texto
+        = "Para fechar a marcação de X: que serviço e que duração prefere (60 ou 90 min)?"
       aceite único ≠ candidato (ou candidato em falta) → candidato = aceite; dia, hora e
         profissional errados no texto são reescritos   (event=meeting_confirmation_corrected)
       ambíguo e candidato fora das opções → sem candidato, meeting_scheduled=false, texto =
-        "Só para confirmar: prefere X ou Y?"            (event=meeting_confirmation_blocked)
+        "Só para confirmar: prefere X ou Y?"            (event=meeting_confirmation_blocked,
+                                                          meeting_scheduled_blocked="ambiguous_options")
       lead_stated / none → sem alteração
     rasto em decision_trace.meeting_confirmation_guard
 ```

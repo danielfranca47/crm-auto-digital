@@ -523,7 +523,11 @@ a pré-agendamento recebe só a tabela.
   (`_confirmation_fact` → `meeting_proposal.py`) dá o facto: "O lead aceitou o horário da
   última proposta: sexta-feira, 30/10, às 11h com Val" + o candidato exato a devolver. Com
   várias opções em aberto e nenhuma escolhida, o bloco passa a "O LEAD CONFIRMOU, MAS HÁ MAIS
-  DE UMA OPÇÃO EM ABERTO" e manda perguntar qual. Sem proposta lida, fica o texto genérico. O
+  DE UMA OPÇÃO EM ABERTO" e manda perguntar qual; com a duração por saber (tabela de serviços com
+  várias durações e nenhuma dita), passa a "FALTA SABER O SERVIÇO E A DURAÇÃO" e manda perguntar
+  serviço e duração mantendo o horário. A variante normal especifica que a confirmação final é a
+  mensagem que as instruções da conta mandam enviar depois de o lead confirmar (o recibo), não o
+  resumo de antes. Sem proposta lida, fica o texto genérico. O
   candidato devolvido é conferido em código por `_apply_meeting_confirmation_guard` (ver
   `docs/architecture/agenda.md`, "Turno da confirmação"). Na entrada da fase não entra (o
   `meeting_scheduler` adia a criação — gate M3).

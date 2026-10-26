@@ -196,7 +196,20 @@ Y?" em vez de gravar. Funciona também na fase de pré-agendamento.
 
 **Objetivo:** com `meeting_scheduled=true` e a duração por saber (não dita pelo lead, não na
 proposta aceite, não única na tabela de serviços), perguntar em vez de gravar. Nome do cliente e
-campo "dados exigidos" no AI profile ficam fora (ver Ajustes Possíveis).
+campo "dados exigidos" no AI profile ficam fora (ver Ajustes Possíveis). Inclui o ajuste visto no
+Cenário P3: a variante normal do bloco passa a dizer que a confirmação final é a mensagem que as
+instruções da conta mandam enviar depois de o lead confirmar (o recibo), não o resumo de antes.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/meeting_proposal.py` | `offered_durations`, `missing_duration`, `durations_text`, `ask_duration_text`; `AcceptedSlot.proposal_text`; `reconcile_confirmation(missing_durations=…)` → `blocked_duration` (texto só é trocado se a Filha confirmou mesmo assim) |
+| `backend-executors/app/services/decision_engine.py` | `_missing_booking_duration`, `_confirmation_block` (usado nas 3 rotas); variante "FALTA SABER O SERVIÇO E A DURAÇÃO"; frase do recibo na variante normal; guard passa as durações e marca `meeting_scheduled_blocked` |
+| `backend-executors/tests/test_meeting_confirmation_guard.py` | casos da duração por saber (tabela no formato renderizado pelo CRM, "— 60min") |
+| `docs/architecture/agenda.md`, `docs/prompts_llms.md` | regra da duração e nova variante do bloco |
+
+A tabela real da conta está guardada como `structured_v1` (JSON), mas o CRM entrega-a ao executor
+já em texto ("Massagem … — 60min: 75 €", `orchestrator._render_service_pricing_block`) — é isso
+que `offered_durations` lê.
 
 ---
 
@@ -226,7 +239,17 @@ campo "dados exigidos" no AI profile ficam fora (ver Ajustes Possíveis).
   Agendada" — marcação certa, formato da conta não seguido nesta rota.
 
 ### Cenário P4 — bancada local: dados em falta (Fase 2)
-- [ ] `python simular.py p-fora-horario B2` → pergunta tipo/duração antes de gravar
+- [x] `python simular.py p-fora-horario B2` → pergunta tipo/duração antes de gravar
+- **Validado em:** 26/10/2026 — `tentativas/20261026-1512-B2-p-fora-horario.md`: "Sim, pode ser
+  segunda às 11h com a Val!" sem serviço nem duração → nada gravado, resposta "Para fechar a
+  marcação de segunda-feira, 02/11, às 11h com Val: que serviço e que duração prefere (20, 30, 45,
+  60 ou 90 min)?" (`event=meeting_confirmation_blocked`, a Filha tinha escrito uma confirmação);
+  depois de "terapêutica de 1h" + "Sim, pode confirmar!" → recibo "Massagem Terapêutica - 60 min"
+  e gravado segunda 02/11 11h–12h.
+- [x] Regressão com o código da Fase 2: `p-val-17h B2` (quinta 16h, recibo no formato da conta),
+  `p-micas B2` (quarta 15h, 90 min), `p-ricardo B2` (sábado 11h) — todos gravados no turno certo.
+  Nesta corrida o `p-val-17h` passou pela fase agendamento, não pré-agendamento: o ajuste do formato
+  do recibo no pré-agendamento fica por observar em P3/C1.
 
 ### Cenário P5 — regressão
 - [x] `python simular.py p-micas B1` e `python simular.py p-ricardo B1` → gravam no turno certo
@@ -245,6 +268,10 @@ campo "dados exigidos" no AI profile ficam fora (ver Ajustes Possíveis).
 
 - Leitura de horas em texto livre: formatos raros ("ao meio-dia", "às onze") não são lidos — sem
   leitura, o guard não mexe (comportamento anterior).
-- O texto da pergunta "Só para confirmar: prefere X ou Y?" é fixo em português, sem o tom da conta.
+- Os textos "Só para confirmar: prefere X ou Y?" e "Para fechar a marcação de X: que serviço e que
+  duração prefere (…)?" são fixos em português, sem o tom da conta, e com o nome do profissional
+  sem artigo ("com Val"). Com tabelas grandes a lista de durações fica longa (5 na Sensi Vitae).
+- Depois da pergunta da duração, a IA pode voltar a pedir "Posso confirmar?" antes do recibo (visto
+  em p-fora-horario B2) — um passo a mais, sem dano.
 - Nome do cliente e "dados exigidos" configuráveis no AI profile (Fase 2 só trata duração/serviço).
 

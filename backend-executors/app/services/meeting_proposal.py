@@ -53,6 +53,7 @@ class AcceptedSlot:
     option: Optional[ProposedOption]
     source: str  # lead_stated | matched_option | single_option | ambiguous | none
     options: List[ProposedOption] = field(default_factory=list)
+    proposal_text: str = ""
 
     @property
     def start(self) -> Optional[datetime]:
@@ -257,17 +258,37 @@ def accepted_slot(
     if wanted is not None:
         narrowed = [o for o in narrowed if o.start.time() == wanted]
         if not narrowed:
-            return AcceptedSlot(None, "lead_stated", options)
+            return AcceptedSlot(None, "lead_stated", options, proposal.text)
     if day is not None:
         narrowed = [o for o in narrowed if o.start.date() == day] or narrowed
     if named:
         narrowed = [o for o in narrowed if o.professional == named] or narrowed
     if not options:
-        return AcceptedSlot(None, "none", options)
+        return AcceptedSlot(None, "none", options, proposal.text)
     if len(narrowed) == 1:
         source = "single_option" if len(options) == 1 else "matched_option"
-        return AcceptedSlot(narrowed[0], source, options)
-    return AcceptedSlot(None, "ambiguous", options)
+        return AcceptedSlot(narrowed[0], source, options, proposal.text)
+    return AcceptedSlot(None, "ambiguous", options, proposal.text)
+
+
+def offered_durations(pricing_table: str) -> List[int]:
+    """Durações (minutos) diferentes que aparecem na tabela de serviços ("60 min", "90 min")."""
+    found = {int(m.group(1)) for m in requested_slot._DURATION_MIN_RE.finditer(pricing_table or "")}
+    return sorted(d for d in found if 10 <= d <= 240)
+
+
+def missing_duration(lead_texts: List[str], proposal_text: str, pricing_table: str) -> Optional[List[int]]:
+    """Durações por onde o lead ainda tem de escolher — None quando a duração já se sabe: dita pelo
+    lead, escrita na proposta que ele aceitou, ou a tabela só tem uma (ou nenhuma tabela).
+
+    Em teste real o lead aceitou "11h na segunda" sem dizer serviço nem duração, e a IA inventou
+    "Massagem Relaxante - 60 min" no recibo."""
+    durations = offered_durations(pricing_table)
+    if len(durations) <= 1:
+        return None
+    if requested_slot.requested_duration(list(lead_texts) + [proposal_text or ""]) is not None:
+        return None
+    return durations
 
 
 def describe(option: ProposedOption) -> str:
@@ -284,6 +305,24 @@ def candidate_iso(option: ProposedOption) -> str:
 
 def ask_which_text(options: List[ProposedOption]) -> str:
     return "Só para confirmar: prefere " + " ou ".join(describe(o) for o in options) + "?"
+
+
+def durations_text(durations: List[int]) -> str:
+    """[20, 60, 90] → "20, 60 ou 90 min"."""
+    values = [str(d) for d in durations]
+    joined = values[0] if len(values) == 1 else ", ".join(values[:-1]) + " ou " + values[-1]
+    return f"{joined} min"
+
+
+def ask_duration_text(option: ProposedOption, durations: List[int]) -> str:
+    return (
+        f"Para fechar a marcação de {describe(option)}: que serviço e que duração prefere "
+        f"({durations_text(durations)})?"
+    )
+
+
+# Texto que anuncia a marcação como feita ("Experiência Agendada", "fica marcado", "reservada").
+_BOOKED_TEXT_RE = re.compile(r"agendad|marcad[ao]|reservad|confirmad", re.IGNORECASE)
 
 
 @dataclass
@@ -330,9 +369,13 @@ def reconcile_confirmation(
     tz_name: Optional[str],
     now_utc: Optional[datetime] = None,
     professionals: Sequence[str] = (),
+    missing_durations: Optional[List[int]] = None,
 ) -> ConfirmationCheck:
     """Confere o candidato da Filha, no turno da confirmação, com o horário aceite.
 
+    - aceite único mas duração por saber (`missing_durations`, de missing_duration) → `blocked`:
+      não se grava; se a Filha confirmou mesmo assim, o texto passa a ser a pergunta do serviço
+      e da duração (se ela já perguntou, o texto dela fica);
     - aceite único e candidato diferente (ou em falta) → candidato passa a ser o aceite; dia,
       hora e terapeuta errados no texto são reescritos (o cliente lê o que fica gravado);
     - várias opções e candidato que não é nenhuma delas → `blocked`: não se grava e o texto passa
@@ -347,6 +390,16 @@ def reconcile_confirmation(
         "candidate_from": candidate,
     }
     naive = current.replace(tzinfo=None) if current else None
+
+    if accepted.option is not None and missing_durations:
+        confirmed = naive is not None or bool(_BOOKED_TEXT_RE.search(text))
+        new_text = ask_duration_text(accepted.option, missing_durations) if confirmed else text
+        return ConfirmationCheck(
+            None,
+            new_text,
+            blocked=True,
+            trace={**trace, "action": "blocked_duration", "durations": missing_durations, "text_changed": new_text != text},
+        )
 
     if accepted.option is not None:
         target = accepted.option.start.replace(tzinfo=None)
