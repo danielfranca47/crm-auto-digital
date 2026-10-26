@@ -1,7 +1,7 @@
 # Na confirmação, a marcação grava uma proposta antiga (e não a última aceite)
 
 **Branch:** `worktree-fix+confirmacao-grava-proposta-antiga` (worktree `.claude/worktrees/fix+confirmacao-grava-proposta-antiga`)
-**Status:** Em andamento — Fase 1 implementada, por validar; Fase 2 por implementar
+**Status:** Em andamento — Fases 1 e 2 validadas na bancada local (26/10/2026); pendente: "sim" do utilizador para juntar a `main`, depois C1 (produção)
 **Sobe ao utilizador:** sim — toca instruções da IA; só junta a `main` com o "sim" do utilizador
 **Autonomia:** manual
 **Origem:** bateria PROD07 do agente Sensi Vitae (26/10/2026), cenário `p-cedo-tarde` — investigação em
@@ -210,6 +210,21 @@ instruções da conta mandam enviar depois de o lead confirmar (o recibo), não 
 A tabela real da conta está guardada como `structured_v1` (JSON), mas o CRM entrega-a ao executor
 já em texto ("Massagem … — 60min: 75 €", `orchestrator._render_service_pricing_block`) — é isso
 que `offered_durations` lê.
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `fd3e4b4` | Duração por saber → pergunta em vez de gravar; recibo como confirmação final |
+
+### Relatório da Fase 2 — o que mudou na prática
+
+**Antes:** se o cliente aceitava um horário sem dizer que massagem e quanto tempo queria, a IA
+confirmava na mesma e inventava o serviço no recibo (ex.: "Massagem Relaxante - 60 min").
+**Agora:** quando a tabela de serviços tem várias durações e ninguém disse qual, o sistema não grava
+e pergunta "que serviço e que duração prefere", mantendo o horário combinado; grava quando o cliente
+responder. Contas com uma só duração (ou sem tabela) não mudam.
+**Para validar:** Cenário P4 (feito na bancada local) e C1 depois do deploy.
 
 ---
 
