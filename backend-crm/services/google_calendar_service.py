@@ -1,6 +1,10 @@
 """
-Push/update/delete de eventos no Google Calendar do utilizador.
-Fail-silent: nunca bloqueia criação/edição de compromissos no CRM.
+Push/update/delete/list de eventos no Google Calendar do utilizador.
+Push/update/delete são fail-silent: nunca bloqueiam criação/edição de compromissos no CRM.
+list_events lança GoogleCalendarError quando a Google falha — quem sincroniza precisa de
+distinguir "Google vazio" de "Google inacessível" para não apagar a agenda importada.
+Erros que exigem acção do utilizador (permissão em falta, acesso revogado) são reportados
+ao backend-core (google_last_error) para aparecerem em Minha Conta.
 Os tokens são lidos do backend-core via chamada service-to-service.
 """
 import datetime
@@ -14,6 +18,57 @@ CORE_BASE = os.environ.get("CORE_API_BASE", "http://localhost:8001")
 SERVICE_TOKEN = os.environ.get("CORE_SERVICE_TOKEN", "")
 
 logger = logging.getLogger(__name__)
+
+ERROR_MISSING_SCOPE = "missing_calendar_scope"
+ERROR_TOKEN_REVOKED = "token_revoked"
+ERROR_UNAVAILABLE = "google_unavailable"
+
+_ERROR_MESSAGES = {
+    ERROR_MISSING_SCOPE: "A Google não deu acesso ao seu calendário. Volte a ligar o Google Calendar em Minha Conta e, na página da Google sobre o calendário, escolha Permitir.",
+    ERROR_TOKEN_REVOKED: "O acesso ao Google Calendar foi retirado ou expirou. Volte a ligar o Google Calendar em Minha Conta.",
+    ERROR_UNAVAILABLE: "Não foi possível falar com o Google Calendar agora. Tente de novo daqui a pouco.",
+}
+
+# Só estes pedem acção do utilizador — falhas temporárias da Google não ficam gravadas.
+_ACTIONABLE_ERRORS = {ERROR_MISSING_SCOPE, ERROR_TOKEN_REVOKED}
+
+
+class GoogleCalendarError(Exception):
+    def __init__(self, code: str):
+        self.code = code
+        self.message = _ERROR_MESSAGES.get(code, _ERROR_MESSAGES[ERROR_UNAVAILABLE])
+        super().__init__(code)
+
+
+def _classify_error(response: httpx.Response) -> str:
+    if response.status_code == 401:
+        return ERROR_TOKEN_REVOKED
+    if response.status_code == 403:
+        # Corpo da Google: details[].reason=ACCESS_TOKEN_SCOPE_INSUFFICIENT, errors[].reason=insufficientPermissions
+        body = response.text or ""
+        if "ACCESS_TOKEN_SCOPE_INSUFFICIENT" in body or "insufficientPermissions" in body:
+            return ERROR_MISSING_SCOPE
+    return ERROR_UNAVAILABLE
+
+
+def _note_failure(user_id: int, response: httpx.Response) -> str:
+    code = _classify_error(response)
+    if code in _ACTIONABLE_ERRORS:
+        _report_error(user_id, code)
+    return code
+
+
+def _report_error(user_id: int, error_code: Optional[str]) -> None:
+    """Grava (ou limpa, com None) o último erro do Google no backend-core. Fail-silent."""
+    try:
+        httpx.put(
+            f"{CORE_BASE}/auth/google/tokens/{user_id}/error",
+            json={"error": error_code},
+            headers={"X-Service-Token": SERVICE_TOKEN},
+            timeout=5.0,
+        )
+    except Exception as exc:
+        logger.debug("google_error_report_failed user_id=%s: %s", user_id, exc)
 
 
 def _get_tokens(user_id: int) -> Optional[dict]:
@@ -185,7 +240,8 @@ def push_event(user_id: int, appointment: dict) -> Optional[str]:
             )
         if r.status_code in (200, 201):
             return r.json().get("id")
-        logger.warning("google_push_event_failed user_id=%s status=%s", user_id, r.status_code)
+        code = _note_failure(user_id, r)
+        logger.warning("google_push_event_failed user_id=%s status=%s code=%s", user_id, r.status_code, code)
         return None
     except Exception as exc:
         logger.warning("google_push_event_error user_id=%s: %s", user_id, exc)
@@ -215,25 +271,32 @@ def update_event(user_id: int, google_event_id: str, appointment: dict) -> None:
             timeout=10.0,
         )
         if r.status_code not in (200, 204):
+            code = _note_failure(user_id, r)
             logger.warning(
-                "google_update_event_failed user_id=%s event_id=%s status=%s",
-                user_id, google_event_id, r.status_code,
+                "google_update_event_failed user_id=%s event_id=%s status=%s code=%s",
+                user_id, google_event_id, r.status_code, code,
             )
     except Exception as exc:
         logger.warning("google_update_event_error user_id=%s: %s", user_id, exc)
 
 
-def list_events(user_id: int, time_min: str, time_max: str) -> list:
-    """Lista eventos do Google Calendar para o período. Retorna [] em caso de erro."""
+def list_events(user_id: int, time_min: str, time_max: str, timeout: float = 10.0) -> Optional[list]:
+    """Lista eventos do Google Calendar para o período.
+
+    Retorna None se o utilizador não tem o Google ligado e a lista de eventos em sucesso.
+    Lança GoogleCalendarError quando a Google falha (permissão, token, rede) — nunca
+    devolve [] por erro, para quem sincroniza não confundir falha com calendário vazio.
+    """
+    tokens = _get_tokens(user_id)
+    if not tokens:
+        return None
+
+    access_token = _get_valid_token(user_id, tokens)
+    if not access_token:
+        _report_error(user_id, ERROR_TOKEN_REVOKED)
+        raise GoogleCalendarError(ERROR_TOKEN_REVOKED)
+
     try:
-        tokens = _get_tokens(user_id)
-        if not tokens:
-            return []
-
-        access_token = _get_valid_token(user_id, tokens)
-        if not access_token:
-            return []
-
         calendar_id = tokens.get("calendar_id") or "primary"
         params = {
             "timeMin": _to_rfc3339(time_min),
@@ -246,27 +309,29 @@ def list_events(user_id: int, time_min: str, time_max: str) -> list:
             f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events",
             params=params,
             headers={"Authorization": f"Bearer {access_token}"},
-            timeout=10.0,
+            timeout=timeout,
         )
         if r.status_code == 401:
             result = _refresh_access_token(tokens)
-            if not result:
-                return []
-            new_token, new_expiry = result
-            _save_refreshed_token(user_id, new_token, new_expiry)
-            r = httpx.get(
-                f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events",
-                params=params,
-                headers={"Authorization": f"Bearer {new_token}"},
-                timeout=10.0,
-            )
-        if r.status_code == 200:
-            return r.json().get("items", [])
-        logger.warning("google_list_events_failed user_id=%s status=%s", user_id, r.status_code)
-        return []
+            if result:
+                new_token, new_expiry = result
+                _save_refreshed_token(user_id, new_token, new_expiry)
+                r = httpx.get(
+                    f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events",
+                    params=params,
+                    headers={"Authorization": f"Bearer {new_token}"},
+                    timeout=timeout,
+                )
     except Exception as exc:
         logger.warning("google_list_events_error user_id=%s: %s", user_id, exc)
-        return []
+        raise GoogleCalendarError(ERROR_UNAVAILABLE) from exc
+
+    if r.status_code == 200:
+        _report_error(user_id, None)
+        return r.json().get("items", [])
+    code = _note_failure(user_id, r)
+    logger.warning("google_list_events_failed user_id=%s status=%s code=%s", user_id, r.status_code, code)
+    raise GoogleCalendarError(code)
 
 
 def delete_event(user_id: int, google_event_id: str) -> None:
@@ -290,9 +355,10 @@ def delete_event(user_id: int, google_event_id: str) -> None:
             timeout=10.0,
         )
         if r.status_code not in (200, 204, 404, 410):
+            code = _note_failure(user_id, r)
             logger.warning(
-                "google_delete_event_failed user_id=%s event_id=%s status=%s",
-                user_id, google_event_id, r.status_code,
+                "google_delete_event_failed user_id=%s event_id=%s status=%s code=%s",
+                user_id, google_event_id, r.status_code, code,
             )
     except Exception as exc:
         logger.warning("google_delete_event_error user_id=%s: %s", user_id, exc)

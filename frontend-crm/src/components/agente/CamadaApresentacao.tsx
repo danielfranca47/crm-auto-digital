@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/services/api';
 import { FieldHelp } from './FieldHelp';
 import { SuggestInput } from './SuggestField';
 import type { AgentConfig } from '@/types/agente';
@@ -98,12 +101,39 @@ function ModalCalendario({ value, onSave, onClose }: { value: string; onSave: (v
       {opts.map(o => (
         <OptCard key={o.v} selected={local === o.v} onClick={() => setLocal(o.v)} label={o.label} desc={o.desc} />
       ))}
-      {local !== 'none' && (
+      {local === 'google_calendar' && <GoogleCalendarConnectionNote />}
+      {local === 'calendly' && (
         <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--o-b0)', borderRadius: 4, border: '1px solid var(--o-b1)', fontSize: 12, color: 'var(--o-sub)' }}>
           ℹ A configuração detalhada da integração está em desenvolvimento. Selecione para reservar a configuração.
         </div>
       )}
     </ModalBase>
+  );
+}
+
+// A ligação ao Google é da conta (Minha Conta), não do AI Profile — aqui só se mostra o estado dela
+function GoogleCalendarConnectionNote() {
+  const { data: status, isLoading } = useQuery({
+    queryKey: ['googleCalendarStatus'],
+    queryFn: () => api.googleCalendar.getStatus(),
+    staleTime: 60_000,
+  });
+  const ok = status?.connected && !status.last_error;
+  return (
+    <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--o-b0)', borderRadius: 4, border: `1px solid ${ok ? 'var(--o-b1)' : 'var(--o-warn)'}`, fontSize: 12, color: 'var(--o-sub)' }}>
+      {isLoading
+        ? 'A verificar a ligação ao Google…'
+        : ok
+          ? `✓ Google Calendar ligado${status?.email ? ` (${status.email})` : ''}. O agente consulta esta agenda antes de oferecer horários.`
+          : status?.connected
+            ? '⚠ O Google Calendar está ligado mas sem acesso ao calendário. '
+            : '⚠ O Google Calendar ainda não está ligado — escolher esta opção não liga a conta. '}
+      {!isLoading && !ok && (
+        <Link to="/minha-conta" style={{ color: 'var(--o-accent)', textDecoration: 'underline' }}>
+          Ligar em Minha Conta
+        </Link>
+      )}
+    </div>
   );
 }
 

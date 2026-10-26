@@ -495,6 +495,8 @@ def ensure_google_calendar_columns() -> None:
         "google_token_expiry",
         "google_calendar_id",
         "google_email",
+        "google_last_error",
+        "google_last_error_at",
     ]
     with engine.begin() as conn:
         if engine.dialect.name == "sqlite":

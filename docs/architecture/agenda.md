@@ -255,11 +255,15 @@ Eventos importados via `POST /api/appointments/google-sync` têm `source='google
 - **Cursor:** `isGoogle ? "cursor-default opacity-80" : "cursor-pointer"`
 - **Lead:** `leadName` é `null` para eventos Google — a linha "Lead:" é suprimida na UI
 
-**Botão "Sincronizar Google"** em `Agenda.tsx`: visível apenas quando `googleCalendar.getStatus()` retorna `connected: true`. Ao clicar, chama o endpoint google-sync para o mês corrente e invalida `appointmentsKeys.all` (refetch de todas as vistas).
+**Sync na Agenda** (`Agenda.tsx`, só quando `googleCalendar.getStatus()` retorna `connected: true`):
+ao abrir a página corre uma vez o google-sync do mês corrente (sem toast de sucesso); o botão
+"Sincronizar Google" faz o mesmo à mão. Ambos invalidam `appointmentsKeys.all`. Em erro (409),
+o toast mostra `detail.message` do backend.
 
-**Upsert e cleanup (google-sync):**
+**Upsert e cleanup (google-sync, `services/google_calendar_sync.py`):**
 - Upsert por `(google_event_id, user_id)` — sincronizar duas vezes não duplica
-- Cleanup automático: apaga `source='google'` do período que já não existem no Google → F3-2 (evento removido do Google desaparece na próxima sync)
+- Cleanup automático: apaga `source='google'` do período que já não existem no Google → F3-2 (evento removido do Google desaparece na próxima sync) — só depois de uma leitura bem-sucedida; se a Google falhar nada é apagado
+- `google_transparency` guarda o "Ocupado/Disponível" do Google (`transparent` = Disponível, padrão dos eventos de dia inteiro). Eventos Disponível aparecem na Agenda mas **não contam como ocupados** (nem em `calendar_busy_slots`, nem em `_check_conflict`)
 
 ---
 
@@ -267,7 +271,7 @@ Eventos importados via `POST /api/appointments/google-sync` têm `source='google
 
 **Ao criar** (`POST /api/leads/{id}/appointments` ou via `routes/appointments.py`), o backend:
 
-1. Valida que não há conflito de horário **para o profissional inteiro** (`_check_conflict`) — não apenas para o mesmo lead. Existem duas implementações paralelas e independentes (uma em cada arquivo, mesma regra): `routes/leads.py::_check_conflict` (usa `current_user.id` diretamente — endpoint já autenticado) e `routes/appointments.py::_check_conflict` (resolve o `user_id` via `_resolve_owner_user_id()`, a partir do `lead_id` ou do `user_id` próprio em appointments importados do Google sem lead). Ambas bloqueiam com `409` se outro appointment do mesmo `user_id` (qualquer lead, ou evento Google) sobrepuser o intervalo — esta é a defesa real contra conflito, pois roda dentro da transacção SQLite no momento exacto do INSERT/UPDATE.
+1. Valida que não há conflito de horário **para o profissional inteiro** (`_check_conflict`) — não apenas para o mesmo lead. Existem duas implementações paralelas e independentes (uma em cada arquivo, mesma regra): `routes/leads.py::_check_conflict` (usa `current_user.id` diretamente — endpoint já autenticado) e `routes/appointments.py::_check_conflict` (resolve o `user_id` via `_resolve_owner_user_id()`, a partir do `lead_id` ou do `user_id` próprio em appointments importados do Google sem lead). Ambas bloqueiam com `409` se outro appointment do mesmo `user_id` (qualquer lead, ou evento Google marcado como Ocupado) sobrepuser o intervalo — esta é a defesa real contra conflito, pois roda dentro da transacção SQLite no momento exacto do INSERT/UPDATE.
 2. Agenda jobs de lembrete (`whatsapp.appointment.reminder`, `jobs_service.schedule_appointment_reminder_jobs()`) com offsets configuráveis por `appointment_reminder_offsets` do AI Profile (default por `template_key`) — cada job recebe um `reminder_kind` (`"early"`/`"final"`, ver secção dedicada abaixo)
 3. Agenda job de briefing (`whatsapp.appointment.briefing`, `briefing_service.schedule_briefing_job_for_appointment()`) se `briefing_enabled` não for `False`
 4. Faz push para Google Calendar se o utilizador tiver tokens OAuth2 válidos (`google_calendar_service.push_event`)
@@ -317,7 +321,9 @@ outros leads do mesmo profissional.
 backend-crm (orchestrator.py)
   enrich_context_bundle() carrega calendar_busy_slots — compromissos reais do
   profissional (próximos 30 dias, status='pending', inclui CRM + importados
-  do Google) — quando ai_profile.agent_mode == "agenda"
+  do Google marcados como Ocupado) — quando ai_profile.agent_mode == "agenda".
+  Antes de ler, sincroniza o Google da janela (no máx. 1x / 3 min por utilizador,
+  timeout 5 s, falha nunca bloqueia) — ver abaixo
         ↓ (mesmo ContextBundle — paridade automática Playground + WhatsApp real)
 backend-executors (decision_engine.py)
   _build_child_prompt_agendamento injeta bloco "HORÁRIOS JÁ OCUPADOS"
@@ -349,7 +355,15 @@ backend-crm (routes/appointments.py + routes/leads.py)
   entre o fetch do ContextBundle e a criação do appointment.
 ```
 
-**Função:** `_load_calendar_busy_slots(user_id, window_days=30)` em `backend-crm/services/ai_orchestrator/orchestrator.py` — mesma cláusula de scoping de `routes/appointments.py::list_appointments`.
+**Função:** `_load_calendar_busy_slots(user_id, window_days=30)` em `backend-crm/services/ai_orchestrator/orchestrator.py` — mesma cláusula de scoping de `routes/appointments.py::list_appointments`, excluindo `google_transparency='transparent'`.
+
+**Sync do Google antes dos ocupados:** `_sync_google_for_busy_slots` chama
+`google_calendar_sync.sync_user_google_events(user_id, now, now+30d, timeout=5)` — um evento
+criado só no Google conta como ocupado sem ninguém clicar "Sincronizar Google". Cache em memória
+por processo (`_google_sync_last_attempt`, TTL `_GOOGLE_SYNC_TTL_SECONDS = 180`) que conta também
+tentativas falhadas e utilizadores sem Google ligado. Qualquer erro (Google, rede, BD) só gera
+log `busy_slots_google_sync_failed`/`_error` — o agente segue com o que já está na tabela. Como
+corre dentro de `enrich_context_bundle`, vale igual para Playground e WhatsApp real.
 
 ### Mensagem de correcção de conflito (gerada via LLM)
 

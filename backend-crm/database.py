@@ -1274,6 +1274,9 @@ def init_db() -> None:
         ensure_column(conn, "appointments", "google_event_id", "google_event_id TEXT")
         ensure_column(conn, "appointments", "source", "source TEXT NOT NULL DEFAULT 'crm'")
         _migrate_appointments_lead_nullable(conn)
+        # Depois da reconstrução acima (que só copia as colunas que conhece). Google "Disponível"
+        # (transparent) aparece na Agenda mas não bloqueia o agente — ver calendar_busy_slots.
+        ensure_column(conn, "appointments", "google_transparency", "google_transparency TEXT")
         ensure_column(conn, "lead_qualification_state", "asked_questions_json", "asked_questions_json TEXT DEFAULT '[]'")
         ensure_column(conn, "lead_qualification_state", "last_question_text", "last_question_text TEXT")
         ensure_column(conn, "lead_qualification_state", "power_score", "power_score INTEGER NOT NULL DEFAULT 0")

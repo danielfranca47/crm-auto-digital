@@ -22,6 +22,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            google_transparency TEXT,
             lead_id INTEGER,
             user_id INTEGER,
             start_at TEXT,
@@ -113,6 +114,22 @@ class AppointmentConflictByProfessionalTest(unittest.TestCase):
                 dt.datetime.fromisoformat("2026-03-02T09:40:00+00:00"),
             )
         self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_google_free_event_does_not_conflict(self):
+        """Evento do Google marcado como Disponível (ex.: aniversário de dia inteiro) não bloqueia."""
+        appt_id = self._insert_appointment(
+            lead_id=None, user_id=1,
+            start_at="2026-03-03", end_at="2026-03-04",
+        )
+        self.conn.execute("UPDATE appointments SET google_transparency = 'transparent' WHERE id = ?", (appt_id,))
+        self.conn.commit()
+        import datetime as dt
+
+        _check_conflict(
+            self.conn, 1,
+            dt.datetime.fromisoformat("2026-03-03T10:00:00+00:00"),
+            dt.datetime.fromisoformat("2026-03-03T11:00:00+00:00"),
+        )  # não levanta excecao
 
     def test_exclude_id_ignores_self(self):
         lead_a = self._insert_lead(user_id=1)
