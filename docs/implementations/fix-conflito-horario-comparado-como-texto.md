@@ -156,6 +156,20 @@ explícito do utilizador**.
 | `backend-crm/tests/test_google_calendar_sync.py` | gravação em UTC; dia inteiro no 1.º dia da janela é apagado quando sai do Google |
 | `docs/architecture/agenda.md`, `docs/architecture/google-calendar.md` | formatos guardados e regra "comparar sempre com `datetime()`" |
 
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `436bc73` | Comparação por datas nos 6 sítios + Google gravado em UTC + testes + docs |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+**Antes:** a agenda comparava horários como se fossem palavras; um evento do Google que acabava às
+16h "colidia" com uma sessão às 16h, e no verão o erro chegava a uma hora inteira.
+**Agora:** os horários são comparados como horas de verdade, seja qual for a forma como foram
+guardados; sessões seguidas passam, sobreposições reais continuam recusadas.
+**Para validar:** Cenários P1, P2 e P3 (bancada local) e, depois do deploy, C1.
+
 ### Fase 2 — 409 ao criar não rebenta (backend-executors)
 
 **Objetivo:** um conflito (ou outra falha do CRM) ao gravar a marcação nunca deixa o cliente sem
