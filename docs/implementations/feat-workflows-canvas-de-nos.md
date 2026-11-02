@@ -1,9 +1,25 @@
 # Canvas de nós para os workflows
 
 **Branch:** claude/feat-workflows-canvas-de-nos
-**Status:** Interrompido de noite — continuar
+**Status:** Só plano — precisa da tua decisão
 **Origem:** docs/discovery (investigação `workflows-canvas-de-nos`, graduada em 2026-10-03) — pedido do utilizador registado em `docs/discovery/levantamentos/2026-10-03-acompanhamento-pos-agendamento.md`, "Complemento do utilizador"
 **Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (clareza da configuração e impacto em demonstração); ligação indireta
+
+---
+
+## Diagnóstico (turno da noite, 02/11/2026)
+
+- **Já existe?** Não. `@xyflow/react`, `reactflow` e `dagre` não estão em `frontend-crm/package.json`, e `main` não tem código de workflows por gatilho (o item `feat-workflows-por-gatilho` só tem plano, na branch dele).
+- **O que construir:** 3 fases (Opção B): (1) canvas dos workflows por gatilho, (2) Fluxo de Venda visto no canvas, (3) Fluxo de Venda editável + alternância Lista | Canvas.
+- **Riscos:** a fase 1 é o editor da fase 2 de `feat-workflows-por-gatilho` — sem esse item em `main` não há o que desenhar nem onde guardar posições. As fases 2–3 mexem em `CamadaFluxoVenda.tsx` (1.922 linhas) e tocam a peça mais sensível do agente.
+
+## Decisões em aberto
+
+1. **Dependência por resolver.** Este item não pode começar antes de `feat-workflows-por-gatilho` (fases 1–2) estar em `main`. *Recomendado:* decidir primeiro a branch `claude/feat-workflows-por-gatilho` e só depois retomar este item.
+2. **Teste com utilizador não técnico antes da fase 3.** *Recomendado:* sim.
+3. **Linhas-guia ao arrastar.** Não pedidas. *Recomendado:* não incluir agora (só o comando "Alinhar").
+
+Nenhum código foi escrito nem testado nesta noite.
 
 ---
 
