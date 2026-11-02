@@ -1,7 +1,7 @@
 # Canvas de nós para os workflows
 
-**Branch:** (a criar)
-**Status:** Aguardando Plan Mode
+**Branch:** claude/feat-workflows-canvas-de-nos
+**Status:** Interrompido de noite — continuar
 **Origem:** docs/discovery (investigação `workflows-canvas-de-nos`, graduada em 2026-10-03) — pedido do utilizador registado em `docs/discovery/levantamentos/2026-10-03-acompanhamento-pos-agendamento.md`, "Complemento do utilizador"
 **Meta ligada:** M1 — Conquistar os primeiros clientes pagantes (clareza da configuração e impacto em demonstração); ligação indireta
 
