@@ -39,4 +39,9 @@ agent-local/run_remoto.ps1
 guia_ports.md
 
 
-.claude/
+# .claude/: só se versionam as definições partilhadas (settings, skills, comandos slash).
+# Ficam fora: dados de clientes (agentes/), worktrees, settings.local.json, locks.
+.claude/*
+!.claude/settings.json
+!.claude/skills/
+!.claude/commands/

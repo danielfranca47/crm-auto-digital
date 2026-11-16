@@ -52,8 +52,7 @@ Tudo o resto (investigar, pesquisar mercado, pontuar) é autónomo.
 | `/discovery-status` | Painel não-técnico: o que decidir, gatilhos de stand-by, metas por validar |
 | `/discovery-decidir` | Aplica os teus vereditos |
 
-Os comandos vivem em `.claude/commands/` (não versionado). Se não aparecerem
-num computador novo, ver `docs/ops/local-dev.md`, secção "Comandos slash locais".
+Os comandos vivem em `.claude/commands/` (versionados — chegam com o repositório).
 
 ---
 

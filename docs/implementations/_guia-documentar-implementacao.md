@@ -32,7 +32,7 @@ Antes de escrever qualquer código, siga os passos abaixo em ordem.
 > — não é necessário reler o `docs/plans/*` separadamente.
 
 > **Exceção — arquivo criado como "Aguardando Plan Mode":** o comando
-> `/statusplans-avancar` (ver `docs/ops/local-dev.md`, seção "Comandos slash locais")
+> `/statusplans-avancar` (ver `.claude/commands/statusplans-avancar.md`)
 > cria `docs/implementations/<slug>.md` para cada item do sprint **antes** deste Passo
 > 0, com `**Status:** Aguardando Plan Mode` e só a seção "Motivação"/"Área do sistema"
 > preenchidas — de propósito, para não gastar tokens rodando Plan Mode em vários itens

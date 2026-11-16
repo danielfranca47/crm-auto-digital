@@ -329,8 +329,11 @@ Quando a Mãe dá `meeting_scheduled=true` e o lead **já estava** na fase (não
 
 ### LLM Filha de Closing
 
-- Prompt: `_build_child_prompt` genérica (não há filha especializada de closing ainda)
-- Recebe: `route_to`, `reason`, `lead_summary`, `ai_summary`, `playbook_summary`, `history`
+- Prompt: `_build_child_prompt_closing` em `decision_engine.py` (identidade da Filha, tom, modo e
+  `presentation_variant`, resposta à saudação quando a Mãe indica `greet`) + blocos `orientacao` de p5 do
+  Fluxo de Venda
+- Na prática só o Agente 02 (`direto`) chega aqui com o bot ativo: os templates de agendamento têm closing
+  desligado para o bot. Detalhe por agente em [`agentes/`](agentes/)
 
 ---
 

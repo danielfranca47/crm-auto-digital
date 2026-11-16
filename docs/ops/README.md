@@ -24,6 +24,7 @@ real, playground, configurações de ambiente).
 |---|---|
 | `fila-automatica.md` | Regras do agente que executa a fila sozinho: que itens pode pegar, turno da noite, turno do dia, avaliador, o que sobe sempre para o utilizador, como pausar e desfazer. |
 | `local-dev.md` | Ambiente local, comandos slash, modo auto e regras de permissão do Claude Code. |
+| `diagnostico-agentes.md` | Guia para onboarding e suporte: como pedir ao Claude o diagnóstico do agente de um cliente a partir de conversas reais, o que esperar e o que fica para decidir. |
 
 ### Ficheiros regulares — trabalho activo
 

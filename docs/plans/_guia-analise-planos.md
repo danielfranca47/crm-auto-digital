@@ -253,7 +253,7 @@ Claude:
 Duas formas de chegar aqui, dependendo de como o sprint foi gerado:
 
 **Via os comandos rápidos** (`/statusplans` → `/statusplans-verificar` →
-`/statusplans-avancar` — ver `docs/ops/local-dev.md`, seção "Comandos slash locais"):
+`/statusplans-avancar` — ver `.claude/commands/statusplans-avancar.md`):
 o próprio `/statusplans-avancar` já cria `docs/implementations/<slug>.md` para cada
 item, com `Status: Aguardando Plan Mode` e a Motivação preenchida — sem rodar Plan
 Mode ainda (evita gastar tokens investigando código para até 6 itens de uma vez). Para
