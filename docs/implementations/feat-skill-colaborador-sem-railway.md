@@ -123,7 +123,7 @@ marca o estado; a skill do colega vê o estado e continua quando estiver "feito"
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | skill `configuracao-personalizada` escolhe o modo sozinha; `modo-colaborador.md`; docs da bancada e guia da equipa sem Railway |
+| 1 | `3c07c35` | skill `configuracao-personalizada` escolhe o modo sozinha; `modo-colaborador.md`; docs da bancada e guia da equipa sem Railway |
 
 ### Relatório da Fase 3 — o que mudou na prática
 O primeiro passo da skill é um checklist do PC. Sem Railway, ela entra no modo colaborador: pede só o email e a
