@@ -504,3 +504,29 @@ abertura, mesmo sem buffer (`backend-crm/services/whatsapp_inbound/inbound_handl
 o perfil sem a chave `professional_availability` cai no campo antigo — só serve a janela de deploy. Remover
 depois de o backend-core em produção já servir `professional_availability` (e o teste de recuo em
 `backend-executors/tests/test_scheduling_offer_style.py`).
+
+---
+
+## M22 — Tabela de horários lida visível no ecrã para o dono confirmar
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `fix-horarios-profissional-leitura-instavel.md` (graduado em 16/11/2026).
+Hoje `backend-executors/app/services/professional_hours.py` lê os horários do texto do perfil por
+consenso (2 leituras iguais, 3.ª para desempatar) e guarda a tabela só em memória, por processo.
+
+**O que construir:** ao gravar o texto dos horários (backend-core, `ai_profiles`), ler a tabela uma vez,
+guardá-la no perfil e mostrá-la no ecrã "Horários de atendimento" (Camada 5 · Apresentação,
+`frontend-crm`) para o dono confirmar ou corrigir; o executors passa a usar a tabela gravada.
+
+---
+
+## M23 — Grelha estruturada de horários por profissional em vez de texto livre
+
+**Prioridade: BAIXA**
+
+**Contexto:** deixado de fora de `fix-horarios-profissional-leitura-instavel.md` (graduado em 16/11/2026).
+
+**O que construir:** campo estruturado (profissional → dia → intervalos) no AI Profile e no ecrã, que
+elimina a leitura pela IA (`professional_hours.get_hours`). Muda o ecrã e todas as contas (migração do
+texto atual); faz sentido junto do item multi-profissional por conta deste ficheiro.

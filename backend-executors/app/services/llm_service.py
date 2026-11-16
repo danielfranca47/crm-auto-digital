@@ -349,7 +349,11 @@ def generate_child_result(
 
 def generate_professional_hours(prompt: str, *, ai_profile: Optional[Dict[str, Any]] = None) -> str:
     return _generate_json(
-        prompt, stub=lambda: json.dumps({"professionals": []}), ai_profile=ai_profile, route="professional_hours"
+        prompt,
+        stub=lambda: json.dumps({"professionals": []}),
+        ai_profile=ai_profile,
+        route="professional_hours",
+        temperature=0,  # leitura, não redação: a mesma resposta para o mesmo texto
     )
 
 
