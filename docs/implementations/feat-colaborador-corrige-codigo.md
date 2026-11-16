@@ -67,3 +67,9 @@ produção depois do deploy + revert; `verificar_ambiente.py` verifica Python, p
 | # | Commit | O que foi implementado |
 |---|---|---|
 | 1 | `5b6be61` | `/version` no crm e no core, `commit` no `/health` do executors, ação `versao` |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `66c76f8` | skill: o colaborador corrige e publica código; checklist do PC; docs |
