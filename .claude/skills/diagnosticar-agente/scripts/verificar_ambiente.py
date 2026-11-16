@@ -50,7 +50,7 @@ def main() -> int:
             print("❌ A conta de teste não tem plano ativo. Pedir ao Daniel o plano Interno.")
             falta = True
         else:
-            print(f"✅ Plano ativo: {', '.join(p for p in conta['planos'] if p)}")
+            print(f"✅ Plano ativo: {', '.join(sorted({p for p in conta['planos'] if p}))}")
         print("✅ AI Profile já existe" if conta["ai_profile_id"]
               else "ℹ️ A conta ainda não tem AI Profile — a skill cria-o na primeira configuração")
     except prod_http.AcessoErro as e:
