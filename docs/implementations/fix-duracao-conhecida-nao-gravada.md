@@ -90,11 +90,15 @@ a Filha diz a linha (`meeting_service`), o código confere se essa linha tem ess
 | `backend-executors/tests/test_meeting_confirmation_guard.py` / `test_meeting_reschedule_guard.py` | 6 testes novos |
 | `docs/architecture/agenda.md`, `docs/prompts_llms.md` | turno da confirmação (linha da tabela + handoff, ordem das fontes da duração), remarcação |
 
-Desvio do plano: o campo `meeting_service` não foi acrescentado também ao schema do agendamento —
-o bloco da confirmação já entra em todos os turnos em que a marcação é gravada (minimalismo,
-princípio 7).
+**Commit:** `c19531e`
 
-**Commit:** (a registar)
+Reforço depois da bancada (`F2` `p-classica-90`: marcou "Massagem Clássica - 90 min" e a Filha não
+devolveu `meeting_service` — o pedido estava só no texto do bloco, não no schema que ela copia):
+`meeting_service` passa a estar no schema do agendamento e no "SINAIS DA MARCAÇÃO" do
+pré-agendamento; sem o campo, `meeting_proposal.service_in_text` lê a linha que o recibo nomeia sem
+ambiguidade (3 testes novos).
+
+**Commit do reforço:** (a registar)
 
 ---
 

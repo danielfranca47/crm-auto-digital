@@ -446,8 +446,10 @@ history + mensagem atual
         (meeting_scheduled_blocked="service_not_in_table"), next_action="handoff",
         reason="service_not_in_table"; o handoff_policy.apply do fim do decide() troca o texto
         pela frase de handoff da conta e regista o pedido — a equipa fecha esse orçamento à
-        mão (event=meeting_service_not_in_table). Sem meeting_service ou sem tabela → não se
-        decide nada
+        mão (event=meeting_service_not_in_table). Sem meeting_service, vale a linha que o
+        recibo nomeia por palavras só dela (service_in_text; "Clássica" → a linha da Clássica;
+        "Relaxante Clássica" bate em duas → não decide; service_source="reply"). Sem linha
+        identificada ou sem tabela → não se decide nada
     rasto em decision_trace.meeting_confirmation_guard (service, service_check)
 ```
 

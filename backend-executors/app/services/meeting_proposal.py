@@ -351,6 +351,20 @@ def _words(text: str) -> set:
     return {w for w in re.findall(r"[a-z]+", plain) if w not in _NAME_FILLER}
 
 
+def service_in_text(rows: Dict[str, List[int]], text: str) -> Optional[str]:
+    """A linha da tabela nomeada no texto (o recibo da Filha), por palavras que só existem no nome
+    dessa linha — None quando o texto não nomeia nenhuma ou nomeia mais de uma ("Relaxante
+    Clássica" bate na Clássica e na Relaxante Exótica)."""
+    names = list(rows)
+    found = _words(text)
+    hits = []
+    for name in names:
+        others = set().union(*(_words(n) for n in names if n != name)) if len(names) > 1 else set()
+        if (_words(name) - others) & found:
+            hits.append(name)
+    return hits[0] if len(hits) == 1 else None
+
+
 def service_fits(rows: Dict[str, List[int]], service: Any, minutes: Optional[int]) -> Optional[str]:
     """`ok` quando o serviço que a Filha diz ter marcado é uma linha da tabela com essa duração;
     `off_table` quando não é (ou quando ela respondeu "fora_da_tabela"); None quando não há

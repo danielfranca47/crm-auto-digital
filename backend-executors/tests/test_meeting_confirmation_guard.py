@@ -372,6 +372,36 @@ def test_guard_lomi_lomi_de_90_min_grava():
     assert trace["meeting_confirmation_guard"]["service_check"] == "ok"
 
 
+def test_service_in_text_so_com_uma_linha_nomeada():
+    rows = mp.pricing_rows(TABELA_SENSI)
+    assert mp.service_in_text(rows, "Experiência Agendada ✨\nMassagem Clássica - 90 min") == (
+        "Massagem Clássica, Desportiva ou Terapêutica"
+    )
+    assert mp.service_in_text(rows, "Massagem Relaxante Exótica - 90 min\nTerapeuta Val") == (
+        "Massagem Relaxante Exótica (Lomi Lomi)"
+    )
+    assert mp.service_in_text(rows, "Massagem Relaxante Clássica - 60 min") is None
+    assert mp.service_in_text(rows, "Experiência Agendada ✨") is None
+
+
+def test_guard_sem_meeting_service_le_o_recibo_e_passa_para_a_equipa():
+    decision = _decision(_iso(2, "11:00"))
+    decision.message_text = "Experiência Agendada ✨\nMassagem Clássica - 90 min\nHorário: 11h"
+    _apply_meeting_confirmation_guard(decision, _context_sensi("massagem clássica"))
+    guard = decision.decision_trace["meeting_confirmation_guard"]
+    assert decision.next_action == "handoff"
+    assert guard["service_source"] == "reply"
+    assert guard["service_check"] == "off_table"
+
+
+def test_guard_recibo_ambiguo_nao_decide_e_grava():
+    decision = _decision(_iso(2, "11:00"))
+    decision.message_text = "Experiência Agendada ✨\nMassagem Relaxante Clássica - 60 min"
+    _apply_meeting_confirmation_guard(decision, _context_sensi("massagem relaxante"))
+    assert decision.next_action == "reply"
+    assert decision.decision_trace["meeting_scheduled"] is True
+
+
 def test_bloco_da_confirmacao_pede_a_linha_da_tabela():
     from app.services.decision_engine import _confirmation_block
 

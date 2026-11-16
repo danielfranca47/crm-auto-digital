@@ -2007,18 +2007,24 @@ def _fill_known_duration(
     return known
 
 
-def _service_off_table(signals: Dict[str, Any], guard_trace: Dict[str, Any], context: Dict[str, Any]) -> bool:
+def _service_off_table(
+    signals: Dict[str, Any], guard_trace: Dict[str, Any], context: Dict[str, Any], reply_text: str = ""
+) -> bool:
     """O serviço + duração a gravar não existe na tabela de serviços (ver
     meeting_proposal.service_fits) — a marcação não é gravada e a conversa passa para a equipa,
-    que fecha o orçamento à mão."""
+    que fecha o orçamento à mão. Sem meeting_service da Filha (em teste local ela não o devolveu),
+    vale a linha que o recibo nomeia sem ambiguidade."""
     try:
         minutes = int(signals.get("meeting_duration_minutes") or 0) or None
     except (TypeError, ValueError):
         minutes = None
+    rows = meeting_proposal.pricing_rows(_pricing_table(context))
     service = signals.get("meeting_service")
-    check = meeting_proposal.service_fits(
-        meeting_proposal.pricing_rows(_pricing_table(context)), service, minutes
-    )
+    if not (isinstance(service, str) and service.strip()):
+        service = meeting_proposal.service_in_text(rows, reply_text)
+        if service:
+            guard_trace["service_source"] = "reply"
+    check = meeting_proposal.service_fits(rows, service, minutes)
     if check is None:
         return False
     guard_trace["service"] = service
@@ -2426,7 +2432,7 @@ def _apply_meeting_confirmation_guard(
                 filled,
                 result.trace.get("duration_source"),
             )
-        if _service_off_table(signals, result.trace, context):
+        if _service_off_table(signals, result.trace, context, decision.message_text or ""):
             # handoff_policy.apply, no fim do decide(), troca o texto pela frase de handoff da conta
             trace["meeting_scheduled"] = False
             trace["meeting_scheduled_blocked"] = "service_not_in_table"
@@ -4972,8 +4978,9 @@ def _build_child_prompt_pre_agendamento(
             _pre_prompt += (
                 "\nSINAIS DA MARCAÇÃO (neste turno, em vez de checkin_at_iso): signals_structured = "
                 '{"meeting_datetime_candidate": "YYYY-MM-DDTHH:MM:SS" | null, "meeting_day_reference": '
-                '"..." | null, "meeting_duration_minutes": inteiro | null} — candidato em ISO naive no fuso '
-                "de ai_profile.timezone; duração em minutos só se foi dita na conversa.\n"
+                '"..." | null, "meeting_duration_minutes": inteiro | null, "meeting_service": "..." | null} — '
+                "candidato em ISO naive no fuso de ai_profile.timezone; duração em minutos só se foi dita na "
+                "conversa; meeting_service como em SERVIÇO DA TABELA, quando houver.\n"
                 + _MEETING_DAY_REFERENCE_RULE
                 + _confirmation_block(context, accepted)
             )
@@ -5142,7 +5149,7 @@ def _build_child_prompt_agendamento(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": [],\n'
-        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_day_reference": null, "meeting_duration_minutes": null} (opcional),\n'
+        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_day_reference": null, "meeting_duration_minutes": null, "meeting_service": null} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n\n"
         "REGRAS DE SINALIZAÇÃO ESTRUTURADA (obrigatório):\n"
@@ -5158,7 +5165,9 @@ def _build_child_prompt_agendamento(
         + _MEETING_DAY_REFERENCE_RULE
         + "  * meeting_duration_minutes: preencha (inteiro, em minutos) só quando houver SERVIÇOS E DURAÇÕES "
         "DISPONÍVEIS configurado acima e você tiver identificado claramente a qual linha o lead se refere; "
-        "deixe null se não houver essa tabela configurada ou se ainda não confirmou qual serviço o lead quer.\n\n"
+        "deixe null se não houver essa tabela configurada ou se ainda não confirmou qual serviço o lead quer.\n"
+        f"  * meeting_service: junto com meeting_duration_minutes, o nome exato dessa linha — ou \"{meeting_proposal.OFF_TABLE}\" "
+        "se o serviço com a duração que o lead quer não está em nenhuma linha (ver SERVIÇO DA TABELA, quando houver).\n\n"
         f"Contexto:\n"
         "- tabela_de_dias (hoje + próximos 14 dias; use para resolver QUALQUER data relativa ou nome de dia "
         f"da semana, SEM calcular por conta própria):\n{dates_table}\n"
