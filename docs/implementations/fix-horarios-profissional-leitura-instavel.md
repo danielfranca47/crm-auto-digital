@@ -1,7 +1,7 @@
 # A leitura dos horários do profissional pode sair errada e ficar presa
 
-**Branch:** (a criar)
-**Status:** Aguardando Plan Mode
+**Branch:** `worktree-fix+horarios-profissional-leitura-instavel` (pedido: `fix/horarios-profissional-leitura-instavel`)
+**Status:** Em andamento
 **Autonomia:** manual
 **Origem:** bancada do agente Sensi Vitae, c14 local (16/11/2026) — `README.md` da bancada, secção
 "16/11/2026 — c14-tipo-perguntas".
@@ -26,16 +26,73 @@ a sua leitura).
 - Log da leitura errada: `event=professional_hours_extracted hash=5fab7b849fec` com `Val` sem `tue`
   (`ambiente/executors-n.log` da bancada).
 
-## Direção da solução (a decidir no Plan Mode)
+## Problemas Identificados (estado anterior)
 
-| # | Opção | Nota |
+1. **Uma só leitura (`professional_hours.get_hours`):** o texto era lido uma vez e a tabela, certa
+   ou errada, ficava em `_CACHE` até reiniciar.
+2. **Sem temperatura (`llm_service.generate_professional_hours`):** a chamada ia sem `temperature`
+   (padrão do provedor), o que aumenta a variação entre leituras do mesmo texto.
+
+## Abordagem (opção 1 da lista original, decidida no Plan Mode de 16/11/2026)
+
+```
+texto do perfil (sem cache)
+  → 2 leituras em paralelo (temperature=0)
+  ├─ iguais → guarda e usa
+  └─ diferentes → 3.ª leitura
+       ├─ alguma coincide com outra → guarda e usa essa
+       └─ nenhuma coincide → sem tabela (a filha confere pelo texto), NÃO guarda — repete na
+          próxima mensagem
+```
+
+Leitura que falha (rede, JSON inválido) não conta como voto. Comparação normalizada (a ordem dos
+intervalos não conta). Assim, um dia que falta numa leitura isolada perde para as outras duas e
+nunca vira "fechado" em silêncio. Opções 2 e 3 (tabela visível no ecrã / grade estruturada) ficam
+em "Ajustes Possíveis".
+
+## Plano de Implementação
+
+### Fase 1 — Leitura por consenso
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/professional_hours.py` | `_read_once()` (uma leitura), `_majority()` (consenso), `get_hours()` com 2 leituras em paralelo + 3.ª para desempatar; só o acordo fica em cache; logs `reads`/`agreed` e `event=professional_hours_disagreement` |
+| `backend-executors/app/services/llm_service.py` | `generate_professional_hours` com `temperature=0` |
+| `backend-executors/tests/test_professional_hours.py` | leituras falsas: consenso, uma sem a terça perde, três diferentes ficam sem tabela e repetem, falha não vota, ordem dos intervalos |
+| `docs/architecture/pipeline-phases.md`, `docs/prompts_llms.md` | descrição da leitura por consenso |
+
+### Commits Fase 1
+
+| # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | Ler 2 vezes e só guardar quando as duas tabelas coincidem (3.ª leitura para desempatar) | Pequeno; custo extra só quando o texto muda |
-| 2 | Guardar a tabela no perfil quando o texto é gravado (core), mostrar no ecrã "Horários de atendimento" para o dono confirmar | Visível e editável; mais trabalho (UI + core) |
-| 3 | Campo estruturado (grade por profissional/dia) em vez de texto livre | Elimina a leitura pela IA; muda o ecrã e outras contas |
+| 1 | (a registar) | leitura dos horários por consenso + temperature 0 + testes + docs |
 
-Em qualquer opção: um dia que aparece no texto mas falta na tabela não deve virar "fechado" em
-silêncio (ex.: tratar como "sem veredicto" e deixar a Filha decidir pelo texto).
+---
+
+## Checks de Validação
+
+### Cenário U1 — Testes unitários
+- [x] `pytest backend-executors/tests` — 531 passaram (16/11/2026; `scripts/` já falhava em `main`)
+
+### Cenário B1 — Bancada: terças da Val aceites
+- [ ] `p-ruben` (amanhã 11h = terça) — gravado terça 11h
+- [ ] `p-joaquim` (amanhã 11h = terça) — gravado terça 11h
+- [ ] `pos-marcacao` — remarcação à terça sem "não temos atendimento" e sem gravar sábado
+
+### Cenário B2 — Medição das leituras (20× o texto c14, sem cache)
+- [ ] 20/20 tabelas com Val seg–sáb 11–17h e Daniel seg–sex 11–19h30; contar quantas pediram 3.ª leitura
+
+### Cenário B3 — Log
+- [ ] `event=professional_hours_extracted ... reads=2 agreed=true` no log do executors da bancada
+
+---
+
+## Ajustes Possíveis Pós-Implementação
+
+- Opção 2: guardar a tabela no perfil quando o texto é gravado (core) e mostrá-la no ecrã
+  "Horários de atendimento" para o dono confirmar.
+- Opção 3: campo estruturado (grade por profissional/dia) em vez de texto livre.
+- Rever no WhatsApp real: `railway logs -s "worker backend-executors" | grep professional_hours`.
 
 ## Área do sistema
 

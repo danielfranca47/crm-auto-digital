@@ -563,8 +563,9 @@ guardrail de código
 **Prompt auxiliar** (`professional_hours._EXTRACTION_PROMPT`, `llm_service.generate_professional_hours`,
 JSON): converte o texto do perfil (`professional_availability` + `custom_instructions`) em
 `{"professionals": [{"name", "days": {"mon": [["HH:MM", "HH:MM"]]}}]}`, fim = hora em que a sessão
-tem de acabar, ignorando o horário em que o assistente responde mensagens. Uma chamada por texto
-diferente (cache em memória).
+tem de acabar, ignorando o horário em que o assistente responde mensagens. `temperature=0`; lido
+por consenso (2 leituras, 3.ª para desempatar) uma vez por texto diferente — só a tabela com acordo
+fica em cache em memória.
 
 ### 1.5 `_build_child_prompt_follow_up()` — Filha Follow-up
 

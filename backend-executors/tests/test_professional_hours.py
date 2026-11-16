@@ -80,19 +80,68 @@ def test_profissional_nomeado():
     assert professional_hours.mentioned_professional(HOURS, ["Pode ser às 15h?"]) is None
 
 
-def test_get_hours_le_uma_vez_por_texto(monkeypatch):
+SEM_TERCA_VAL = {
+    "professionals": [
+        {"name": "Val", "days": {d: [["11:00", "17:00"]] for d in ("mon", "wed", "thu", "fri", "sat")}},
+        SENSI["professionals"][1],
+    ]
+}
+
+
+def _fake_reads(monkeypatch, *answers):
+    """Leituras falsas, pela ordem; uma exceção na lista é lançada nessa leitura."""
+    queue = iter(answers)
     calls = []
 
     def fake(prompt, ai_profile=None):
         calls.append(prompt)
-        return json.dumps(SENSI)
+        answer = next(queue)
+        if isinstance(answer, Exception):
+            raise answer
+        return json.dumps(answer)
 
     monkeypatch.setattr(llm_service, "generate_professional_hours", fake)
+    return calls
+
+
+def test_get_hours_le_por_consenso_uma_vez_por_texto(monkeypatch):
+    calls = _fake_reads(monkeypatch, SENSI, SENSI, SENSI, SENSI)
     profile = {"custom_instructions": "Val seg–sáb 11h–17h; Daniel seg–sex 11h–19h30."}
     assert professional_hours.get_hours(profile) == HOURS
     assert professional_hours.get_hours(profile) == HOURS
-    assert len(calls) == 1
+    assert len(calls) == 2
     professional_hours.get_hours({"custom_instructions": "texto diferente"})
+    assert len(calls) == 4
+
+
+def test_leitura_sem_a_terca_perde_para_as_outras_duas(monkeypatch):
+    calls = _fake_reads(monkeypatch, SEM_TERCA_VAL, SENSI, SENSI)
+    hours = professional_hours.get_hours({"custom_instructions": "Val seg–sáb 11h–17h"})
+    assert hours == HOURS and hours["Val"][1] == [(660, 1020)]
+    assert len(calls) == 3
+
+
+def test_tres_leituras_diferentes_ficam_sem_tabela_e_repetem(monkeypatch):
+    outra = {"professionals": [{"name": "Val", "days": {"mon": [["10:00", "17:00"]]}}]}
+    calls = _fake_reads(monkeypatch, SEM_TERCA_VAL, SENSI, outra, SENSI, SENSI)
+    profile = {"custom_instructions": "Val seg–sáb 11h–17h"}
+    assert professional_hours.get_hours(profile) is None
+    assert len(calls) == 3
+    assert professional_hours.get_hours(profile) == HOURS  # sem acordo não ficou em cache
+    assert len(calls) == 5
+
+
+def test_leitura_falhada_nao_conta_como_voto(monkeypatch):
+    calls = _fake_reads(monkeypatch, RuntimeError("rede"), SENSI, SENSI)
+    assert professional_hours.get_hours({"custom_instructions": "Val 11h–17h"}) == HOURS
+    assert len(calls) == 3
+
+
+def test_ordem_dos_intervalos_nao_conta_como_diferenca(monkeypatch):
+    manha_tarde = {"professionals": [{"name": "Ana", "days": {"mon": [["09:00", "13:00"], ["14:00", "18:00"]]}}]}
+    tarde_manha = {"professionals": [{"name": "Ana", "days": {"mon": [["14:00", "18:00"], ["09:00", "13:00"]]}}]}
+    calls = _fake_reads(monkeypatch, manha_tarde, tarde_manha)
+    assert professional_hours.get_hours({"custom_instructions": "Ana seg 9–13h, 14–18h"})
     assert len(calls) == 2
 
 

@@ -7,6 +7,11 @@ conferisse "cabe no horário" no meio da conversa não funcionou (teste real: re
 sábado com a Val a atender das 11h às 17h, e aceitou 17h para 1h). Converter o texto numa tabela
 é uma tarefa simples para a IA; fazemo-lo uma vez por texto (cache em memória) e a conta de
 "cabe ou não" passa a ser do código.
+
+Uma leitura isolada falha raramente (teste real: ~1 em 50 saltou a terça da Val) e, em cache,
+ficava errada para todas as conversas da conta até reiniciar. Por isso a tabela só é guardada
+quando duas leituras coincidem; sem acordo fica sem tabela (a filha confere pelo texto) e a
+leitura repete-se na mensagem seguinte.
 """
 from __future__ import annotations
 
@@ -14,6 +19,7 @@ import hashlib
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -26,6 +32,7 @@ Hours = Dict[str, Dict[int, List[Tuple[int, int]]]]
 _DAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 _HHMM_RE = re.compile(r"^\s*(\d{1,2})(?::(\d{2}))?\s*$")
 _CACHE: Dict[str, Optional[Hours]] = {}
+_FAILED = object()  # leitura que não chegou a dar resposta: não conta como voto
 
 _EXTRACTION_PROMPT = (
     "Leia o texto de configuração de um negócio e extraia SÓ os horários em que cada profissional "
@@ -94,9 +101,40 @@ def parse_hours(payload: Any) -> Optional[Hours]:
     return hours or None
 
 
+def _read_once(text: str, ai_profile: Dict[str, Any], log: logging.Logger) -> Any:
+    """Uma leitura do texto pela IA: tabela, None (texto sem horários) ou _FAILED."""
+    try:
+        raw = llm_service.generate_professional_hours(_EXTRACTION_PROMPT + text, ai_profile=ai_profile)
+        start, end = raw.find("{"), raw.rfind("}")
+        return parse_hours(json.loads(raw[start:end + 1])) if start != -1 and end > start else None
+    except Exception as exc:
+        log.warning("event=professional_hours_extract_failed exc_type=%s exc=%s", type(exc).__name__, exc)
+        return _FAILED
+
+
+def _as_json(hours: Any) -> str:
+    if hours is _FAILED:
+        return "failed"
+    return json.dumps(
+        {n: {_DAY_KEYS[d]: sorted(r) for d, r in sorted(days.items())} for n, days in (hours or {}).items()},
+        sort_keys=True,
+    )
+
+
+def _majority(reads: List[Any]) -> Tuple[Optional[Hours], bool]:
+    """A leitura que coincide com outra (falhas não contam). Sem acordo → (None, False)."""
+    for i, read in enumerate(reads):
+        if read is _FAILED:
+            continue
+        if any(_as_json(read) == _as_json(other) for other in reads[i + 1:]):
+            return read, True
+    return None, False
+
+
 def get_hours(ai_profile: Dict[str, Any], logger: Optional[logging.Logger] = None) -> Optional[Hours]:
-    """Tabela de horários do perfil; uma chamada à IA por texto diferente. None quando o texto
-    não tem horários ou a leitura falha — quem chama mantém o comportamento sem tabela."""
+    """Tabela de horários do perfil, lida por consenso: 2 leituras em paralelo e, se diferirem,
+    uma 3.ª para desempatar. None quando o texto não tem horários ou as leituras não chegam a
+    acordo — quem chama mantém o comportamento sem tabela. Só o acordo fica em cache."""
     text = source_text(ai_profile)
     if not text:
         return None
@@ -104,19 +142,28 @@ def get_hours(ai_profile: Dict[str, Any], logger: Optional[logging.Logger] = Non
     if key in _CACHE:
         return _CACHE[key]
     log = logger or logging.getLogger(__name__)
-    hours: Optional[Hours] = None
-    try:
-        raw = llm_service.generate_professional_hours(_EXTRACTION_PROMPT + text, ai_profile=ai_profile)
-        start, end = raw.find("{"), raw.rfind("}")
-        hours = parse_hours(json.loads(raw[start:end + 1])) if start != -1 and end > start else None
-    except Exception as exc:  # leitura falhou: fica sem tabela, como antes
-        log.warning("event=professional_hours_extract_failed exc_type=%s exc=%s", type(exc).__name__, exc)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        reads = list(pool.map(lambda _: _read_once(text, ai_profile, log), range(2)))
+    hours, agreed = _majority(reads)
+    if not agreed:
+        reads.append(_read_once(text, ai_profile, log))
+        hours, agreed = _majority(reads)
+    if len(reads) > 2:
+        log.warning(
+            "event=professional_hours_disagreement hash=%s agreed=%s reads=%s",
+            key[:12],
+            agreed,
+            json.dumps([_as_json(r) for r in reads]),
+        )
     log.info(
-        "event=professional_hours_extracted hash=%s hours=%s",
+        "event=professional_hours_extracted hash=%s reads=%s agreed=%s hours=%s",
         key[:12],
-        json.dumps({n: {_DAY_KEYS[d]: r for d, r in days.items()} for n, days in (hours or {}).items()}),
+        len(reads),
+        str(agreed).lower(),
+        _as_json(hours),
     )
-    _CACHE[key] = hours
+    if agreed:
+        _CACHE[key] = hours
     return hours
 
 
