@@ -68,7 +68,7 @@ Decisões:
 | `docs/architecture/agenda.md` | "Turno da confirmação" e "Duração da sessão" |
 | `docs/architecture/knowledge-base.md` | chaves do `structured_v1`: `nome`, `duracaoMinutos`, `preco`, `descricao` |
 
-**Commit:** (a registar)
+**Commit:** `5e47d62`
 
 ---
 
@@ -78,9 +78,12 @@ Decisões:
 - [x] `pytest backend-executors/tests` — 531 passam (16/11/2026)
 
 ### Bancada local `.claude/agentes/sensi-vitae/` (código desta branch copiado para `ambiente/codigo`)
-- [ ] `p-relax90` — marcação gravada com 90 min
-- [ ] `p-relax-sem-tipo` — marcação gravada com 90 min
-- [ ] Regressão `p-micas`, `pos-marcacao`, `p-seguidas` — sem pioras
+- [x] `p-relax90` — marcação gravada com 90 min (16/11/2026, `F1`: 14h–15h30; nesta corrida a
+  própria Filha devolveu os 90 — o caminho em que ela os omite está coberto pelos testes)
+- [x] `p-relax-sem-tipo` — marcação gravada com 90 min (16/11/2026, `F1`: 14h–15h30; idem)
+- [x] Regressão `p-micas`, `pos-marcacao`, `p-seguidas` — sem pioras (16/11/2026, `F1`):
+  `p-micas` quarta 15h Val 90 min; `pos-marcacao` 60 min e a remarcação manteve 60 min;
+  `p-seguidas` 16h Daniel 60 min, sem erro
 
 ### Produção (`--prod`, depois do merge e deploy)
 - [ ] `p-relax90` e `p-relax-sem-tipo` com 90 min
@@ -92,3 +95,16 @@ Decisões:
 
 - Ler a duração também do próprio recibo da Filha quando ela não devolve o campo (hoje só se lê o
   lead e a proposta aceite).
+- Em `pos-marcacao` (F1), depois de remarcar, a Lara voltou a perguntar "Como se chama?" — texto
+  da IA no `meeting_management`, sem relação com a duração.
+
+---
+
+## Relatório da Fase 1 — o que mudou na prática
+
+Quando um cliente diz quanto tempo quer ("90 minutos", "1h") e marca, a marcação passa a ficar
+na agenda com essa duração, mesmo que a IA se esqueça de a passar ao sistema. Antes, nesse
+esquecimento, ficava a duração padrão da conta (60 min) e a agenda podia aceitar outro cliente
+por cima da sessão. Se a IA disser uma duração diferente da do cliente, fica a da IA (é a que
+aparece no recibo que o cliente lê); a diferença fica registada para análise. Remarcar mantém a
+duração da sessão original, como já era.
