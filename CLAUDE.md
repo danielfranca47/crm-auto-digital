@@ -287,7 +287,7 @@ Os arquivos abaixo descrevem a estrutura **atual** de cada área do sistema. Ler
 | [`docs/architecture/followup.md`](docs/architecture/followup.md) | Arquitetura de follow-up: estados, reconciliador, jobs, modal |
 | [`docs/architecture/llm-architecture.md`](docs/architecture/llm-architecture.md) | LLMs Mãe e Filhas, contratos, fluxo de decisão |
 | [`docs/architecture/agents.md`](docs/architecture/agents.md) | Agentes locais e AI Profiles: campos, endpoints, ciclo de vida |
-| [`docs/architecture/agentes/`](docs/architecture/agentes/) | Os 3 agentes da página Tipos de Agentes (01 SDR de Alto Ticket, 02 Vendedor Autônomo, 03 Assistente Comercial): preset, etapas da página ↔ sistema, prometido vs. código. Diagnóstico do agente de um cliente: skill `diagnosticar-agente` ([guia](docs/ops/diagnostico-agentes.md)) |
+| [`docs/architecture/agentes/`](docs/architecture/agentes/) | Os 3 agentes da página Tipos de Agentes (01 SDR de Alto Ticket, 02 Vendedor Autônomo, 03 Assistente Comercial): preset, etapas da página ↔ sistema, prometido vs. código. Diagnóstico do agente de um cliente: skill `diagnosticar-agente`; montar e entregar o agente ao cliente: skill `configuracao-personalizada` ([guia](docs/ops/diagnostico-agentes.md)) |
 | [`docs/architecture/webhooks.md`](docs/architecture/webhooks.md) | Webhook inbound WhatsApp: filtros, fluxo, grupos ignorados |
 | [`docs/architecture/playground-parity.md`](docs/architecture/playground-parity.md) | Paridade Playground ↔ WhatsApp real (ContextBundle) |
 | [`docs/architecture/admin-agents-contract.md`](docs/architecture/admin-agents-contract.md) | Contrato AdminAgents frontend ↔ backend |

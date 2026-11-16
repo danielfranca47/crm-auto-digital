@@ -57,6 +57,34 @@ Para retomar um cliente já trabalhado: "retoma o diagnóstico do agente do clie
 
 ---
 
+## Montar e entregar o agente de um cliente (configuração personalizada)
+
+Para entregar a um cliente o agente já a funcionar, e não só diagnosticar, usa a skill
+`configuracao-personalizada` (escreve "configuração personalizada do agente do cliente X" ou
+`/configuracao-personalizada`). O Claude trabalha até o agente estar entregue, sem te pedir decisões
+técnicas.
+
+**O que precisas de lhe dar** (se faltar alguma coisa, ele pergunta tudo de uma vez):
+- o email da **tua conta de teste** de produção, onde o agente é montado e testado. Cada colaborador
+  autorizado tem a sua;
+- o nome do cliente e, se ele já tiver conta, o email dela;
+- até onde o agente deve levar a conversa (ex.: "até a marcação ficar confirmada");
+- os números de 2 a 5 conversas que correram bem (ou prints);
+- no fim, um telemóvel de teste que nunca tenha falado com a conta.
+
+**O que acontece:** monta o agente na tua conta de teste (configuração e treinamento) e testa-o no
+Playground. Se a configuração não chegar, corrige o sistema sem piorar as outras contas. Faz 1 conversa
+real no WhatsApp e, no fim, diz-te como **exportar** o agente (com ou sem treinamento, ele recomenda) e
+**importá-lo** na conta do cliente. A exportação não leva a Base de Conhecimento, o WhatsApp nem o
+Google; ele dá-te o conteúdo pronto a colar e verifica a conta do cliente com o email dela.
+
+**Fica contigo:** a autorização no início (uma vez), o que só uma pessoa faz (QR, telemóvel de teste,
+exportar e importar) e as dúvidas de negócio. As correções que mexem nas instruções da IA, no envio de
+mensagens, na base de dados ou em pagamentos afetam todos os clientes e só são publicadas com o "sim"
+do Daniel.
+
+---
+
 ## Dados e privacidade
 
 As conversas, os testes e as cópias de segurança de cada cliente ficam em `.claude/agentes/<cliente>/`, fora
@@ -69,6 +97,7 @@ do repositório. Nos documentos do projeto entram só números agregados e exemp
 | O quê | Onde |
 |---|---|
 | Como o Claude faz o diagnóstico (passos e scripts) | `.claude/skills/diagnosticar-agente/` |
+| Como o Claude monta e entrega o agente de um cliente | `.claude/skills/configuracao-personalizada/` |
 | O que medir em cada tipo de agente | `.claude/skills/agente-01-sdr-alto-ticket/`, `agente-02-vendedor-autonomo/`, `agente-03-assistente-comercial/` |
 | O que o sistema faz em cada agente | [`docs/architecture/agentes/`](../architecture/agentes/) |
 | Dados de cada cliente | `.claude/agentes/<cliente>/` (fora do git) |

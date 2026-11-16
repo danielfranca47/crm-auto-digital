@@ -34,3 +34,10 @@ o código não faz (ver "prometido vs. código" em `docs/architecture/agentes/`)
 prints ou de um prompt do comportamento desejado.
 **O que construir:** um modo de entrevista ao dono do negócio que gere o comportamento esperado e os
 cenários da bancada (candidato a `docs/discovery/`).
+
+## M6 — A exportação do agente não leva a Base de Conhecimento
+**Prioridade: por definir**
+**Estado atual:** `AgentExportImportPanel.tsx` exporta o AI Profile e, se se escolher, o treinamento
+(`playground_training_items`). A Base de Conhecimento (`/api/knowledge`: itens, informações do negócio,
+mídias) fica de fora, e na entrega a um cliente novo tem de ser refeita à mão.
+**O que construir:** uma opção "com Base de Conhecimento" na exportação e na importação, com as mídias.

@@ -1,6 +1,6 @@
 ---
 name: diagnosticar-agente
-description: Diagnóstico do agente de IA de uma conta de cliente a partir de conversas reais de referência — identifica o tipo de agente (01/02/03 da página Tipos de Agentes), testa numa bancada com cliente simulado, afina a configuração e encaminha o que é código. Usar quando o agente de uma conta "não atende como devia" ou como numa conversa de referência, para configurar o agente de um cliente a partir de conversas (números de telefone), ou para retomar uma bancada em .claude/agentes/<cliente>/.
+description: Diagnóstico do agente de IA de uma conta de cliente a partir de conversas reais de referência — identifica o tipo de agente (01/02/03 da página Tipos de Agentes), testa numa bancada com cliente simulado, afina a configuração e encaminha o que é código. Usar quando o agente de uma conta "não atende como devia" ou como numa conversa de referência, para configurar o agente de um cliente a partir de conversas (números de telefone), ou para retomar uma bancada em .claude/agentes/<cliente>/. Para montar o agente numa conta de teste e entregá-lo ao cliente já a funcionar (com correções de código e teste no WhatsApp real), usar configuracao-personalizada.
 ---
 
 # Diagnosticar um agente a partir de conversas reais (skill primária)
