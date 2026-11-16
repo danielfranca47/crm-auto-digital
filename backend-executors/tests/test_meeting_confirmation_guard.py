@@ -331,10 +331,27 @@ def test_service_fits_confere_a_linha_e_a_duracao():
     assert mp.service_fits(rows, "Massagem Clássica, Desportiva ou Terapêutica", 60) == "ok"
     assert mp.service_fits(rows, "Massagem Terapêutica", 60) == "ok"
     assert mp.service_fits(rows, "Lomi Lomi", 90) == "ok"
-    assert mp.service_fits(rows, "Massagem Relaxante Clássica", 90) == "off_table"
     assert mp.service_fits(rows, "fora_da_tabela", None) == "off_table"
     assert mp.service_fits(rows, None, 90) is None
     assert mp.service_fits({}, "Lomi Lomi", 90) is None
+
+
+def test_service_fits_pelo_numero_da_linha():
+    rows = mp.pricing_rows(TABELA_SENSI)
+    assert mp.service_fits(rows, 1, 90) == "off_table"
+    assert mp.service_fits(rows, 1, 60) == "ok"
+    assert mp.service_fits(rows, "2", 90) == "ok"
+    assert mp.service_fits(rows, 5, 60) is None
+    assert mp.service_fits(rows, True, 60) is None
+
+
+def test_service_fits_nome_proprio_da_conta_nao_faz_handoff_errado():
+    # a conta chama "Relaxante Clássica" à Clássica: bate nas duas linhas — só a duração decide
+    rows = mp.pricing_rows(TABELA_SENSI)
+    assert mp.service_fits(rows, "Massagem Relaxante Clássica", 60) == "ok"
+    assert mp.service_fits(rows, "Massagem Relaxante Clássica", 120) == "off_table"
+    assert mp.service_fits(rows, "Massagem Tailandesa", 60) == "off_table"
+    assert mp.service_fits(rows, "Massagem", 60) == "ok"
 
 
 def _context_sensi(service_text):
@@ -363,7 +380,7 @@ def test_guard_classica_de_90_min_nao_grava_e_passa_para_a_equipa():
 
 def test_guard_lomi_lomi_de_90_min_grava():
     decision = _decision(_iso(2, "11:00"))
-    decision.decision_trace["child_signals_structured"]["meeting_service"] = "Massagem Relaxante Exótica (Lomi Lomi)"
+    decision.decision_trace["child_signals_structured"]["meeting_service"] = 2
     _apply_meeting_confirmation_guard(decision, _context_sensi("Lomi Lomi"))
     trace = decision.decision_trace
     assert decision.next_action == "reply"
@@ -402,11 +419,64 @@ def test_guard_recibo_ambiguo_nao_decide_e_grava():
     assert decision.decision_trace["meeting_scheduled"] is True
 
 
+def test_off_table_request():
+    rows = mp.pricing_rows(TABELA_SENSI)
+    assert mp.off_table_request(rows, "Quero a clássica de 90 minutos, por favor. Marca assim!")
+    assert not mp.off_table_request(rows, "Quero a clássica de 60 minutos")
+    assert not mp.off_table_request(rows, "Quero uma relaxante de 90 minutos")
+    assert not mp.off_table_request(rows, "Quero a relaxante clássica de 90 minutos")  # ambíguo
+
+
+def _reply(text="A Clássica vai só até 1h. Pode ser a Lomi Lomi de 90 min?"):
+    return DecisionOutput(next_action="reply", message_text=text, questions=[], reason="ok", decision_trace={})
+
+
+def _context_insiste(inbound, earlier):
+    context = _context(inbound=inbound)
+    context["history"] = [{"model": "inbound", "body": earlier}, {"model": "outbound", "body": "A Clássica vai só até 1h."}]
+    context["knowledge_items"] = {"service_pricing_table": TABELA_SENSI}
+    return context
+
+
+def test_lead_que_insiste_fora_da_tabela_passa_para_a_equipa():
+    from app.services.decision_engine import _apply_off_table_insistence_guard
+
+    decision = _reply()
+    _apply_off_table_insistence_guard(
+        decision, _context_insiste("Quero mesmo a clássica de 90 minutos!", "Queria uma massagem clássica de 90 minutos")
+    )
+    assert decision.next_action == "handoff"
+    assert decision.reason == "service_not_in_table_insisted"
+    assert decision.decision_trace["meeting_scheduled"] is False
+
+
+def test_primeiro_pedido_fora_da_tabela_ou_aceitar_a_alternativa_nao_passa():
+    from app.services.decision_engine import _apply_off_table_insistence_guard
+
+    primeira = _reply()
+    context = _context_insiste("Queria uma massagem clássica de 90 minutos", "Olá")
+    _apply_off_table_insistence_guard(primeira, context)
+    assert primeira.next_action == "reply"
+
+    aceita = _reply("Ótimo!")
+    _apply_off_table_insistence_guard(
+        aceita, _context_insiste("Então a Lomi Lomi de 90 minutos", "Queria uma massagem clássica de 90 minutos")
+    )
+    assert aceita.next_action == "reply"
+
+    # o histórico com a própria mensagem atual não conta como "já tinha pedido"
+    repetida = _reply()
+    _apply_off_table_insistence_guard(
+        repetida, _context_insiste("Queria uma massagem clássica de 90 minutos", "Queria uma massagem clássica de 90 minutos")
+    )
+    assert repetida.next_action == "reply"
+
+
 def test_bloco_da_confirmacao_pede_a_linha_da_tabela():
     from app.services.decision_engine import _confirmation_block
 
     block = _confirmation_block(_context_sensi("Lomi Lomi"))
     assert "MARCAÇÃO JÁ GRAVADA NESTE TURNO" in block
     assert "meeting_service" in block
-    assert "- Massagem Relaxante Exótica (Lomi Lomi): 45, 60 ou 90 min" in block
+    assert "2. Massagem Relaxante Exótica (Lomi Lomi): 45, 60 ou 90 min" in block
     assert "meeting_service" not in _confirmation_block(_context())

@@ -351,45 +351,66 @@ def _words(text: str) -> set:
     return {w for w in re.findall(r"[a-z]+", plain) if w not in _NAME_FILLER}
 
 
+def _own_words(rows: Dict[str, List[int]]) -> Dict[str, set]:
+    """Palavras que só existem no nome de cada linha ("classica" só na da Clássica)."""
+    names = list(rows)
+    return {
+        name: _words(name) - set().union(set(), *(_words(n) for n in names if n != name))
+        for name in names
+    }
+
+
 def service_in_text(rows: Dict[str, List[int]], text: str) -> Optional[str]:
     """A linha da tabela nomeada no texto (o recibo da Filha), por palavras que só existem no nome
     dessa linha — None quando o texto não nomeia nenhuma ou nomeia mais de uma ("Relaxante
     Clássica" bate na Clássica e na Relaxante Exótica)."""
-    names = list(rows)
     found = _words(text)
-    hits = []
-    for name in names:
-        others = set().union(*(_words(n) for n in names if n != name)) if len(names) > 1 else set()
-        if (_words(name) - others) & found:
-            hits.append(name)
+    hits = [name for name, own in _own_words(rows).items() if own & found]
     return hits[0] if len(hits) == 1 else None
+
+
+def off_table_request(rows: Dict[str, List[int]], text: str) -> bool:
+    """A mensagem pede, sem ambiguidade, um serviço da tabela com uma duração que essa linha não
+    tem ("quero a clássica de 90 minutos" e a Clássica vai só até 60 min)."""
+    name = service_in_text(rows, text)
+    minutes = requested_slot.requested_duration([text]) if name else None
+    return minutes is not None and minutes not in rows[name]
 
 
 def service_fits(rows: Dict[str, List[int]], service: Any, minutes: Optional[int]) -> Optional[str]:
     """`ok` quando o serviço que a Filha diz ter marcado é uma linha da tabela com essa duração;
-    `off_table` quando não é (ou quando ela respondeu "fora_da_tabela"); None quando não há
-    tabela ou ela não disse o serviço — aí não se decide nada. Um nome que bata em várias linhas
-    ("Massagem") vale se alguma tiver a duração.
+    `off_table` quando de certeza não é (ou quando ela respondeu "fora_da_tabela"); None quando
+    não há tabela ou não se sabe a linha — aí não se decide nada.
+
+    `service` é o número da linha (1, 2, … pela ordem de pricing_rows, o que o bloco "SERVIÇO DA
+    TABELA" pede) ou um nome. Com um nome, a conta pode ter o seu próprio ("Relaxante Clássica"
+    para a Clássica, em teste local deu um handoff errado): bate em várias linhas → vale se alguma
+    tiver a duração; não bate em nenhuma e tem palavras que a tabela não tem → off_table.
 
     Em teste real a Lara confirmou "Relaxante Clássica - 90 min", e a Clássica só vai até 60 min.
     Só a IA sabe a que linha o lead se refere; o código confere se essa linha existe."""
-    if not rows or not isinstance(service, str) or not service.strip():
+    if not rows or isinstance(service, bool):
         return None
-    wanted = _words(service)
-    if not wanted:
+    names = list(rows)
+    if isinstance(service, int) or (isinstance(service, str) and service.strip().isdigit()):
+        index = int(service)
+        if not 1 <= index <= len(names):
+            return None
+        candidates = [names[index - 1]]
+    elif isinstance(service, str) and _words(service):
+        wanted = _words(service)
+        if wanted == _words(OFF_TABLE):
+            return "off_table"
+        # um nome com todas as palavras do outro ("Massagem Terapêutica", "Lomi Lomi - 90 min")
+        candidates = [n for n in names if wanted <= _words(n) or _words(n) <= wanted]
+        if not candidates:
+            candidates = [n for n, own in _own_words(rows).items() if own & wanted]
+        if not candidates:
+            unknown = wanted - set().union(*(_words(n) for n in names))
+            return "off_table" if unknown else None
+    else:
         return None
-    if wanted == _words(OFF_TABLE):
-        return "off_table"
-    # a linha é a do serviço quando um nome tem todas as palavras do outro (a Filha abrevia
-    # "Massagem Terapêutica" ou acrescenta "Lomi Lomi - 90 min")
-    matches = [
-        durations
-        for name, durations in rows.items()
-        if wanted <= _words(name) or _words(name) <= wanted
-    ]
-    if not matches:
-        return "off_table"
-    if minutes is None or any(minutes in durations for durations in matches):
+    if minutes is None or any(minutes in rows[n] for n in candidates):
         return "ok"
     return "off_table"
 

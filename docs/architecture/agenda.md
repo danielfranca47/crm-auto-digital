@@ -415,9 +415,10 @@ history + mensagem atual
     | ambiguous (várias, nenhuma escolhida) | lead_stated (hora nova — não é aceitação) | none
   → prompt: _build_meeting_already_booked_block(accepted) diz à Filha o horário aceite e o
     candidato a devolver; ambíguo → manda perguntar qual. Com tabela de serviços com linhas
-    ("- <nome> — <N>min: …"), _booking_service_block pede também meeting_service = nome exato
-    da linha que fica marcada, ou "fora_da_tabela" quando o serviço + duração pedidos não
-    estão em nenhuma linha
+    ("- <nome> — <N>min: …"), _booking_service_block lista-as numeradas e pede também
+    meeting_service = número da linha que fica marcada (mesmo que as instruções da conta deem
+    outro nome ao serviço), ou "fora_da_tabela" quando o serviço + duração pedidos não estão
+    em nenhuma linha
   → duração por saber? missing_duration(): a tabela de serviços (service_pricing_table, já
     renderizada pelo CRM como "— 60min") tem mais de uma duração e nem o lead nem a proposta
     aceite a disseram → o bloco passa a "FALTA SABER O SERVIÇO E A DURAÇÃO" (perguntar,
@@ -441,16 +442,23 @@ history + mensagem atual
         diferente da do lead → fica a da Filha (escreveu o recibo); a do lead só no rasto
         (duration_lead)
       não bloqueado → service_fits(pricing_rows(tabela), meeting_service, duração): a linha
-        dita pela Filha (nomes comparados por palavras, sem acentos) não tem essa duração, não
-        existe, ou veio "fora_da_tabela" → meeting_scheduled=false
+        dita pela Filha (número, ou nome comparado por palavras sem acentos) não tem essa
+        duração, ou veio "fora_da_tabela" → meeting_scheduled=false
         (meeting_scheduled_blocked="service_not_in_table"), next_action="handoff",
         reason="service_not_in_table"; o handoff_policy.apply do fim do decide() troca o texto
         pela frase de handoff da conta e regista o pedido — a equipa fecha esse orçamento à
-        mão (event=meeting_service_not_in_table). Sem meeting_service, vale a linha que o
-        recibo nomeia por palavras só dela (service_in_text; "Clássica" → a linha da Clássica;
-        "Relaxante Clássica" bate em duas → não decide; service_source="reply"). Sem linha
-        identificada ou sem tabela → não se decide nada
+        mão (event=meeting_service_not_in_table). Um nome que bate em várias linhas (a conta
+        pode ter nomes próprios: "Relaxante Clássica" para a Clássica) só é off_table se
+        nenhuma tiver a duração; um nome com palavras que a tabela não tem
+        ("Tailandesa") é off_table. Sem meeting_service, vale a linha que o recibo nomeia por
+        palavras só dela (service_in_text; service_source="reply"). Sem linha identificada ou
+        sem tabela → não se decide nada
     rasto em decision_trace.meeting_confirmation_guard (service, service_check)
+  → logo a seguir, em qualquer rota: _apply_off_table_insistence_guard — a mensagem atual e
+    uma anterior do lead pedem, sem ambiguidade, um serviço com uma duração que a linha não
+    tem (off_table_request: "clássica de 90 minutos") → handoff
+    (reason="service_not_in_table_insisted", trace.off_table_insisted). Na 1.ª vez a Filha
+    explica e oferece o que existe
 ```
 
 Vale nas três rotas onde a confirmação cai: apresentação, agendamento e **pré-agendamento**

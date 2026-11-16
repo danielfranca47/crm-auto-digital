@@ -98,7 +98,19 @@ devolveu `meeting_service` — o pedido estava só no texto do bloco, não no sc
 pré-agendamento; sem o campo, `meeting_proposal.service_in_text` lê a linha que o recibo nomeia sem
 ambiguidade (3 testes novos).
 
-**Commit do reforço:** (a registar)
+**Commit do reforço:** `651e1ff`
+
+Segundo reforço (bancada `F2b`):
+- `pos-marcacao` e `p-micas`: **handoff errado** — a Filha devolveu "Massagem Relaxante Clássica"
+  (o nome que as instruções da conta dão à Clássica), que não batia em nenhuma linha. Agora o bloco
+  numera as linhas e pede o **número**; com um nome, um que bata em várias linhas só é off_table se
+  nenhuma tiver a duração.
+- `p-classica-90`: a Lara recusou bem a Clássica de 90 min, mas a cliente insistiu e a conversa
+  ficou 14 turnos em círculo (o handoff só disparava ao gravar). Novo
+  `_apply_off_table_insistence_guard`: a 2.ª vez que o lead pede, sem ambiguidade, uma combinação
+  fora da tabela → handoff.
+
+**Commit do 2.º reforço:** (a registar)
 
 ---
 
