@@ -430,6 +430,12 @@ history + mensagem atual
         "Só para confirmar: prefere X ou Y?"            (event=meeting_confirmation_blocked,
                                                           meeting_scheduled_blocked="ambiguous_options")
       lead_stated / none → sem alteração
+      não bloqueado e a Filha sem meeting_duration_minutes → known_duration() preenche-o com
+        a duração já sabida: mensagem atual do lead → proposta aceite (só se tiver uma
+        duração) → mensagens anteriores do lead (mais recente primeiro); com tabela de
+        serviços, só uma duração que esteja nela          (event=meeting_duration_filled,
+        duration_filled / duration_source). Duração da Filha diferente da do lead → fica a
+        da Filha (escreveu o recibo); a do lead só no rasto (duration_lead)
     rasto em decision_trace.meeting_confirmation_guard
 ```
 
@@ -507,7 +513,10 @@ fixo de 30 min hardcoded:
 ```
 1. signal.duration_minutes        ← extraído de signals_structured.meeting_duration_minutes
                                      (filha de agendamento, só quando a Tabela de
-                                     Serviços e Preços identifica a linha do lead)
+                                     Serviços e Preços identifica a linha do lead; sem
+                                     ele, no turno da confirmação o código preenche-o com
+                                     a duração dita pelo lead ou escrita na proposta
+                                     aceite — ver "Turno da confirmação")
 2. default_session_duration_minutes  ← AI Profile (ver agents.md), padrão 30
 3. 30                              ← fallback final, se o AI Profile vier vazio
 ```
