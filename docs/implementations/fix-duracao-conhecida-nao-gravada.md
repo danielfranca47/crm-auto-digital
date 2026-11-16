@@ -70,6 +70,50 @@ Decisões:
 
 **Commit:** `5e47d62`
 
+### Fase 2 — Três ajustes da validação PROD09 (16/11/2026)
+
+Problemas vistos na validação da Fase 1:
+1. **Combinação fora da tabela** (PROD09 `p-relax-sem-tipo`): a Lara confirmou "Relaxante
+   Clássica - 90 min", e a Clássica só vai até 60 min. Decisão do Daniel: nesse caso, **handoff**
+   — a equipa fecha a venda à mão (pode ser um orçamento personalizado).
+2. **Duração no recibo:** sem `meeting_duration_minutes`, a duração escrita no recibo da Filha não
+   era lida.
+3. **"Como se chama?" depois de remarcar** (bancada `F1` `pos-marcacao`).
+
+Só o código não sabe a que linha "Relaxante Clássica" se refere (as palavras batem em duas linhas):
+a Filha diz a linha (`meeting_service`), o código confere se essa linha tem essa duração.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/meeting_proposal.py` | `known_duration(..., reply_text)` com fonte `reply` primeiro; `pricing_rows()`, `service_fits()`, `OFF_TABLE` |
+| `backend-executors/app/services/decision_engine.py` | `_booking_service_block` (bloco "SERVIÇO DA TABELA" nas variantes que confirmam); `_service_off_table` no `_apply_meeting_confirmation_guard` → handoff sem marcação; `_apply_meeting_reschedule_guard` tira a pergunta final quando a remarcação segue e o texto já a dá como feita |
+| `backend-executors/tests/test_meeting_confirmation_guard.py` / `test_meeting_reschedule_guard.py` | 6 testes novos |
+| `docs/architecture/agenda.md`, `docs/prompts_llms.md` | turno da confirmação (linha da tabela + handoff, ordem das fontes da duração), remarcação |
+
+**Commit:** `c19531e`
+
+Reforço depois da bancada (`F2` `p-classica-90`: marcou "Massagem Clássica - 90 min" e a Filha não
+devolveu `meeting_service` — o pedido estava só no texto do bloco, não no schema que ela copia):
+`meeting_service` passa a estar no schema do agendamento e no "SINAIS DA MARCAÇÃO" do
+pré-agendamento; sem o campo, `meeting_proposal.service_in_text` lê a linha que o recibo nomeia sem
+ambiguidade (3 testes novos).
+
+**Commit do reforço:** `651e1ff`
+
+Segundo reforço (bancada `F2b`):
+- `pos-marcacao` e `p-micas`: **handoff errado** — a Filha devolveu "Massagem Relaxante Clássica"
+  (o nome que as instruções da conta dão à Clássica), que não batia em nenhuma linha. Agora o bloco
+  numera as linhas e pede o **número**; com um nome, um que bata em várias linhas só é off_table se
+  nenhuma tiver a duração.
+- `p-classica-90`: a Lara recusou bem a Clássica de 90 min, mas a cliente insistiu e a conversa
+  ficou 14 turnos em círculo (o handoff só disparava ao gravar). Novo
+  `_apply_off_table_insistence_guard`: a 2.ª vez que o lead pede, sem ambiguidade, uma combinação
+  fora da tabela → handoff.
+
+**Commit do 2.º reforço:** `a14bcb2`; correção a seguir (`F2c` `p-classica-90`: o handoff
+disparou logo no 1.º pedido, porque a 2.ª decisão da Recepção repõe um pedaço do pedido original
+no histórico — passa a não contar): `297da1a`
+
 ---
 
 ## Checks de Validação
@@ -86,17 +130,24 @@ Decisões:
   `p-seguidas` 16h Daniel 60 min, sem erro
 
 ### Produção (`--prod`, depois do merge e deploy)
-- [ ] `p-relax90` e `p-relax-sem-tipo` com 90 min
-- [ ] Regressão `p-micas`, `pos-marcacao`, `p-seguidas`
+- [x] `p-relax90` e `p-relax-sem-tipo` com 90 min (16/11/2026, `PROD09`: 14h–15h30 nos dois)
+- [x] Regressão `p-micas`, `pos-marcacao`, `p-seguidas` (16/11/2026, `PROD09`): `p-micas` quarta
+  15h Val 90 min; `pos-marcacao` 60 min e remarcação com 60 min; `p-seguidas` 16h Daniel 60 min
+
+### Fase 2
+- [x] `pytest backend-executors/tests` — 549 passam (16/11/2026)
+- [x] Local: combinação fora da tabela → handoff, sem marcação (16/11/2026, `F2d` `p-classica-90`:
+  1.º pedido a Lara explica e oferece a Lomi Lomi; a cliente insiste → handoff; nada gravado)
+- [x] Local (16/11/2026): `p-relax90` `F2d` Lomi Lomi 90 min; `p-relax-sem-tipo` `F2d` Exótica 90
+  min; `p-micas` `F2c` 90 min, sem handoff errado; `pos-marcacao` `F2c` 60 min, remarcação 60 min
+  e sem pergunta no fim; `p-seguidas` `F2d` 60 min com o Daniel
+- [ ] `--prod`: a mesma bateria depois do merge e deploy
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Ler a duração também do próprio recibo da Filha quando ela não devolve o campo (hoje só se lê o
-  lead e a proposta aceite).
-- Em `pos-marcacao` (F1), depois de remarcar, a Lara voltou a perguntar "Como se chama?" — texto
-  da IA no `meeting_management`, sem relação com a duração.
+(Os três da Fase 1 foram resolvidos na Fase 2.)
 
 ---
 
@@ -108,3 +159,13 @@ esquecimento, ficava a duração padrão da conta (60 min) e a agenda podia acei
 por cima da sessão. Se a IA disser uma duração diferente da do cliente, fica a da IA (é a que
 aparece no recibo que o cliente lê); a diferença fica registada para análise. Remarcar mantém a
 duração da sessão original, como já era.
+
+## Relatório da Fase 2 — o que mudou na prática
+
+- **Serviço que não existe na tabela:** quando o cliente quer uma combinação que a tabela não
+  tem (ex.: Clássica de 90 min), a Lara explica e oferece o que existe; se o cliente insiste, ou
+  se a Lara ia gravar essa combinação, a conversa passa para a equipa (handoff) e não fica nada
+  marcado. A equipa fecha a venda à mão (orçamento personalizado).
+- **Duração do recibo:** se a IA não passar a duração ao sistema, conta também a que ela escreveu
+  no recibo ("- 90 min").
+- **Remarcação:** a mensagem de remarcação já não termina a perguntar o nome outra vez.

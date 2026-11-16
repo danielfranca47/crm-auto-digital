@@ -1979,12 +1979,18 @@ def _missing_booking_duration(
 
 
 def _fill_known_duration(
-    signals: Dict[str, Any], guard_trace: Dict[str, Any], context: Dict[str, Any], proposal_text: str
+    signals: Dict[str, Any],
+    guard_trace: Dict[str, Any],
+    context: Dict[str, Any],
+    proposal_text: str,
+    reply_text: str = "",
 ) -> Optional[int]:
     """Sem meeting_duration_minutes da Filha, a marcação ficava com a duração por omissão mesmo
     quando o lead já a tinha dito (ver meeting_proposal.known_duration). A da Filha, quando vem,
     fica — foi ela que escreveu o recibo; uma discordância só fica no rasto."""
-    known, source = meeting_proposal.known_duration(_lead_texts(context), proposal_text, _pricing_table(context))
+    known, source = meeting_proposal.known_duration(
+        _lead_texts(context), proposal_text, _pricing_table(context), reply_text
+    )
     if known is None:
         return None
     try:
@@ -2001,9 +2007,35 @@ def _fill_known_duration(
     return known
 
 
+def _service_off_table(
+    signals: Dict[str, Any], guard_trace: Dict[str, Any], context: Dict[str, Any], reply_text: str = ""
+) -> bool:
+    """O serviço + duração a gravar não existe na tabela de serviços (ver
+    meeting_proposal.service_fits) — a marcação não é gravada e a conversa passa para a equipa,
+    que fecha o orçamento à mão. Sem meeting_service da Filha (em teste local ela não o devolveu),
+    vale a linha que o recibo nomeia sem ambiguidade."""
+    try:
+        minutes = int(signals.get("meeting_duration_minutes") or 0) or None
+    except (TypeError, ValueError):
+        minutes = None
+    rows = meeting_proposal.pricing_rows(_pricing_table(context))
+    service = signals.get("meeting_service")
+    if service is None or (isinstance(service, str) and not service.strip()):
+        service = meeting_proposal.service_in_text(rows, reply_text)
+        if service:
+            guard_trace["service_source"] = "reply"
+    check = meeting_proposal.service_fits(rows, service, minutes)
+    if check is None:
+        return False
+    guard_trace["service"] = service
+    guard_trace["service_check"] = check
+    return check == "off_table"
+
+
 def _build_meeting_already_booked_block(
     accepted: Optional[meeting_proposal.AcceptedSlot] = None,
     missing_durations: Optional[List[int]] = None,
+    service_block: str = "",
 ) -> str:
     """Quando a Mãe dá meeting_scheduled=true, a marcação é gravada neste turno — a Filha tem
     de enviar a confirmação final, não o resumo + "Posso confirmar?" que as instruções da
@@ -2049,6 +2081,7 @@ def _build_meeting_already_booked_block(
             "termine sem pedir confirmação: o lead já confirmou, e perguntar de novo faz parecer que "
             f"nada ficou marcado. Preencha meeting_datetime_candidate=\"{meeting_proposal.candidate_iso(option)}\" "
             f"e meeting_day_reference=\"{meeting_date_guard.WEEKDAY_NAMES_PT[option.start.weekday()]}\".\n"
+            + service_block
         )
     return (
         "\nMARCAÇÃO JÁ GRAVADA NESTE TURNO (prevalece sobre o passo de pedir confirmação das "
@@ -2059,12 +2092,39 @@ def _build_meeting_already_booked_block(
         "e termine sem pedir confirmação: o lead já confirmou, e perguntar de novo faz parecer que "
         "nada ficou marcado. Preencha meeting_datetime_candidate e meeting_day_reference com o "
         "dia e a hora aceites.\n"
+        + service_block
+    )
+
+
+def _booking_service_block(context: Dict[str, Any]) -> str:
+    """Pede à Filha a linha da tabela de serviços que fica marcada — o código confere se ela
+    existe com essa duração (meeting_proposal.service_fits) e, se não, passa para a equipa. Em
+    teste real a Lara confirmou "Relaxante Clássica - 90 min", que a tabela não tem."""
+    rows = meeting_proposal.pricing_rows(_pricing_table(context))
+    if not rows:
+        return ""
+    lines = "\n".join(
+        f"{number}. {name}: {meeting_proposal.durations_text(sorted(set(durations)))}"
+        for number, (name, durations) in enumerate(rows.items(), start=1)
+    )
+    return (
+        "SERVIÇO DA TABELA (ao confirmar): preencha signals_structured.meeting_service com o número "
+        "da linha da tabela de serviços que fica marcada (ex.: 2) e meeting_duration_minutes com a "
+        "duração escolhida. Use o número mesmo que as instruções personalizadas chamem o serviço por "
+        f"outro nome. Linhas da tabela:\n{lines}\n"
+        "Se o serviço com a duração que o lead quer não está em nenhuma linha (ex.: pediu 90 min de "
+        "um serviço cuja linha vai só até 60 min), preencha meeting_service=\""
+        f"{meeting_proposal.OFF_TABLE}\" e escreva a confirmação normalmente: o sistema não grava e "
+        "passa a conversa para a equipa, que fecha esse orçamento com o lead — uma combinação fora da "
+        "tabela não tem preço nem duração combinados.\n"
     )
 
 
 def _confirmation_block(context: Dict[str, Any], accepted: Optional[meeting_proposal.AcceptedSlot] = None) -> str:
     accepted = accepted or _confirmation_fact(context)
-    return _build_meeting_already_booked_block(accepted, _missing_booking_duration(context, accepted))
+    return _build_meeting_already_booked_block(
+        accepted, _missing_booking_duration(context, accepted), _booking_service_block(context)
+    )
 
 
 def _get_mother_mode_conflict(context: Dict[str, Any], mother_decision: Optional[MotherDecision]) -> tuple[Optional[str], bool]:
@@ -2363,7 +2423,9 @@ def _apply_meeting_confirmation_guard(
     decision.decision_trace = trace
     action = result.trace.get("action")
     if not result.blocked:
-        filled = _fill_known_duration(signals, result.trace, context, accepted.proposal_text)
+        filled = _fill_known_duration(
+            signals, result.trace, context, accepted.proposal_text, decision.message_text or ""
+        )
         if filled is not None:
             trace["child_signals_structured"] = signals
             (logger or logging.getLogger(__name__)).info(
@@ -2371,6 +2433,18 @@ def _apply_meeting_confirmation_guard(
                 filled,
                 result.trace.get("duration_source"),
             )
+        if _service_off_table(signals, result.trace, context, decision.message_text or ""):
+            # handoff_policy.apply, no fim do decide(), troca o texto pela frase de handoff da conta
+            trace["meeting_scheduled"] = False
+            trace["meeting_scheduled_blocked"] = "service_not_in_table"
+            decision.next_action = "handoff"
+            decision.reason = "service_not_in_table"
+            (logger or logging.getLogger(__name__)).warning(
+                "event=meeting_service_not_in_table service=%s minutes=%s",
+                signals.get("meeting_service"),
+                signals.get("meeting_duration_minutes"),
+            )
+            return
     if action in ("ok", "skip"):
         return
     signals["meeting_datetime_candidate"] = result.candidate
@@ -2391,6 +2465,41 @@ def _apply_meeting_confirmation_guard(
         result.trace.get("accepted_source"),
         result.trace.get("text_changed", result.blocked),
     )
+
+
+def _apply_off_table_insistence_guard(
+    decision: DecisionOutput, context: Dict[str, Any], logger: Optional[logging.Logger] = None
+) -> None:
+    """O lead volta a pedir um serviço + duração que a tabela não tem
+    (meeting_proposal.off_table_request) → handoff: a equipa fecha esse orçamento à mão. Na 1.ª
+    vez a Filha explica e oferece o que existe; em teste local a cliente insistiu na Clássica de
+    90 min e a conversa ficou 14 turnos em círculo."""
+    if decision.next_action == "handoff":
+        return
+    rows = meeting_proposal.pricing_rows(_pricing_table(context))
+    if not rows:
+        return
+    now, *earlier = _lead_texts(context)
+    if not meeting_proposal.off_table_request(rows, now):
+        return
+
+    def same_message(text: str) -> bool:
+        # a 2.ª decisão da Recepção volta a pôr no histórico um pedaço do pedido original como
+        # mensagem do lead (requeue) — em teste local isso contava como "já tinha pedido"
+        a, b = " ".join(now.lower().split()), " ".join(text.lower().split())
+        return a in b or b in a
+
+    if not any(
+        meeting_proposal.off_table_request(rows, text) for text in earlier if not same_message(text)
+    ):
+        return
+    trace = decision.decision_trace or {}
+    trace["meeting_scheduled"] = False
+    trace["off_table_insisted"] = True
+    decision.decision_trace = trace
+    decision.next_action = "handoff"
+    decision.reason = "service_not_in_table_insisted"
+    (logger or logging.getLogger(__name__)).warning("event=meeting_service_not_in_table_insisted")
 
 
 def _current_meeting(context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -2505,6 +2614,13 @@ def _apply_meeting_reschedule_guard(
             option = accepted.option if origin == "accepted" else meeting_proposal.ProposedOption(start=start)
             decision.message_text = meeting_proposal.reschedule_done_text(option)
             guard_trace["text_changed"] = True
+        elif start is not None:
+            # em teste real a confirmação da remarcação acabou em "Como se chama?" (o passo das
+            # instruções da conta para quem marca pela 1.ª vez) — o lead já está identificado
+            without_question = _drop_trailing_question(decision.message_text or "")
+            if without_question != (decision.message_text or ""):
+                decision.message_text = without_question
+                guard_trace["text_changed"] = True
         if guard_trace.get("corrected_to") or guard_trace.get("text_changed"):
             log.warning(
                 "event=meeting_reschedule_corrected from=%s to=%s text_changed=%s",
@@ -4898,8 +5014,10 @@ def _build_child_prompt_pre_agendamento(
             _pre_prompt += (
                 "\nSINAIS DA MARCAÇÃO (neste turno, em vez de checkin_at_iso): signals_structured = "
                 '{"meeting_datetime_candidate": "YYYY-MM-DDTHH:MM:SS" | null, "meeting_day_reference": '
-                '"..." | null, "meeting_duration_minutes": inteiro | null} — candidato em ISO naive no fuso '
-                "de ai_profile.timezone; duração em minutos só se foi dita na conversa.\n"
+                '"..." | null, "meeting_duration_minutes": inteiro | null, "meeting_service": inteiro | '
+                f'"{meeting_proposal.OFF_TABLE}" | null}} — '
+                "candidato em ISO naive no fuso de ai_profile.timezone; duração em minutos só se foi dita na "
+                "conversa; meeting_service como em SERVIÇO DA TABELA, quando houver.\n"
                 + _MEETING_DAY_REFERENCE_RULE
                 + _confirmation_block(context, accepted)
             )
@@ -5068,7 +5186,7 @@ def _build_child_prompt_agendamento(
         '  "outcome": null,\n'
         '  "kanban_highlight": null,\n'
         '  "signals": [],\n'
-        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_day_reference": null, "meeting_duration_minutes": null} (opcional),\n'
+        '  "signals_structured": {"meeting_proposed": false, "meeting_datetime_candidate": null, "meeting_day_reference": null, "meeting_duration_minutes": null, "meeting_service": null} (opcional),\n'
         '  "confidence": 0.0\n'
         "}\n\n"
         "REGRAS DE SINALIZAÇÃO ESTRUTURADA (obrigatório):\n"
@@ -5084,7 +5202,9 @@ def _build_child_prompt_agendamento(
         + _MEETING_DAY_REFERENCE_RULE
         + "  * meeting_duration_minutes: preencha (inteiro, em minutos) só quando houver SERVIÇOS E DURAÇÕES "
         "DISPONÍVEIS configurado acima e você tiver identificado claramente a qual linha o lead se refere; "
-        "deixe null se não houver essa tabela configurada ou se ainda não confirmou qual serviço o lead quer.\n\n"
+        "deixe null se não houver essa tabela configurada ou se ainda não confirmou qual serviço o lead quer.\n"
+        "  * meeting_service: ao confirmar, o número da linha em SERVIÇO DA TABELA (quando houver) — ou "
+        f"\"{meeting_proposal.OFF_TABLE}\" se o serviço com a duração que o lead quer não está em nenhuma linha.\n\n"
         f"Contexto:\n"
         "- tabela_de_dias (hoje + próximos 14 dias; use para resolver QUALQUER data relativa ou nome de dia "
         f"da semana, SEM calcular por conta própria):\n{dates_table}\n"
@@ -6173,6 +6293,7 @@ def compose_decision_output(
         decision.decision_trace = {}
     decision.decision_trace["is_phase_entry"] = _is_phase_entry
     _apply_meeting_confirmation_guard(decision, context)
+    _apply_off_table_insistence_guard(decision, context)
     _phases_result = _evaluate_sales_flow_phases(
         context, effective_route_to, _extract_message_text(context),
         detected_intents=mother_decision.detected_intents,

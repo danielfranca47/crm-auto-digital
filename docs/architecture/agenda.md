@@ -414,7 +414,11 @@ history + mensagem atual
   → accepted_slot(): single_option | matched_option (lead nomeia hora/dia/profissional de uma)
     | ambiguous (várias, nenhuma escolhida) | lead_stated (hora nova — não é aceitação) | none
   → prompt: _build_meeting_already_booked_block(accepted) diz à Filha o horário aceite e o
-    candidato a devolver; ambíguo → manda perguntar qual
+    candidato a devolver; ambíguo → manda perguntar qual. Com tabela de serviços com linhas
+    ("- <nome> — <N>min: …"), _booking_service_block lista-as numeradas e pede também
+    meeting_service = número da linha que fica marcada (mesmo que as instruções da conta deem
+    outro nome ao serviço), ou "fora_da_tabela" quando o serviço + duração pedidos não estão
+    em nenhuma linha
   → duração por saber? missing_duration(): a tabela de serviços (service_pricing_table, já
     renderizada pelo CRM como "— 60min") tem mais de uma duração e nem o lead nem a proposta
     aceite a disseram → o bloco passa a "FALTA SABER O SERVIÇO E A DURAÇÃO" (perguntar,
@@ -431,12 +435,30 @@ history + mensagem atual
                                                           meeting_scheduled_blocked="ambiguous_options")
       lead_stated / none → sem alteração
       não bloqueado e a Filha sem meeting_duration_minutes → known_duration() preenche-o com
-        a duração já sabida: mensagem atual do lead → proposta aceite (só se tiver uma
-        duração) → mensagens anteriores do lead (mais recente primeiro); com tabela de
-        serviços, só uma duração que esteja nela          (event=meeting_duration_filled,
-        duration_filled / duration_source). Duração da Filha diferente da do lead → fica a
-        da Filha (escreveu o recibo); a do lead só no rasto (duration_lead)
-    rasto em decision_trace.meeting_confirmation_guard
+        a duração já sabida: recibo da Filha → mensagem atual do lead → proposta aceite →
+        mensagens anteriores do lead (mais recente primeiro); recibo e proposta só contam com
+        uma duração; com tabela de serviços, só uma duração que esteja nela
+        (event=meeting_duration_filled, duration_filled / duration_source). Duração da Filha
+        diferente da do lead → fica a da Filha (escreveu o recibo); a do lead só no rasto
+        (duration_lead)
+      não bloqueado → service_fits(pricing_rows(tabela), meeting_service, duração): a linha
+        dita pela Filha (número, ou nome comparado por palavras sem acentos) não tem essa
+        duração, ou veio "fora_da_tabela" → meeting_scheduled=false
+        (meeting_scheduled_blocked="service_not_in_table"), next_action="handoff",
+        reason="service_not_in_table"; o handoff_policy.apply do fim do decide() troca o texto
+        pela frase de handoff da conta e regista o pedido — a equipa fecha esse orçamento à
+        mão (event=meeting_service_not_in_table). Um nome que bate em várias linhas (a conta
+        pode ter nomes próprios: "Relaxante Clássica" para a Clássica) só é off_table se
+        nenhuma tiver a duração; um nome com palavras que a tabela não tem
+        ("Tailandesa") é off_table. Sem meeting_service, vale a linha que o recibo nomeia por
+        palavras só dela (service_in_text; service_source="reply"). Sem linha identificada ou
+        sem tabela → não se decide nada
+    rasto em decision_trace.meeting_confirmation_guard (service, service_check)
+  → logo a seguir, em qualquer rota: _apply_off_table_insistence_guard — a mensagem atual e
+    uma anterior do lead pedem, sem ambiguidade, um serviço com uma duração que a linha não
+    tem (off_table_request: "clássica de 90 minutos") → handoff
+    (reason="service_not_in_table_insisted", trace.off_table_insisted). Na 1.ª vez a Filha
+    explica e oferece o que existe
 ```
 
 Vale nas três rotas onde a confirmação cai: apresentação, agendamento e **pré-agendamento**
@@ -663,7 +685,7 @@ Ambas as chamadas passam por `routes/appointments.py` (não pelas rotas de `rout
 2. **Origem** (`meeting_proposal.reschedule_origin`): `accepted` (a opção aceite) → `lead_stated` (a hora que o lead escreveu nesta mensagem) → senão `counter_proposal` (um horário que só o agente pôs na mesa).
 3. **Disponibilidade:** livre em `calendar_busy_slots` (excluindo o próprio lead) e dentro do horário do profissional (`professional_hours.check`, com a duração do appointment original; sem tabela de horários, só a agenda conta).
 
-Contraproposta, ocupado ou fora do horário → `meeting_reschedule_requested` passa a `false` e o appointment não é tocado: uma contraproposta do agente só é gravada no turno em que o lead a aceita. O texto da Filha segue como está, exceto quando anuncia a remarcação como feita (`meeting_proposal.announces_reschedule`): aí passa a ser "Posso remarcar a sua sessão para <X>? Até confirmar, a sessão de <original> mantém-se." (contraproposta que cabe) ou "Peço desculpa, esse horário já não está disponível. A sua sessão de <original> mantém-se. Que outro horário prefere?" (ocupado/fora do horário). Remarcação que segue com um texto que não a dá como feita (ex.: "Posso confirmar?") → "Combinado! A sua sessão fica remarcada para <dia, dd/mm, às Hh com X>." Rasto: `decision_trace.meeting_reschedule_guard` (`candidate`, `corrected_to`, `origin`, `blocked`, `text_changed`); logs `event=meeting_reschedule_blocked` / `event=meeting_reschedule_corrected`.
+Contraproposta, ocupado ou fora do horário → `meeting_reschedule_requested` passa a `false` e o appointment não é tocado: uma contraproposta do agente só é gravada no turno em que o lead a aceita. O texto da Filha segue como está, exceto quando anuncia a remarcação como feita (`meeting_proposal.announces_reschedule`): aí passa a ser "Posso remarcar a sua sessão para <X>? Até confirmar, a sessão de <original> mantém-se." (contraproposta que cabe) ou "Peço desculpa, esse horário já não está disponível. A sua sessão de <original> mantém-se. Que outro horário prefere?" (ocupado/fora do horário). Remarcação que segue com um texto que não a dá como feita (ex.: "Posso confirmar?") → "Combinado! A sua sessão fica remarcada para <dia, dd/mm, às Hh com X>." Remarcação que segue com um texto que já a dá como feita → tira-se a pergunta final (`_drop_trailing_question`; ex.: o "Como se chama?" das instruções da conta para quem marca pela 1.ª vez). Rasto: `decision_trace.meeting_reschedule_guard` (`candidate`, `corrected_to`, `origin`, `blocked`, `text_changed`); logs `event=meeting_reschedule_blocked` / `event=meeting_reschedule_corrected`.
 
 **Conflito de horário no reagendamento (409 no CRM — corrida):** o appointment original **não é alterado** e a resposta da Filha (que dava a remarcação como feita) é **substituída** em `decision.message_text` pela mesma frase "esse horário já não está disponível; a sua sessão de <original> mantém-se". A função devolve `None` — o caller não envia uma segunda mensagem (ao contrário de `handle_meeting_scheduled()`, que devolve a mensagem de conflito para ser enviada à parte).
 

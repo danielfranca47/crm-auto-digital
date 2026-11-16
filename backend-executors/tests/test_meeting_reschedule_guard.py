@@ -184,3 +184,11 @@ def test_remarcacao_que_segue_com_texto_a_pedir_confirmacao_passa_a_feita():
     )
     assert signals["meeting_reschedule_requested"] is True
     assert decision.message_text.startswith("Combinado! A sua sessão fica remarcada para ")
+
+
+def test_remarcacao_feita_termina_sem_voltar_a_perguntar_o_nome():
+    text = f"Temos sim, fica confirmado para {DAY_WORD} às 12h com a Val.\nComo se chama?"
+    decision, signals, trace = _run(f"Pode ser {DAY_WORD} às 12h?", _iso(DAY, 12), text)
+    assert signals["meeting_reschedule_requested"] is True
+    assert decision.message_text == f"Temos sim, fica confirmado para {DAY_WORD} às 12h com a Val."
+    assert trace["text_changed"] is True

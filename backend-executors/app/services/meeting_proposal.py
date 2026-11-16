@@ -13,6 +13,7 @@ não aceitou?" — as mesmas `last_proposal` + `accepted_slot`.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -291,13 +292,17 @@ def missing_duration(lead_texts: List[str], proposal_text: str, pricing_table: s
     return durations
 
 
+def _minutes_in(text: str) -> set:
+    return {int(m.group(1)) for m in requested_slot._DURATION_MIN_RE.finditer(text or "")}
+
+
 def known_duration(
-    lead_texts: List[str], proposal_text: str, pricing_table: str
+    lead_texts: List[str], proposal_text: str, pricing_table: str, reply_text: str = ""
 ) -> Tuple[Optional[int], Optional[str]]:
-    """Duração (minutos) que já se sabe e de onde veio: `lead_now` (a mensagem atual), `proposal`
-    (a proposta aceite, só se tiver uma duração) ou `lead_earlier` (mensagens anteriores do lead,
-    mais recente primeiro). Com tabela de serviços, só vale uma duração que esteja nela ("chego
-    10 min antes" não é a sessão).
+    """Duração (minutos) que já se sabe e de onde veio: `reply` (o recibo da Filha), `lead_now`
+    (a mensagem atual), `proposal` (a proposta aceite) ou `lead_earlier` (mensagens anteriores do
+    lead, mais recente primeiro). Recibo e proposta só contam com uma duração. Com tabela de
+    serviços, só vale uma duração que esteja nela ("chego 10 min antes" não é a sessão).
 
     Em teste real o lead pediu "90 minutos", o recibo dizia 90 min e a marcação ficou com os 60
     da duração por omissão: a Filha não devolveu meeting_duration_minutes."""
@@ -307,11 +312,11 @@ def known_duration(
         return minutes if minutes is not None and (not offered or minutes in offered) else None
 
     texts = list(lead_texts)
-    in_proposal = {
-        int(m.group(1)) for m in requested_slot._DURATION_MIN_RE.finditer(proposal_text or "")
-    }
-    sources = [("lead_now", texts[:1])]
-    if len(in_proposal) == 1:
+    sources = []
+    if len(_minutes_in(reply_text)) == 1:
+        sources.append(("reply", [reply_text]))
+    sources.append(("lead_now", texts[:1]))
+    if len(_minutes_in(proposal_text)) == 1:
         sources.append(("proposal", [proposal_text]))
     sources.append(("lead_earlier", texts[1:]))
     for source, messages in sources:
@@ -320,6 +325,94 @@ def known_duration(
             if minutes is not None:
                 return minutes, source
     return None, None
+
+
+# Linha da tabela de serviços como o CRM a renderiza: "- Massagem Clássica — 60min: 75 €".
+_PRICING_ROW_RE = re.compile(r"^\s*-\s*(.+?)\s+—\s+(\d{1,3})\s*min\b", re.MULTILINE)
+OFF_TABLE = "fora_da_tabela"
+
+
+def pricing_rows(pricing_table: str) -> Dict[str, List[int]]:
+    """{nome do serviço: durações} das linhas da tabela de serviços."""
+    rows: Dict[str, List[int]] = {}
+    for m in _PRICING_ROW_RE.finditer(pricing_table or ""):
+        rows.setdefault(m.group(1).strip(), []).append(int(m.group(2)))
+    return rows
+
+
+_NAME_FILLER = {"de", "da", "do", "ou", "e", "com", "min", "minutos"}
+
+
+def _words(text: str) -> set:
+    """Palavras do nome sem acentos, números nem ligações ("Massagem Clássica, Desportiva ou
+    Terapêutica" → {massagem, classica, desportiva, terapeutica})."""
+    decomposed = unicodedata.normalize("NFKD", text or "")
+    plain = "".join(c for c in decomposed if not unicodedata.combining(c)).lower()
+    return {w for w in re.findall(r"[a-z]+", plain) if w not in _NAME_FILLER}
+
+
+def _own_words(rows: Dict[str, List[int]]) -> Dict[str, set]:
+    """Palavras que só existem no nome de cada linha ("classica" só na da Clássica)."""
+    names = list(rows)
+    return {
+        name: _words(name) - set().union(set(), *(_words(n) for n in names if n != name))
+        for name in names
+    }
+
+
+def service_in_text(rows: Dict[str, List[int]], text: str) -> Optional[str]:
+    """A linha da tabela nomeada no texto (o recibo da Filha), por palavras que só existem no nome
+    dessa linha — None quando o texto não nomeia nenhuma ou nomeia mais de uma ("Relaxante
+    Clássica" bate na Clássica e na Relaxante Exótica)."""
+    found = _words(text)
+    hits = [name for name, own in _own_words(rows).items() if own & found]
+    return hits[0] if len(hits) == 1 else None
+
+
+def off_table_request(rows: Dict[str, List[int]], text: str) -> bool:
+    """A mensagem pede, sem ambiguidade, um serviço da tabela com uma duração que essa linha não
+    tem ("quero a clássica de 90 minutos" e a Clássica vai só até 60 min)."""
+    name = service_in_text(rows, text)
+    minutes = requested_slot.requested_duration([text]) if name else None
+    return minutes is not None and minutes not in rows[name]
+
+
+def service_fits(rows: Dict[str, List[int]], service: Any, minutes: Optional[int]) -> Optional[str]:
+    """`ok` quando o serviço que a Filha diz ter marcado é uma linha da tabela com essa duração;
+    `off_table` quando de certeza não é (ou quando ela respondeu "fora_da_tabela"); None quando
+    não há tabela ou não se sabe a linha — aí não se decide nada.
+
+    `service` é o número da linha (1, 2, … pela ordem de pricing_rows, o que o bloco "SERVIÇO DA
+    TABELA" pede) ou um nome. Com um nome, a conta pode ter o seu próprio ("Relaxante Clássica"
+    para a Clássica, em teste local deu um handoff errado): bate em várias linhas → vale se alguma
+    tiver a duração; não bate em nenhuma e tem palavras que a tabela não tem → off_table.
+
+    Em teste real a Lara confirmou "Relaxante Clássica - 90 min", e a Clássica só vai até 60 min.
+    Só a IA sabe a que linha o lead se refere; o código confere se essa linha existe."""
+    if not rows or isinstance(service, bool):
+        return None
+    names = list(rows)
+    if isinstance(service, int) or (isinstance(service, str) and service.strip().isdigit()):
+        index = int(service)
+        if not 1 <= index <= len(names):
+            return None
+        candidates = [names[index - 1]]
+    elif isinstance(service, str) and _words(service):
+        wanted = _words(service)
+        if wanted == _words(OFF_TABLE):
+            return "off_table"
+        # um nome com todas as palavras do outro ("Massagem Terapêutica", "Lomi Lomi - 90 min")
+        candidates = [n for n in names if wanted <= _words(n) or _words(n) <= wanted]
+        if not candidates:
+            candidates = [n for n, own in _own_words(rows).items() if own & wanted]
+        if not candidates:
+            unknown = wanted - set().union(*(_words(n) for n in names))
+            return "off_table" if unknown else None
+    else:
+        return None
+    if minutes is None or any(minutes in rows[n] for n in candidates):
+        return "ok"
+    return "off_table"
 
 
 def describe(option: ProposedOption) -> str:
