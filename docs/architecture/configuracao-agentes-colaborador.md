@@ -9,7 +9,12 @@ As skills `configuracao-personalizada` e `diagnosticar-agente` funcionam em dois
 | Acesso à produção | `railway ssh` → `prod_turno.py` dentro do backend-core | rotas públicas com o login da conta de teste (`prod_http.py`) |
 | Bancada local | sim (`preparar_bancada.py`, `.env` copiados) | não — tudo no Playground de produção da conta de trabalho |
 | Cliente simulado | chave LLM local | `POST /api/playground/simulated-client` |
-| Código | fluxo de implementação | pedido de correção (`/api/suporte/pedidos-correcao`) |
+| Código | fluxo de implementação; regressão na bancada local | o mesmo fluxo; regressão = opt-in por omissão + 0 falhas novas nos testes (antes/depois) + validação em produção depois do deploy + revert |
+| Confirmar deploy | código no container | `GET /version` (ação `versao`) |
+| "Sim" das categorias que sobem | quem corre a sessão | quem corre a sessão (o colaborador) |
+| Pedido de correção | — | só o que exige um dono do sistema (segredos, variáveis do servidor, serviços pagos, apagar dados) |
+
+O deploy dos 4 serviços Railway vem do push no `main` do GitHub; publicar não exige acesso ao Railway.
 
 ## Transporte http (`prod_http.py`)
 
@@ -26,6 +31,13 @@ As skills `configuracao-personalizada` e `diagnosticar-agente` funcionam em dois
   `treino` (`/api/playground/training*`), `mensagens` (`/api/assistente-ia/messages/{lead_id}`),
   `conta` (user_id, plano, ai_profile_id), `pedido`/`pedidos`.
 - `preparar_bancada.py <slug> --colaborador` cria a bancada a partir do login e tira o snapshot.
+
+## Versão em produção (`GET /version`)
+
+- backend-crm `GET /version` (público, só hashes): `{crm, core, executors}` via
+  `services/deploy_version.py::versoes()` — `RAILWAY_GIT_COMMIT_SHA` do crm, `commit` do core
+  (`GET /version`) e do executors (`GET /health`, campo `commit`); `None` se o serviço não responder.
+- O `worker backend-executors` sai do mesmo commit e não tem HTTP.
 
 ## Cliente simulado no servidor
 

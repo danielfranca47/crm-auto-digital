@@ -54,11 +54,11 @@ produção depois do deploy + revert; `verificar_ambiente.py` verifica Python, p
 ## Checks de Validação
 
 ### Cenário C1 — Versão
-- [ ] `pytest` do backend-crm passa com as rotas novas
+- [x] `pytest` do backend-crm passa com as rotas novas (16/11/2026: 301 passed)
 - [ ] depois do deploy, `--prod-acao versao` mostra o commit publicado nos 3 serviços, sem Railway
 
 ### Cenário C2 — Checklist do colaborador
-- [ ] `verificar_ambiente.py` (`DIAG_MODO_COLABORADOR=1`) mostra Python, pacotes, git e permissão de push
+- [x] `verificar_ambiente.py` (`DIAG_MODO_COLABORADOR=1`) mostra Python, pacotes, git e permissão de push (16/11/2026: tudo ✅, conta 2 de produção; acesso ao GitHub por ls-remote — a escrita confirma-se na 1.ª publicação)
 
 ---
 
@@ -66,4 +66,4 @@ produção depois do deploy + revert; `verificar_ambiente.py` verifica Python, p
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | `/version` no crm e no core, `commit` no `/health` do executors, ação `versao` |
+| 1 | `5b6be61` | `/version` no crm e no core, `commit` no `/health` do executors, ação `versao` |

@@ -64,10 +64,11 @@ Para entregar a um cliente o agente já a funcionar, e não só diagnosticar, us
 `/configuracao-personalizada`). O Claude trabalha até o agente estar entregue, sem te pedir decisões
 técnicas.
 
-**O que precisas no PC:** o projeto atualizado e o Claude Code aberto na pasta dele. Não é preciso
-Railway, chaves nem acesso ao servidor: o Claude trabalha só com o login da tua conta de teste. Se ele
-não conseguir corrigir algo só com a configuração, envia um **pedido de correção** ao Daniel (fica no
-painel admin, em "Pedidos de correção") e avisa-te quando estiver resolvido.
+**O que precisas:** uma conta no GitHub colaboradora do repositório (com escrita), o projeto no PC e o
+Claude Code aberto na pasta dele. Não é preciso Railway, chaves, acesso ao servidor nem autorização do
+Daniel: o Claude trabalha com o login da tua conta de teste e, se a configuração não chegar, corrige
+também o sistema e publica-o (o deploy é automático), sempre com testes antes e depois. O que falta no
+PC (Python, pacotes, nome no git), o primeiro passo da skill deteta e resolve contigo.
 
 **O que precisas de lhe dar** (se faltar alguma coisa, ele pergunta tudo de uma vez):
 - o email e a senha da **tua conta de teste** de produção, onde o agente é montado e testado. Cada
@@ -92,8 +93,12 @@ criadas pelo Daniel ou pelo Claude a pedido dele):
 
 **Fica contigo:** a autorização no início (uma vez), o que só uma pessoa faz (QR, telemóvel de teste,
 exportar e importar) e as dúvidas de negócio. As correções que mexem nas instruções da IA, no envio de
-mensagens, na base de dados ou em pagamentos afetam todos os clientes e só são publicadas com o "sim"
-do Daniel.
+mensagens, na base de dados ou em pagamentos afetam todos os clientes: o Claude explica-te numa frase o
+que muda e o resultado dos testes, e só as publica com o **teu** "sim". Se algo piorar depois de
+publicado, desfaz logo.
+
+Os **Pedidos de correção** (painel admin) ficam só para o que exige o dono do sistema: segredos e
+variáveis do servidor, serviços pagos, apagar dados de clientes.
 
 ---
 
