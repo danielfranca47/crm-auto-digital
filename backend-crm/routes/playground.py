@@ -1514,6 +1514,64 @@ def playground_reset_training(
     return {"deleted": deleted}
 
 
+class SimulatedClientAgente(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=80)
+    negocio: str = Field(..., min_length=1, max_length=400)
+    idioma: Optional[str] = Field(None, max_length=80)
+
+
+class SimulatedClientTurn(BaseModel):
+    de: Literal["cliente", "agente"]
+    texto: str = Field(..., max_length=4000)
+
+
+class SimulatedClientRequest(BaseModel):
+    persona: str = Field(..., min_length=1, max_length=4000)
+    agente: SimulatedClientAgente
+    conversa: List[SimulatedClientTurn] = Field(default_factory=list, max_length=40)
+
+
+class SimulatedClientResponse(BaseModel):
+    mensagem: str
+    fim: bool
+
+
+@router.post("/simulated-client", response_model=SimulatedClientResponse)
+def playground_simulated_client(
+    body: SimulatedClientRequest,
+    current_user: CurrentUser = Depends(require_crm_access),
+) -> SimulatedClientResponse:
+    """
+    Próxima fala de um cliente de teste (persona) para conversas simuladas no Playground.
+
+    Usado pelas skills de configuração de agentes quando correm sem chave de LLM local. Só gera
+    texto: não lê nem altera dados de nenhuma conta.
+    """
+    from services.playground_simulated_client import (
+        SimulatedClientUnavailable,
+        build_prompt,
+        next_message,
+    )
+
+    prompt = build_prompt(
+        body.persona,
+        body.agente.nome,
+        body.agente.negocio,
+        body.agente.idioma,
+        [(t.de, t.texto) for t in body.conversa],
+    )
+    try:
+        mensagem, fim = next_message(prompt)
+    except SimulatedClientUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Cliente simulado indisponível: {exc}")
+    except Exception as exc:
+        logger.warning("simulated_client user_id=%s llm_error=%s", current_user.id, exc)
+        raise HTTPException(status_code=502, detail="Falha ao gerar a mensagem do cliente simulado")
+
+    logger.info("simulated_client user_id=%s turnos=%s fim=%s", current_user.id, len(body.conversa), fim)
+    return SimulatedClientResponse(mensagem=mensagem, fim=fim)
+
+
 @router.post("/training/import")
 def playground_import_training(
     body: TrainingImportRequest,
