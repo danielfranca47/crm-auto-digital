@@ -1979,12 +1979,18 @@ def _missing_booking_duration(
 
 
 def _fill_known_duration(
-    signals: Dict[str, Any], guard_trace: Dict[str, Any], context: Dict[str, Any], proposal_text: str
+    signals: Dict[str, Any],
+    guard_trace: Dict[str, Any],
+    context: Dict[str, Any],
+    proposal_text: str,
+    reply_text: str = "",
 ) -> Optional[int]:
     """Sem meeting_duration_minutes da Filha, a marcação ficava com a duração por omissão mesmo
     quando o lead já a tinha dito (ver meeting_proposal.known_duration). A da Filha, quando vem,
     fica — foi ela que escreveu o recibo; uma discordância só fica no rasto."""
-    known, source = meeting_proposal.known_duration(_lead_texts(context), proposal_text, _pricing_table(context))
+    known, source = meeting_proposal.known_duration(
+        _lead_texts(context), proposal_text, _pricing_table(context), reply_text
+    )
     if known is None:
         return None
     try:
@@ -2001,9 +2007,29 @@ def _fill_known_duration(
     return known
 
 
+def _service_off_table(signals: Dict[str, Any], guard_trace: Dict[str, Any], context: Dict[str, Any]) -> bool:
+    """O serviço + duração a gravar não existe na tabela de serviços (ver
+    meeting_proposal.service_fits) — a marcação não é gravada e a conversa passa para a equipa,
+    que fecha o orçamento à mão."""
+    try:
+        minutes = int(signals.get("meeting_duration_minutes") or 0) or None
+    except (TypeError, ValueError):
+        minutes = None
+    service = signals.get("meeting_service")
+    check = meeting_proposal.service_fits(
+        meeting_proposal.pricing_rows(_pricing_table(context)), service, minutes
+    )
+    if check is None:
+        return False
+    guard_trace["service"] = service
+    guard_trace["service_check"] = check
+    return check == "off_table"
+
+
 def _build_meeting_already_booked_block(
     accepted: Optional[meeting_proposal.AcceptedSlot] = None,
     missing_durations: Optional[List[int]] = None,
+    service_block: str = "",
 ) -> str:
     """Quando a Mãe dá meeting_scheduled=true, a marcação é gravada neste turno — a Filha tem
     de enviar a confirmação final, não o resumo + "Posso confirmar?" que as instruções da
@@ -2049,6 +2075,7 @@ def _build_meeting_already_booked_block(
             "termine sem pedir confirmação: o lead já confirmou, e perguntar de novo faz parecer que "
             f"nada ficou marcado. Preencha meeting_datetime_candidate=\"{meeting_proposal.candidate_iso(option)}\" "
             f"e meeting_day_reference=\"{meeting_date_guard.WEEKDAY_NAMES_PT[option.start.weekday()]}\".\n"
+            + service_block
         )
     return (
         "\nMARCAÇÃO JÁ GRAVADA NESTE TURNO (prevalece sobre o passo de pedir confirmação das "
@@ -2059,12 +2086,38 @@ def _build_meeting_already_booked_block(
         "e termine sem pedir confirmação: o lead já confirmou, e perguntar de novo faz parecer que "
         "nada ficou marcado. Preencha meeting_datetime_candidate e meeting_day_reference com o "
         "dia e a hora aceites.\n"
+        + service_block
+    )
+
+
+def _booking_service_block(context: Dict[str, Any]) -> str:
+    """Pede à Filha a linha da tabela de serviços que fica marcada — o código confere se ela
+    existe com essa duração (meeting_proposal.service_fits) e, se não, passa para a equipa. Em
+    teste real a Lara confirmou "Relaxante Clássica - 90 min", que a tabela não tem."""
+    rows = meeting_proposal.pricing_rows(_pricing_table(context))
+    if not rows:
+        return ""
+    lines = "\n".join(
+        f"- {name}: {meeting_proposal.durations_text(sorted(set(durations)))}"
+        for name, durations in rows.items()
+    )
+    return (
+        "SERVIÇO DA TABELA (ao confirmar): preencha signals_structured.meeting_service com o nome "
+        "exato da linha da tabela de serviços que fica marcada e meeting_duration_minutes com a "
+        f"duração dessa linha. Linhas da tabela:\n{lines}\n"
+        "Se o serviço com a duração que o lead quer não está em nenhuma linha (ex.: pediu 90 min de "
+        "um serviço cujas linhas vão só até 60 min), preencha meeting_service=\""
+        f"{meeting_proposal.OFF_TABLE}\" e escreva a confirmação normalmente: o sistema não grava e "
+        "passa a conversa para a equipa, que fecha esse orçamento com o lead — uma combinação fora da "
+        "tabela não tem preço nem duração combinados.\n"
     )
 
 
 def _confirmation_block(context: Dict[str, Any], accepted: Optional[meeting_proposal.AcceptedSlot] = None) -> str:
     accepted = accepted or _confirmation_fact(context)
-    return _build_meeting_already_booked_block(accepted, _missing_booking_duration(context, accepted))
+    return _build_meeting_already_booked_block(
+        accepted, _missing_booking_duration(context, accepted), _booking_service_block(context)
+    )
 
 
 def _get_mother_mode_conflict(context: Dict[str, Any], mother_decision: Optional[MotherDecision]) -> tuple[Optional[str], bool]:
@@ -2363,7 +2416,9 @@ def _apply_meeting_confirmation_guard(
     decision.decision_trace = trace
     action = result.trace.get("action")
     if not result.blocked:
-        filled = _fill_known_duration(signals, result.trace, context, accepted.proposal_text)
+        filled = _fill_known_duration(
+            signals, result.trace, context, accepted.proposal_text, decision.message_text or ""
+        )
         if filled is not None:
             trace["child_signals_structured"] = signals
             (logger or logging.getLogger(__name__)).info(
@@ -2371,6 +2426,18 @@ def _apply_meeting_confirmation_guard(
                 filled,
                 result.trace.get("duration_source"),
             )
+        if _service_off_table(signals, result.trace, context):
+            # handoff_policy.apply, no fim do decide(), troca o texto pela frase de handoff da conta
+            trace["meeting_scheduled"] = False
+            trace["meeting_scheduled_blocked"] = "service_not_in_table"
+            decision.next_action = "handoff"
+            decision.reason = "service_not_in_table"
+            (logger or logging.getLogger(__name__)).warning(
+                "event=meeting_service_not_in_table service=%s minutes=%s",
+                signals.get("meeting_service"),
+                signals.get("meeting_duration_minutes"),
+            )
+            return
     if action in ("ok", "skip"):
         return
     signals["meeting_datetime_candidate"] = result.candidate
@@ -2505,6 +2572,13 @@ def _apply_meeting_reschedule_guard(
             option = accepted.option if origin == "accepted" else meeting_proposal.ProposedOption(start=start)
             decision.message_text = meeting_proposal.reschedule_done_text(option)
             guard_trace["text_changed"] = True
+        elif start is not None:
+            # em teste real a confirmação da remarcação acabou em "Como se chama?" (o passo das
+            # instruções da conta para quem marca pela 1.ª vez) — o lead já está identificado
+            without_question = _drop_trailing_question(decision.message_text or "")
+            if without_question != (decision.message_text or ""):
+                decision.message_text = without_question
+                guard_trace["text_changed"] = True
         if guard_trace.get("corrected_to") or guard_trace.get("text_changed"):
             log.warning(
                 "event=meeting_reschedule_corrected from=%s to=%s text_changed=%s",

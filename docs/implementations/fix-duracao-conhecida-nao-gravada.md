@@ -70,6 +70,32 @@ Decisões:
 
 **Commit:** `5e47d62`
 
+### Fase 2 — Três ajustes da validação PROD09 (16/11/2026)
+
+Problemas vistos na validação da Fase 1:
+1. **Combinação fora da tabela** (PROD09 `p-relax-sem-tipo`): a Lara confirmou "Relaxante
+   Clássica - 90 min", e a Clássica só vai até 60 min. Decisão do Daniel: nesse caso, **handoff**
+   — a equipa fecha a venda à mão (pode ser um orçamento personalizado).
+2. **Duração no recibo:** sem `meeting_duration_minutes`, a duração escrita no recibo da Filha não
+   era lida.
+3. **"Como se chama?" depois de remarcar** (bancada `F1` `pos-marcacao`).
+
+Só o código não sabe a que linha "Relaxante Clássica" se refere (as palavras batem em duas linhas):
+a Filha diz a linha (`meeting_service`), o código confere se essa linha tem essa duração.
+
+| Arquivo | O que muda |
+|---|---|
+| `backend-executors/app/services/meeting_proposal.py` | `known_duration(..., reply_text)` com fonte `reply` primeiro; `pricing_rows()`, `service_fits()`, `OFF_TABLE` |
+| `backend-executors/app/services/decision_engine.py` | `_booking_service_block` (bloco "SERVIÇO DA TABELA" nas variantes que confirmam); `_service_off_table` no `_apply_meeting_confirmation_guard` → handoff sem marcação; `_apply_meeting_reschedule_guard` tira a pergunta final quando a remarcação segue e o texto já a dá como feita |
+| `backend-executors/tests/test_meeting_confirmation_guard.py` / `test_meeting_reschedule_guard.py` | 6 testes novos |
+| `docs/architecture/agenda.md`, `docs/prompts_llms.md` | turno da confirmação (linha da tabela + handoff, ordem das fontes da duração), remarcação |
+
+Desvio do plano: o campo `meeting_service` não foi acrescentado também ao schema do agendamento —
+o bloco da confirmação já entra em todos os turnos em que a marcação é gravada (minimalismo,
+princípio 7).
+
+**Commit:** (a registar)
+
 ---
 
 ## Checks de Validação
@@ -86,17 +112,22 @@ Decisões:
   `p-seguidas` 16h Daniel 60 min, sem erro
 
 ### Produção (`--prod`, depois do merge e deploy)
-- [ ] `p-relax90` e `p-relax-sem-tipo` com 90 min
-- [ ] Regressão `p-micas`, `pos-marcacao`, `p-seguidas`
+- [x] `p-relax90` e `p-relax-sem-tipo` com 90 min (16/11/2026, `PROD09`: 14h–15h30 nos dois)
+- [x] Regressão `p-micas`, `pos-marcacao`, `p-seguidas` (16/11/2026, `PROD09`): `p-micas` quarta
+  15h Val 90 min; `pos-marcacao` 60 min e remarcação com 60 min; `p-seguidas` 16h Daniel 60 min
+
+### Fase 2
+- [x] `pytest backend-executors/tests` — 541 passam (16/11/2026)
+- [ ] Local: combinação fora da tabela (ex.: Clássica 90 min) → handoff, sem marcação
+- [ ] Local: `p-relax90`, `p-relax-sem-tipo` (Lomi Lomi 90 → grava 90 min), `p-micas`,
+  `pos-marcacao` (remarcação sem pergunta no fim), `p-seguidas`
+- [ ] `--prod`: a mesma bateria depois do merge e deploy
 
 ---
 
 ## Ajustes Possíveis Pós-Implementação
 
-- Ler a duração também do próprio recibo da Filha quando ela não devolve o campo (hoje só se lê o
-  lead e a proposta aceite).
-- Em `pos-marcacao` (F1), depois de remarcar, a Lara voltou a perguntar "Como se chama?" — texto
-  da IA no `meeting_management`, sem relação com a duração.
+(Os três da Fase 1 foram resolvidos na Fase 2.)
 
 ---
 

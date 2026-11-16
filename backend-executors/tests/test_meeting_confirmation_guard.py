@@ -302,3 +302,81 @@ def test_guard_sem_duracao_dita_deixa_a_por_omissao():
     decision = _decision(_iso(2, "11:00"))
     _apply_meeting_confirmation_guard(decision, _context())
     assert "meeting_duration_minutes" not in decision.decision_trace["child_signals_structured"]
+
+
+def test_known_duration_le_primeiro_o_recibo_da_filha():
+    recibo = "Experiência Agendada ✨\nMassagem Relaxante - 90 min\nHorário: 11h"
+    assert mp.known_duration(["Sim, pode confirmar", "Quero a de 60 min"], "", TABELA, recibo) == (90, "reply")
+    assert mp.known_duration(["Quero a de 60 min"], "", TABELA, "Chegue 10 min antes") == (60, "lead_now")
+
+
+# --- serviço + duração fora da tabela → handoff -------------------------------------------
+
+TABELA_SENSI = (
+    "## Massagens\n"
+    "- Massagem Clássica, Desportiva ou Terapêutica — 20min: 45 € (Sessão localizada)\n"
+    "- Massagem Clássica, Desportiva ou Terapêutica — 30min: 55 €\n"
+    "- Massagem Clássica, Desportiva ou Terapêutica — 45min: 65 €\n"
+    "- Massagem Clássica, Desportiva ou Terapêutica — 60min: 75 €\n"
+    "- Massagem Relaxante Exótica (Lomi Lomi) — 45min: 75 €\n"
+    "- Massagem Relaxante Exótica (Lomi Lomi) — 60min: 85 €\n"
+    "- Massagem Relaxante Exótica (Lomi Lomi) — 90min: 110 €"
+)
+
+
+def test_service_fits_confere_a_linha_e_a_duracao():
+    rows = mp.pricing_rows(TABELA_SENSI)
+    assert rows["Massagem Relaxante Exótica (Lomi Lomi)"] == [45, 60, 90]
+    assert mp.service_fits(rows, "Massagem Clássica, Desportiva ou Terapêutica", 90) == "off_table"
+    assert mp.service_fits(rows, "Massagem Clássica, Desportiva ou Terapêutica", 60) == "ok"
+    assert mp.service_fits(rows, "Massagem Terapêutica", 60) == "ok"
+    assert mp.service_fits(rows, "Lomi Lomi", 90) == "ok"
+    assert mp.service_fits(rows, "Massagem Relaxante Clássica", 90) == "off_table"
+    assert mp.service_fits(rows, "fora_da_tabela", None) == "off_table"
+    assert mp.service_fits(rows, None, 90) is None
+    assert mp.service_fits({}, "Lomi Lomi", 90) is None
+
+
+def _context_sensi(service_text):
+    context = _context(inbound="Sim, pode confirmar")
+    context["history"] = [
+        {"model": "inbound", "body": f"Queria uma {service_text} de 90 minutos"},
+        {"model": "outbound", "body": "Tenho depois de amanhã às 11h. Pode ser?"},
+    ]
+    context["knowledge_items"] = {"service_pricing_table": TABELA_SENSI}
+    return context
+
+
+def test_guard_classica_de_90_min_nao_grava_e_passa_para_a_equipa():
+    decision = _decision(_iso(2, "11:00"))
+    decision.decision_trace["child_signals_structured"]["meeting_service"] = (
+        "Massagem Clássica, Desportiva ou Terapêutica"
+    )
+    _apply_meeting_confirmation_guard(decision, _context_sensi("massagem clássica"))
+    trace = decision.decision_trace
+    assert decision.next_action == "handoff"
+    assert decision.reason == "service_not_in_table"
+    assert trace["meeting_scheduled"] is False
+    assert trace["meeting_scheduled_blocked"] == "service_not_in_table"
+    assert trace["meeting_confirmation_guard"]["service_check"] == "off_table"
+
+
+def test_guard_lomi_lomi_de_90_min_grava():
+    decision = _decision(_iso(2, "11:00"))
+    decision.decision_trace["child_signals_structured"]["meeting_service"] = "Massagem Relaxante Exótica (Lomi Lomi)"
+    _apply_meeting_confirmation_guard(decision, _context_sensi("Lomi Lomi"))
+    trace = decision.decision_trace
+    assert decision.next_action == "reply"
+    assert trace["meeting_scheduled"] is True
+    assert trace["child_signals_structured"]["meeting_duration_minutes"] == 90
+    assert trace["meeting_confirmation_guard"]["service_check"] == "ok"
+
+
+def test_bloco_da_confirmacao_pede_a_linha_da_tabela():
+    from app.services.decision_engine import _confirmation_block
+
+    block = _confirmation_block(_context_sensi("Lomi Lomi"))
+    assert "MARCAÇÃO JÁ GRAVADA NESTE TURNO" in block
+    assert "meeting_service" in block
+    assert "- Massagem Relaxante Exótica (Lomi Lomi): 45, 60 ou 90 min" in block
+    assert "meeting_service" not in _confirmation_block(_context())

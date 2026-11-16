@@ -527,7 +527,11 @@ a pré-agendamento recebe só a tabela.
   várias durações e nenhuma dita), passa a "FALTA SABER O SERVIÇO E A DURAÇÃO" e manda perguntar
   serviço e duração mantendo o horário. A variante normal especifica que a confirmação final é a
   mensagem que as instruções da conta mandam enviar depois de o lead confirmar (o recibo), não o
-  resumo de antes. Sem proposta lida, fica o texto genérico. O
+  resumo de antes. Sem proposta lida, fica o texto genérico. Nas variantes que confirmam, com
+  tabela de serviços com linhas, `_booking_service_block` acrescenta "SERVIÇO DA TABELA": as
+  linhas (nome + durações) e o pedido de `signals_structured.meeting_service` = nome exato da
+  linha marcada, ou `"fora_da_tabela"` quando o serviço + duração não existem (o código não
+  grava e faz handoff). O
   candidato devolvido é conferido em código por `_apply_meeting_confirmation_guard` (ver
   `docs/architecture/agenda.md`, "Turno da confirmação"). Na entrada da fase não entra (o
   `meeting_scheduler` adia a criação — gate M3).
