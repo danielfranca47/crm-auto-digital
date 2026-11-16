@@ -110,7 +110,9 @@ Segundo reforço (bancada `F2b`):
   `_apply_off_table_insistence_guard`: a 2.ª vez que o lead pede, sem ambiguidade, uma combinação
   fora da tabela → handoff.
 
-**Commit do 2.º reforço:** (a registar)
+**Commit do 2.º reforço:** `a14bcb2`; correção a seguir (`F2c` `p-classica-90`: o handoff
+disparou logo no 1.º pedido, porque a 2.ª decisão da Recepção repõe um pedaço do pedido original
+no histórico — passa a não contar): `297da1a`
 
 ---
 
@@ -133,10 +135,12 @@ Segundo reforço (bancada `F2b`):
   15h Val 90 min; `pos-marcacao` 60 min e remarcação com 60 min; `p-seguidas` 16h Daniel 60 min
 
 ### Fase 2
-- [x] `pytest backend-executors/tests` — 541 passam (16/11/2026)
-- [ ] Local: combinação fora da tabela (ex.: Clássica 90 min) → handoff, sem marcação
-- [ ] Local: `p-relax90`, `p-relax-sem-tipo` (Lomi Lomi 90 → grava 90 min), `p-micas`,
-  `pos-marcacao` (remarcação sem pergunta no fim), `p-seguidas`
+- [x] `pytest backend-executors/tests` — 549 passam (16/11/2026)
+- [x] Local: combinação fora da tabela → handoff, sem marcação (16/11/2026, `F2d` `p-classica-90`:
+  1.º pedido a Lara explica e oferece a Lomi Lomi; a cliente insiste → handoff; nada gravado)
+- [x] Local (16/11/2026): `p-relax90` `F2d` Lomi Lomi 90 min; `p-relax-sem-tipo` `F2d` Exótica 90
+  min; `p-micas` `F2c` 90 min, sem handoff errado; `pos-marcacao` `F2c` 60 min, remarcação 60 min
+  e sem pergunta no fim; `p-seguidas` `F2d` 60 min com o Daniel
 - [ ] `--prod`: a mesma bateria depois do merge e deploy
 
 ---
@@ -155,3 +159,13 @@ esquecimento, ficava a duração padrão da conta (60 min) e a agenda podia acei
 por cima da sessão. Se a IA disser uma duração diferente da do cliente, fica a da IA (é a que
 aparece no recibo que o cliente lê); a diferença fica registada para análise. Remarcar mantém a
 duração da sessão original, como já era.
+
+## Relatório da Fase 2 — o que mudou na prática
+
+- **Serviço que não existe na tabela:** quando o cliente quer uma combinação que a tabela não
+  tem (ex.: Clássica de 90 min), a Lara explica e oferece o que existe; se o cliente insiste, ou
+  se a Lara ia gravar essa combinação, a conversa passa para a equipa (handoff) e não fica nada
+  marcado. A equipa fecha a venda à mão (orçamento personalizado).
+- **Duração do recibo:** se a IA não passar a duração ao sistema, conta também a que ela escreveu
+  no recibo ("- 90 min").
+- **Remarcação:** a mensagem de remarcação já não termina a perguntar o nome outra vez.
