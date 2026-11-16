@@ -42,6 +42,10 @@ O sistema é multi-empresa e multi-agente. Uma correção pedida por uma conta c
 
 ## As 5 provas antes do merge
 
+**No modo colaborador** (sem bancada local), as provas 2 e 3 fazem-se como está em
+`modo-colaborador.md`, secção 5: opt-in por omissão, 0 falhas novas nos testes, teste novo, validação
+em produção depois do deploy e revert imediato se algo piorar.
+
 | # | Prova | Como |
 |---|---|---|
 | 1 | Testes automáticos do serviço tocado passam | `python -m pytest tests/ -q` no backend tocado (ver `docs/ops/local-dev.md`; numa worktree nova, copiar `.env` antes) |
@@ -71,8 +75,9 @@ Objetivo: mostrar que, **com o valor por omissão**, as outras contas se comport
 
 ## Depois do merge
 
-- Confirma que o deploy chegou: procura a função ou o ficheiro novo **dentro do container** de cada
-  serviço tocado (`backend-crm`, `backend-core`, `worker backend-executors`).
-- Se nasceu um campo novo, liga-o **só nesta conta** (via `aplicar_producao.sh`, com backup e um
-  "sim").
+- Confirma que o deploy chegou: `simular.py <pasta> --prod-acao versao` tem de mostrar o commit
+  publicado no `crm`, no `core` e no `executors`. O `worker backend-executors` sai do mesmo commit; no
+  modo dono também se pode procurar o código dentro do container.
+- Se nasceu um campo novo, liga-o **só na conta de trabalho** (`--aplicar-prod` no modo colaborador,
+  `aplicar_producao.sh` no modo dono), sempre com backup.
 - Corre a bateria `--prod` completa desta conta e valida o `C1`.

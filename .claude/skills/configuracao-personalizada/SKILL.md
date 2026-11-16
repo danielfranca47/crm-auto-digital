@@ -32,7 +32,7 @@ fechado: **só acaba quando o agente está entregue e a funcionar** (ver "Parage
   respondem, com a opção recomendada. Se ele não souber, segue a recomendada e marca-a como
   provisória.
 - **Há dois pontos de paragem humana, e só esses:**
-  1. o "sim" do Daniel para juntar ao `main` uma correção numa categoria que sobe (regra 6);
+  1. o "sim" de quem corre a sessão para publicar uma correção numa categoria que sobe (regra 6);
   2. um risco real e irreversível de perda de dados.
 - **Não há checkpoints de "queres que continue?"** nem a pergunta "queres teste automatizado?": os
   testes são sempre automáticos, por API.
@@ -50,9 +50,9 @@ Pede-a uma vez, em linguagem simples:
 >    contas, para garantir que nada piora para os outros clientes;
 > 3. fazer 1 conversa de teste no WhatsApp real, a partir de um número de teste;
 > 4. na entrega, fazer 1 conversa de teste no Playground da conta do cliente e apagá-la a seguir.
-> Correções que mexem nas instruções da IA, no envio de mensagens, na base de dados ou em pagamentos
-> só são publicadas com o "sim" do Daniel. Nunca envio mensagens a clientes reais e nunca apago
-> dados de clientes sem perguntar.
+> Se uma correção mexer nas instruções da IA, no envio de mensagens, na base de dados ou em
+> pagamentos, explico-te numa frase o que muda e o resultado dos testes, e só a publico com o teu
+> "sim". Nunca envio mensagens a clientes reais e nunca apago dados de clientes sem perguntar.
 
 **Vocabulário:** o da página Tipos de Agentes (`/agentes-info`): Agente 01 · SDR de Alto Ticket,
 Agente 02 · Vendedor Autônomo, Agente 03 · Assistente Comercial; Inbound/Outbound, Fit, Dor,
@@ -82,12 +82,17 @@ checklist simples (o projeto atualizado, o login e o plano da conta de teste) e 
 | Testes | bancada local e Playground de produção | **só o Playground de produção da conta de trabalho** (é de teste, não afeta ninguém) |
 | Cliente simulado | chave local | gerado pelo servidor |
 | Conversas de referência | CRM de produção ou WhatsApp Web | WhatsApp Web (no PC da pessoa) ou prints |
-| Código (fase 6) | corrige pelo fluxo de implementação | **não mexe em código**: envia um pedido de correção ao Daniel e continua |
+| Código (fase 6) | corrige pelo fluxo de implementação | **corrige também**, pelo mesmo fluxo: testes antes/depois no PC, publicação pelo GitHub (o deploy é automático), validação em produção depois do deploy |
+| Confirmar o deploy | procurar o código no container | `--prod-acao versao` (commit de cada serviço) |
 | Teste real (fase 7) | CRM e logs | CRM da conta de trabalho (mensagens do lead) |
+
+O colaborador **não depende de ninguém**: o que só um dono do sistema pode fazer (segredos, variáveis
+do servidor, serviços pagos, apagar dados de clientes) é o único caso que vira pedido de correção.
 
 Tudo o que muda no modo colaborador está em
 [references/modo-colaborador.md](references/modo-colaborador.md). Se o checklist falhar, diz à pessoa
-a única coisa a fazer (ex.: "correr `git pull`", "pedir ao Daniel o plano Interno") e espera.
+a única coisa a fazer e, se for algo que o Claude possa fazer no PC (instalar o Python ou os pacotes,
+atualizar o projeto, configurar o nome no git), faz-o com a autorização da pessoa.
 
 ## Base reutilizada (não duplicar)
 
@@ -138,10 +143,11 @@ Valem as regras fixas da `diagnosticar-agente`, **com três exceções desta mis
    critérios ⚠ passaram na bateria `--prod` e na conversa real.
 6. **Categorias que sobem:** as instruções da IA, o envio real, a base de dados e o pagamento
    (`python scripts/fila/categorias_que_sobem.py`). Uma correção nestas categorias afeta todas as
-   contas e **só vai para `main` com o "sim" explícito do dono do sistema (o Daniel)**, dado nessa
-   altura. A autorização do início da missão não o substitui. O Claude deixa a branch pronta e com as
-   5 provas passadas. Faz uma única pergunta, sem termos técnicos: o que muda, para quem, e o
-   resultado da regressão. Enquanto espera, continua o resto da missão.
+   contas e **só vai para `main` com o "sim" explícito de quem corre a sessão** (o Daniel ou o
+   colaborador; por decisão do Daniel, o colaborador não precisa do Daniel), dado nessa altura, para
+   essa correção. A autorização do início da missão não o substitui. O Claude deixa a branch pronta e
+   com as provas passadas e faz uma única pergunta, sem termos técnicos: o que muda, para quem, e o
+   resultado dos testes. Enquanto espera, continua o resto da missão.
 7. **Dados de clientes** ficam em `.claude/agentes/<slug>/` (no gitignore). Nos ficheiros
    versionados entram só números agregados e exemplos anonimizados.
 
@@ -204,13 +210,13 @@ divergências: critério → o que o agente faz hoje → classe da triagem.
 3. O que continuar a falhar e a triagem disser que é código passa à fase 6.
 
 ### 6. Correções de código (só o que a configuração e o treinamento não resolvem)
-**Modo colaborador:** não se mexe em código. Envia um **pedido de correção** ao Daniel, com a
-evidência medida e os cenários (`modo-colaborador.md`, "Pedido de correção"). Diz à pessoa, numa
-frase, o que foi pedido e porquê, e continua a missão com o resto. Quando o pedido passar a `feito`,
-volta a correr a bateria. No **modo dono**, os pedidos novos dos colegas (frontend-admin → Pedidos de
-correção → "Copiar prompt") entram aqui como ficheiros de implementação.
+Os dois modos corrigem o código pelo mesmo fluxo. A diferença está na forma de provar que nada piora
+para as outras contas: no modo colaborador não há bancada local. Ver `modo-colaborador.md`, secção
+"Corrigir código" e [references/codigo-sem-regressao.md](references/codigo-sem-regressao.md). Só vira
+**pedido de correção** o que exige um dono do sistema (segredos, variáveis do servidor, serviços
+pagos, apagar dados de clientes).
 
-Modo dono — segue [references/codigo-sem-regressao.md](references/codigo-sem-regressao.md):
+Segue [references/codigo-sem-regressao.md](references/codigo-sem-regressao.md):
 1. Um ficheiro em `docs/implementations/` por correção, com a evidência medida e os cenários da
    bancada. Se 2 ou mais correções tocam o mesmo código, investiga primeiro e faz o quadro de
    sobreposição (`entregas.md`).
@@ -220,11 +226,13 @@ Modo dono — segue [references/codigo-sem-regressao.md](references/codigo-sem-r
    automáticos. As correções fazem-se **nesta conversa**, uma de cada vez, pela ordem do quadro de
    sobreposição.
 3. Valida com o código da worktree na bancada (`preparar_bancada.py <slug> --codigo-de <branch>`):
-   os cenários deste cliente e a **regressão das outras contas**.
+   os cenários deste cliente e a **regressão das outras contas**. No modo colaborador, a validação é
+   a da secção "Corrigir código" de `modo-colaborador.md`.
 4. Com as 5 provas passadas (e, nas categorias que sobem, com o "sim" da regra 6): graduação, merge,
    push e deploy pelo fluxo normal. Se o merge tiver
-   conflitos, resolve-os sozinho (`_guia-resolucao-conflitos.md`). Depois confirma que o código novo
-   está **dentro do container** de cada serviço tocado e corre a bateria `--prod` completa.
+   conflitos, resolve-os sozinho (`_guia-resolucao-conflitos.md`). Depois confirma que o deploy
+   chegou: `--prod-acao versao` tem de mostrar o commit publicado em cada serviço tocado (no modo
+   dono também se pode procurar o código no container). Por fim corre a bateria `--prod` completa.
 
 Volta à fase 5 se a correção de código abrir espaço para simplificar a configuração.
 
@@ -265,7 +273,7 @@ Segue [references/entrega-ao-cliente.md](references/entrega-ao-cliente.md):
 
 A missão acaba quando o agente **está na conta do cliente**, com os critérios ⚠ a passar na bateria
 `--prod` e na conversa real, e cada falha que sobra está registada como plan, com uma decisão do
-utilizador. No modo colaborador, um ⚠ que só uma correção de código resolve fica como pedido de
-correção aberto: a missão pára aí, com o estado do pedido no "Onde retomamos". A entrega fica para
-quando o pedido estiver `feito` e a bateria voltar a passar. Se o que falta depender só do cliente (dados, negócio, WhatsApp desligado), pára e diz
+utilizador. Só um ⚠ que exige um dono do sistema (segredos, variáveis do servidor, serviços pagos)
+fica como pedido de correção aberto: a missão pára aí, com o estado do pedido no "Onde retomamos".
+Se o que falta depender só do cliente (dados, negócio, WhatsApp desligado), pára e diz
 exatamente o que falta e a quem pedir.

@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter
 
 from app.core.config import settings
@@ -11,4 +13,5 @@ def health() -> dict:
         "status": "ok",
         "service": "executors",
         "env": settings.env,
+        "commit": os.getenv("RAILWAY_GIT_COMMIT_SHA") or None,
     }

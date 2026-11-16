@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -104,3 +105,9 @@ app.include_router(api_router)
 @app.get("/")
 async def read_root():
     return {"status": "ok"}
+
+
+@app.get("/version")
+async def version():
+    """Commit do deploy (o Railway define RAILWAY_GIT_COMMIT_SHA); público, só o hash."""
+    return {"commit": os.getenv("RAILWAY_GIT_COMMIT_SHA") or None}

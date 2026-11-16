@@ -6,6 +6,7 @@ Escreve cada verificação em linguagem simples (✅ / ❌ + o que fazer) e term
   MODO=colaborador  → sem Railway: tudo pelas rotas públicas com a conta de teste do login
 Sai com código 1 se faltar alguma coisa que impeça o modo colaborador.
 """
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -41,7 +42,31 @@ def main() -> int:
     dono = shutil.which("railway") is not None and not os.getenv("DIAG_MODO_COLABORADOR")
     print("ℹ️ Railway encontrado neste PC" if dono else "ℹ️ Sem Railway neste PC — modo colaborador")
 
-    # 3. conta de teste
+    # 3. ferramentas para configurar e corrigir código (Python já está, porque este script corre)
+    print(f"✅ Python {sys.version.split()[0]}")
+    em_falta = [m for m in ("requests", "pytest") if importlib.util.find_spec(m) is None]
+    if em_falta:
+        print(f"❌ Faltam pacotes do Python: {', '.join(em_falta)}. Correr: python -m pip install {' '.join(em_falta)}")
+        falta = True
+    else:
+        print("✅ Pacotes do Python (requests, pytest)")
+    nome, email = git("config", "user.name"), git("config", "user.email")
+    if nome and email:
+        print(f"✅ Git identificado como {nome} <{email}>")
+    else:
+        print('❌ O git não sabe o teu nome/email. Correr: git config --global user.name "<nome>" '
+              'e git config --global user.email "<email do GitHub>"')
+        falta = True
+    acesso_github = subprocess.run(["git", "ls-remote", "--heads", "origin", "main"], cwd=REPO,
+                                   capture_output=True, timeout=60).returncode == 0
+    print("✅ Acesso ao repositório no GitHub (a permissão de publicar confirma-se na 1.ª publicação)"
+          if acesso_github else "❌ Sem acesso ao repositório no GitHub: a tua conta tem de ser colaboradora")
+    falta = falta or not acesso_github
+    if em_falta:
+        print(f"MODO={'dono' if dono else 'colaborador'}")
+        return 1
+
+    # 4. conta de teste
     import prod_http
     try:
         conta = prod_http.executar({"agente": {}}, {"acao": "conta"})
