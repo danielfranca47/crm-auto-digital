@@ -10,6 +10,7 @@ import {
   Settings,
   LogOut,
   Layers,
+  Wrench,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: "/usuarios", label: "Usuários", icon: Users },
   { to: "/planos", label: "Planos", icon: Layers },
   { to: "/agentes", label: "Agentes e Prompts", icon: Bot },
+  { to: "/pedidos", label: "Pedidos de correção", icon: Wrench },
   { to: "/crescimento", label: "Crescimento", icon: TrendingUp },
   { to: "/financeiro", label: "Financeiro", icon: DollarSign },
   { to: "/configuracoes", label: "Configurações", icon: Settings },

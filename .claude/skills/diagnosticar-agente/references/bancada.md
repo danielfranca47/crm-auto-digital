@@ -117,6 +117,16 @@ Cuidados:
 - O worker real do WhatsApp é outro serviço (`worker backend-executors`). Para confirmar que um fix
   está ativo, procura-o nos dois serviços de executores.
 
+## Transporte http (modo colaborador)
+
+Quem não tem Railway trabalha só com o login da sua conta de teste: `preparar_bancada.py <slug>
+--colaborador` cria a bancada com `"transporte": "http"`, e o `simular.py` passa a usar as rotas
+públicas (`prod_http.py`): mesmas ações, mesma saída, mais `aplicar` (`--aplicar-prod`, com backup),
+`treino`, `mensagens`, `conta` e `pedido`/`pedidos`. Não há bancada local: tudo corre no Playground de
+produção dessa conta. O cliente simulado vem da rota `POST /api/playground/simulated-client`. Uma trava
+recusa qualquer bancada que não seja da conta do login. Guia completo:
+`configuracao-personalizada/references/modo-colaborador.md`.
+
 ## Desligar
 
 Pára os 3 backends no fim de cada sessão. As notificações de "comando falhou" desses processos de

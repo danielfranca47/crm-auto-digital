@@ -43,6 +43,7 @@ from routes import (
 )
 from routes import public
 from routes import admin_agents
+from routes import agent_fix_requests
 from routes import admin_billing
 from routes import bot_pause
 from routes import knowledge_ingest
@@ -323,6 +324,8 @@ app.include_router(spy_agent.router)                                # /api/spy-a
 app.include_router(collab_monitor.router)                           # /api/collab-monitor
 app.include_router(checkout.router)                                 # /checkout/efi/{offer_key}
 app.include_router(admin_agents.router)                             # /admin/agents/*
+app.include_router(agent_fix_requests.router)                       # /api/suporte/pedidos-correcao
+app.include_router(agent_fix_requests.admin_router)                 # /admin/pedidos-correcao
 app.include_router(admin_billing.router)                            # /admin/billing/*
 app.include_router(bot_pause.router)                                # /api/bot-pause/*
 # app.include_router(dashboard.router)

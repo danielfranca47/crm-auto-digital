@@ -7,6 +7,9 @@ Uso:
   python preparar_bancada.py <slug> --so-snapshot     → só lê de produção o perfil e a Base de Conhecimento
   python preparar_bancada.py <slug> --copiar-prod     → snapshot + aplica-o à conta de teste LOCAL (backends da bancada ligados)
   python preparar_bancada.py <slug> --codigo-de REF   → recopia o código de REF (branch/commit) para ambiente/codigo/
+  python preparar_bancada.py <slug> --colaborador [--agente ...] [--negocio ...] [--idioma ...] [--agente-tipo ...]
+        → modo colaborador: bancada só com a conta de teste do login (.claude/agentes/_acesso.json),
+          transporte http, sem ambiente local, sem Railway e sem .env; tira logo o snapshot
 
 Ambiente isolado: código de `main` em ambiente/codigo/, cópias dos bancos, .env reescritos para as
 portas da bancada (core 8101, crm 8100, executors 8102 por omissão) — não colide com backends de
@@ -204,6 +207,35 @@ def copiar_para_local(pasta: Path) -> None:
     print(f"informações do negócio → {n} campos")
 
 
+def bancada_colaborador(pasta: Path, a) -> None:
+    """Bancada do modo colaborador: a conta de trabalho é a do login; tudo por rotas públicas."""
+    import prod_http
+    conta = prod_http.executar({"agente": {}}, {"acao": "conta"})
+    email = prod_http.acesso()["email"]
+    for sub in ("configs", "tentativas", "referencias", "ambiente", "entrega"):
+        (pasta / sub).mkdir(parents=True, exist_ok=True)
+    bj = pasta / "bancada.json"
+    b = json.loads(bj.read_text(encoding="utf-8")) if bj.exists() else {}
+    b.update({
+        "slug": a.slug,
+        "transporte": "http",
+        "conta": {"email": email, "prod_user_id": conta["user_id"], "prod_ai_profile_id": conta["ai_profile_id"]},
+        "agente": b.get("agente") or {"nome": a.agente, "negocio": a.negocio, "idioma": a.idioma},
+        "agente_tipo": b.get("agente_tipo") or a.agente_tipo,
+        "prod": {"core_url": prod_http.CORE_URL, "crm_http_url": prod_http.CRM_URL},
+    })
+    bj.write_text(json.dumps(b, ensure_ascii=False, indent=1), encoding="utf-8")
+    for nome, conteudo in (("cenarios.json", "{}\n"), ("gerar_config.py", GERAR_CONFIG),
+                           ("README.md", README.format(nome=a.agente, slug=a.slug, email=email,
+                                                       uid=conta["user_id"], pid=conta["ai_profile_id"]))):
+        if not (pasta / nome).exists():
+            (pasta / nome).write_text(conteudo, encoding="utf-8")
+    print(f"bancada (colaborador): {pasta} — conta {conta['user_id']}, plano {conta['planos']}, "
+          f"ai_profile {conta['ai_profile_id'] or 'ainda não criado'}")
+    if conta["ai_profile_id"]:
+        snapshot(pasta)
+
+
 def main() -> None:
     import sys
     sys.stdout.reconfigure(encoding="utf-8")  # consola do Windows (cp1252)
@@ -220,6 +252,7 @@ def main() -> None:
     ap.add_argument("--copiar-prod", action="store_true")
     ap.add_argument("--codigo-de")
     ap.add_argument("--sem-ambiente", action="store_true")
+    ap.add_argument("--colaborador", action="store_true")
     ap.add_argument("--portas", default="8101,8100,8102", help="core,crm,executors — mudar se outra bancada já estiver ligada")
     a = ap.parse_args()
     pasta = REPO / ".claude" / "agentes" / a.slug
@@ -229,6 +262,8 @@ def main() -> None:
         return copiar_para_local(pasta)
     if a.codigo_de:
         return copiar_codigo(pasta, a.codigo_de)
+    if a.colaborador:
+        return bancada_colaborador(pasta, a)
     if not (a.email and a.prod_user_id and a.prod_ai_profile_id):
         raise SystemExit("para criar a bancada: --email, --prod-user-id e --prod-ai-profile-id")
     for sub in ("configs", "tentativas", "referencias", "ambiente"):

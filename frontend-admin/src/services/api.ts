@@ -80,7 +80,37 @@ async function crmPost<T>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function crmPatch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${CRM_BASE}${path}`, {
+    method: "PATCH",
+    headers: adminHeaders(),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+export type PedidoCorrecaoEstado = "novo" | "em_curso" | "feito" | "descartado";
+
+export type PedidoCorrecao = {
+  id: number;
+  user_id: number;
+  user_email: string | null;
+  titulo: string;
+  sintoma: string;
+  evidencia: string | null;
+  cenarios_json: string | null;
+  bancada: string | null;
+  estado: PedidoCorrecaoEstado;
+  nota_admin: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export type AdminStats = {
   total_users: number;
@@ -263,6 +293,10 @@ export const api = {
     ),
 
   getAgentsOverview: () => crmGet<AgentsOverview>("/admin/agents/overview"),
+  listPedidosCorrecao: (estado?: PedidoCorrecaoEstado) =>
+    crmGet<PedidoCorrecao[]>(`/admin/pedidos-correcao${estado ? `?estado=${estado}` : ""}`),
+  updatePedidoCorrecao: (id: number, body: { estado?: PedidoCorrecaoEstado; nota_admin?: string }) =>
+    crmPatch<PedidoCorrecao>(`/admin/pedidos-correcao/${id}`, body),
 
   getAgentsUsers: () => crmGet<AgentsUsers>("/admin/agents/users"),
 

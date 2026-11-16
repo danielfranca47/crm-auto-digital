@@ -69,6 +69,26 @@ entre parênteses.
 A conta de trabalho é **reutilizada** entre clientes. No início de cada missão tem de ficar limpa
 (fase 1): sobras de outro cliente iriam parar à exportação.
 
+## Dois modos: dono e colaborador
+
+**O primeiro comando de qualquer missão** é
+`python .claude/skills/diagnosticar-agente/scripts/verificar_ambiente.py`. Mostra à pessoa um
+checklist simples (o projeto atualizado, o login e o plano da conta de teste) e diz o modo:
+
+| | **Modo dono** (`MODO=dono`) | **Modo colaborador** (`MODO=colaborador`) |
+|---|---|---|
+| Quando | há Railway no PC (o Daniel) | não há Railway (colegas) — **nunca pedir Railway, `.env` nem acesso ao servidor** |
+| Acesso à produção | `railway ssh` | as rotas públicas, com o login da conta de teste (`_acesso.json`) |
+| Testes | bancada local e Playground de produção | **só o Playground de produção da conta de trabalho** (é de teste, não afeta ninguém) |
+| Cliente simulado | chave local | gerado pelo servidor |
+| Conversas de referência | CRM de produção ou WhatsApp Web | WhatsApp Web (no PC da pessoa) ou prints |
+| Código (fase 6) | corrige pelo fluxo de implementação | **não mexe em código**: envia um pedido de correção ao Daniel e continua |
+| Teste real (fase 7) | CRM e logs | CRM da conta de trabalho (mensagens do lead) |
+
+Tudo o que muda no modo colaborador está em
+[references/modo-colaborador.md](references/modo-colaborador.md). Se o checklist falhar, diz à pessoa
+a única coisa a fazer (ex.: "correr `git pull`", "pedir ao Daniel o plano Interno") e espera.
+
 ## Base reutilizada (não duplicar)
 
 Esta skill **orquestra**; o trabalho de cada fase vive noutros sítios. Lê o ficheiro indicado quando
@@ -86,6 +106,7 @@ chegares a essa fase.
 | **Corrigir código sem prejudicar as outras contas** | [references/codigo-sem-regressao.md](references/codigo-sem-regressao.md) |
 | **Teste com 1 conversa no WhatsApp real** | [references/whatsapp-real.md](references/whatsapp-real.md) |
 | **Exportar, importar e verificar a entrega** | [references/entrega-ao-cliente.md](references/entrega-ao-cliente.md) |
+| **Modo colaborador (sem Railway): acesso, comandos, pedidos de correção** | [references/modo-colaborador.md](references/modo-colaborador.md) |
 
 Na bancada, o `bancada.json` aponta `conta` para a **conta de trabalho** (é nela que os scripts leem,
 testam e aplicam). A conta do cliente fica registada à parte, em `cliente`
@@ -183,7 +204,13 @@ divergências: critério → o que o agente faz hoje → classe da triagem.
 3. O que continuar a falhar e a triagem disser que é código passa à fase 6.
 
 ### 6. Correções de código (só o que a configuração e o treinamento não resolvem)
-Segue [references/codigo-sem-regressao.md](references/codigo-sem-regressao.md):
+**Modo colaborador:** não se mexe em código. Envia um **pedido de correção** ao Daniel, com a
+evidência medida e os cenários (`modo-colaborador.md`, "Pedido de correção"). Diz à pessoa, numa
+frase, o que foi pedido e porquê, e continua a missão com o resto. Quando o pedido passar a `feito`,
+volta a correr a bateria. No **modo dono**, os pedidos novos dos colegas (frontend-admin → Pedidos de
+correção → "Copiar prompt") entram aqui como ficheiros de implementação.
+
+Modo dono — segue [references/codigo-sem-regressao.md](references/codigo-sem-regressao.md):
 1. Um ficheiro em `docs/implementations/` por correção, com a evidência medida e os cenários da
    bancada. Se 2 ou mais correções tocam o mesmo código, investiga primeiro e faz o quadro de
    sobreposição (`entregas.md`).
@@ -238,5 +265,7 @@ Segue [references/entrega-ao-cliente.md](references/entrega-ao-cliente.md):
 
 A missão acaba quando o agente **está na conta do cliente**, com os critérios ⚠ a passar na bateria
 `--prod` e na conversa real, e cada falha que sobra está registada como plan, com uma decisão do
-utilizador. Se o que falta depender só do cliente (dados, negócio, WhatsApp desligado), pára e diz
+utilizador. No modo colaborador, um ⚠ que só uma correção de código resolve fica como pedido de
+correção aberto: a missão pára aí, com o estado do pedido no "Onde retomamos". A entrega fica para
+quando o pedido estiver `feito` e a bateria voltar a passar. Se o que falta depender só do cliente (dados, negócio, WhatsApp desligado), pára e diz
 exatamente o que falta e a quem pedir.

@@ -8,6 +8,7 @@ import AdminDashboard from "@/pages/AdminDashboard";
 import AdminUsers from "@/pages/AdminUsers";
 import AdminInstances from "@/pages/AdminInstances";
 import AdminAgents from "@/pages/AdminAgents";
+import AdminPedidos from "@/pages/AdminPedidos";
 import AdminPlans from "@/pages/AdminPlans";
 import AdminGrowth from "@/pages/AdminGrowth";
 import AdminFinancial from "@/pages/AdminFinancial";
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/usuarios" element={<AdminUsers />} />
             <Route path="/planos" element={<AdminPlans />} />
             <Route path="/agentes" element={<AdminAgents />} />
+            <Route path="/pedidos" element={<AdminPedidos />} />
             <Route path="/crescimento" element={<AdminGrowth />} />
             <Route path="/financeiro" element={<AdminFinancial />} />
             <Route path="/configuracoes" element={<AdminSettings />} />
