@@ -471,6 +471,17 @@ def test_primeiro_pedido_fora_da_tabela_ou_aceitar_a_alternativa_nao_passa():
     )
     assert repetida.next_action == "reply"
 
+    # nem o pedaço do pedido original que a 2.ª decisão da Recepção repõe (requeue)
+    requeue = _reply()
+    _apply_off_table_insistence_guard(
+        requeue,
+        _context_insiste(
+            "queria marcar uma massagem clássica de 90 minutos para quinta às 15h.",
+            "Olá, queria marcar uma massagem clássica de 90 minutos para quinta às 15h.",
+        ),
+    )
+    assert requeue.next_action == "reply"
+
 
 def test_bloco_da_confirmacao_pede_a_linha_da_tabela():
     from app.services.decision_engine import _confirmation_block

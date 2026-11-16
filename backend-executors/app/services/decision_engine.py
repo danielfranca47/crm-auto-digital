@@ -2482,7 +2482,16 @@ def _apply_off_table_insistence_guard(
     now, *earlier = _lead_texts(context)
     if not meeting_proposal.off_table_request(rows, now):
         return
-    if not any(meeting_proposal.off_table_request(rows, text) for text in earlier if text != now):
+
+    def same_message(text: str) -> bool:
+        # a 2.ª decisão da Recepção volta a pôr no histórico um pedaço do pedido original como
+        # mensagem do lead (requeue) — em teste local isso contava como "já tinha pedido"
+        a, b = " ".join(now.lower().split()), " ".join(text.lower().split())
+        return a in b or b in a
+
+    if not any(
+        meeting_proposal.off_table_request(rows, text) for text in earlier if not same_message(text)
+    ):
         return
     trace = decision.decision_trace or {}
     trace["meeting_scheduled"] = False
