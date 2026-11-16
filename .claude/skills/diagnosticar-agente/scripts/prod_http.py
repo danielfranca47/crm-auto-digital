@@ -95,8 +95,17 @@ def _call(method: str, url: str, tok: str, body=None, timeout: int = 300):
     return r.json() if r.content else None
 
 
+def versao(b: dict) -> dict:
+    """Commit em produção do crm, core e executors (GET /version do CRM, público, sem login)."""
+    _, crm = urls(b)
+    r = requests.get(f"{crm}/version", headers=UA, timeout=30)
+    return r.json() if r.status_code == 200 else {"_erro": r.status_code, "_corpo": r.text[:200]}
+
+
 def executar(b: dict, args: dict) -> dict:
     """Mesmas ações e mesma saída que prod_turno.py, mais as do modo colaborador (ver o topo)."""
+    if args["acao"] == "versao":
+        return versao(b)
     tok, uid = login(b)
     _trava(b, uid)
     core, crm = urls(b)

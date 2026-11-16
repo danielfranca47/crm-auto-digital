@@ -376,3 +376,10 @@ app.mount("/public", public_app)
 @app.get("/")
 def root():
     return {"status": "API CRM rodando 🎯"}
+
+
+@app.get("/version")
+def version():
+    """Commit em produção do crm, core e executors (público; só hashes)."""
+    from services.deploy_version import versoes
+    return versoes()
