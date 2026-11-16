@@ -31,7 +31,7 @@ profissional (isso continua sendo uma [limitação conhecida do MVP](agenda.md),
 ### Formato do conteúdo — `structured_v1` vs. texto livre
 
 `content_text` de um item `service_pricing_table` pode ser:
-- **JSON estruturado** (`{"format": "structured_v1", "rows": [{name, duration_minutes, price, description?}]}`)
+- **JSON estruturado** (`{"format": "structured_v1", "rows": [{nome, duracaoMinutos, preco, descricao?}]}`)
 - **Texto livre legado** — qualquer conteúdo anterior a este formato; continua funcionando sem
   conversão forçada (a UI detecta e abre em modo "Texto livre" automaticamente)
 

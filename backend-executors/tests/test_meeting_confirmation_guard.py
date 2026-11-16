@@ -255,3 +255,50 @@ def test_bloco_pede_servico_e_duracao_em_vez_de_confirmar():
     prompt = _build_child_prompt_agendamento(_context_tabela(), "Pode ser sim, marca aí!", booked)
     assert "FALTA SABER O SERVIÇO E A DURAÇÃO" in prompt
     assert "MARCAÇÃO JÁ GRAVADA NESTE TURNO" not in prompt
+
+
+# --- duração já conhecida passa para a marcação ------------------------------------------
+
+def test_known_duration_le_o_lead_a_proposta_e_ignora_o_que_nao_esta_na_tabela():
+    assert mp.known_duration(["Sim, pode confirmar", "Quero a de 90 minutos"], "", TABELA) == (90, "lead_earlier")
+    assert mp.known_duration(["Sim"], "Posso marcar a relaxante de 90 min às 14h?", TABELA) == (90, "proposal")
+    assert mp.known_duration(["Afinal 60 min", "Quero 90 minutos"], "", TABELA) == (60, "lead_now")
+    assert mp.known_duration(["Sim, chego 10 min antes"], "", TABELA) == (None, None)
+    assert mp.known_duration(["Sim"], "Tenho a de 60 min ou a de 90 min às 14h", TABELA) == (None, None)
+    assert mp.known_duration(["Quero 45 min"], "", "") == (45, "lead_now")
+
+
+def _context_90(inbound="Sim, pode confirmar"):
+    context = _context(inbound=inbound)
+    context["history"] = [
+        {"model": "inbound", "body": "Olá, queria uma massagem relaxante de 90 minutos"},
+        {"model": "outbound", "body": "Tenho depois de amanhã às 11h. Pode ser?"},
+    ]
+    context["knowledge_items"] = {"service_pricing_table": TABELA}
+    return context
+
+
+def test_guard_preenche_a_duracao_que_o_lead_disse_e_a_filha_nao_devolveu():
+    decision = _decision(_iso(2, "11:00"))
+    _apply_meeting_confirmation_guard(decision, _context_90())
+    trace = decision.decision_trace
+    assert trace["meeting_scheduled"] is True
+    assert trace["child_signals_structured"]["meeting_duration_minutes"] == 90
+    assert trace["meeting_confirmation_guard"]["duration_filled"] == 90
+    assert trace["meeting_confirmation_guard"]["duration_source"] == "lead_earlier"
+
+
+def test_guard_mantem_a_duracao_da_filha_e_regista_a_do_lead():
+    decision = _decision(_iso(2, "11:00"))
+    decision.decision_trace["child_signals_structured"]["meeting_duration_minutes"] = 60
+    _apply_meeting_confirmation_guard(decision, _context_90())
+    trace = decision.decision_trace
+    assert trace["child_signals_structured"]["meeting_duration_minutes"] == 60
+    assert trace["meeting_confirmation_guard"]["duration_lead"] == 90
+    assert "duration_filled" not in trace["meeting_confirmation_guard"]
+
+
+def test_guard_sem_duracao_dita_deixa_a_por_omissao():
+    decision = _decision(_iso(2, "11:00"))
+    _apply_meeting_confirmation_guard(decision, _context())
+    assert "meeting_duration_minutes" not in decision.decision_trace["child_signals_structured"]

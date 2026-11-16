@@ -291,6 +291,37 @@ def missing_duration(lead_texts: List[str], proposal_text: str, pricing_table: s
     return durations
 
 
+def known_duration(
+    lead_texts: List[str], proposal_text: str, pricing_table: str
+) -> Tuple[Optional[int], Optional[str]]:
+    """Duração (minutos) que já se sabe e de onde veio: `lead_now` (a mensagem atual), `proposal`
+    (a proposta aceite, só se tiver uma duração) ou `lead_earlier` (mensagens anteriores do lead,
+    mais recente primeiro). Com tabela de serviços, só vale uma duração que esteja nela ("chego
+    10 min antes" não é a sessão).
+
+    Em teste real o lead pediu "90 minutos", o recibo dizia 90 min e a marcação ficou com os 60
+    da duração por omissão: a Filha não devolveu meeting_duration_minutes."""
+    offered = offered_durations(pricing_table)
+
+    def valid(minutes: Optional[int]) -> Optional[int]:
+        return minutes if minutes is not None and (not offered or minutes in offered) else None
+
+    texts = list(lead_texts)
+    in_proposal = {
+        int(m.group(1)) for m in requested_slot._DURATION_MIN_RE.finditer(proposal_text or "")
+    }
+    sources = [("lead_now", texts[:1])]
+    if len(in_proposal) == 1:
+        sources.append(("proposal", [proposal_text]))
+    sources.append(("lead_earlier", texts[1:]))
+    for source, messages in sources:
+        for text in messages:
+            minutes = valid(requested_slot.requested_duration([text]))
+            if minutes is not None:
+                return minutes, source
+    return None, None
+
+
 def describe(option: ProposedOption) -> str:
     """"sexta-feira, 30/10, às 11h com a Val" — a forma como o facto é dito à Filha."""
     start = option.start

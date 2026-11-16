@@ -1956,19 +1956,49 @@ def _confirmation_fact(context: Dict[str, Any]) -> meeting_proposal.AcceptedSlot
     return meeting_proposal.accepted_slot(inbound_now, proposal, tz_name=tz_name, professionals=names)
 
 
+def _lead_texts(context: Dict[str, Any]) -> List[str]:
+    """Mensagem atual do lead + as anteriores dele, da mais recente para a mais antiga."""
+    return [_extract_message_text(context)] + [
+        str(item.get("body") or item.get("text") or "")
+        for item in reversed(context.get("history") or [])
+        if str(item.get("model") or "").lower() == "inbound"
+    ]
+
+
+def _pricing_table(context: Dict[str, Any]) -> str:
+    return str((context.get("knowledge_items") or {}).get("service_pricing_table") or "")
+
+
 def _missing_booking_duration(
     context: Dict[str, Any], accepted: meeting_proposal.AcceptedSlot
 ) -> Optional[List[int]]:
     """Durações por escolher antes de gravar (ver meeting_proposal.missing_duration)."""
     if accepted.option is None:
         return None
-    lead_texts = [_extract_message_text(context)] + [
-        str(item.get("body") or item.get("text") or "")
-        for item in context.get("history") or []
-        if str(item.get("model") or "").lower() == "inbound"
-    ]
-    pricing = str((context.get("knowledge_items") or {}).get("service_pricing_table") or "")
-    return meeting_proposal.missing_duration(lead_texts, accepted.proposal_text, pricing)
+    return meeting_proposal.missing_duration(_lead_texts(context), accepted.proposal_text, _pricing_table(context))
+
+
+def _fill_known_duration(
+    signals: Dict[str, Any], guard_trace: Dict[str, Any], context: Dict[str, Any], proposal_text: str
+) -> Optional[int]:
+    """Sem meeting_duration_minutes da Filha, a marcação ficava com a duração por omissão mesmo
+    quando o lead já a tinha dito (ver meeting_proposal.known_duration). A da Filha, quando vem,
+    fica — foi ela que escreveu o recibo; uma discordância só fica no rasto."""
+    known, source = meeting_proposal.known_duration(_lead_texts(context), proposal_text, _pricing_table(context))
+    if known is None:
+        return None
+    try:
+        given = int(signals.get("meeting_duration_minutes") or 0)
+    except (TypeError, ValueError):
+        given = 0
+    if given > 0:
+        if given != known:
+            guard_trace["duration_lead"] = known
+        return None
+    signals["meeting_duration_minutes"] = known
+    guard_trace["duration_filled"] = known
+    guard_trace["duration_source"] = source
+    return known
 
 
 def _build_meeting_already_booked_block(
@@ -2332,6 +2362,15 @@ def _apply_meeting_confirmation_guard(
     trace["meeting_confirmation_guard"] = result.trace
     decision.decision_trace = trace
     action = result.trace.get("action")
+    if not result.blocked:
+        filled = _fill_known_duration(signals, result.trace, context, accepted.proposal_text)
+        if filled is not None:
+            trace["child_signals_structured"] = signals
+            (logger or logging.getLogger(__name__)).info(
+                "event=meeting_duration_filled minutes=%s source=%s",
+                filled,
+                result.trace.get("duration_source"),
+            )
     if action in ("ok", "skip"):
         return
     signals["meeting_datetime_candidate"] = result.candidate
