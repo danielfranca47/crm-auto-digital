@@ -65,7 +65,17 @@ em "Ajustes Possíveis".
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | (a registar) | leitura dos horários por consenso + temperature 0 + testes + docs |
+| 1 | `f395c22` | leitura dos horários por consenso + temperature 0 + testes + docs |
+
+### Relatório da Fase 1 — o que mudou na prática
+
+O sistema lê os horários dos terapeutas a partir do texto do perfil com a ajuda da IA. Antes lia uma
+vez só: se essa leitura viesse errada (como quando "esqueceu" a terça da Val), o erro ficava guardado
+e todos os clientes ouviam "à terça não há atendimento" até o serviço reiniciar. Agora lê duas vezes
+ao mesmo tempo (sem demorar mais) e só guarda quando as duas dizem o mesmo; se discordarem, lê uma
+terceira para desempatar. Se nem assim houver acordo, não guarda nada e o agente confere pelo texto,
+tentando outra vez na mensagem seguinte. Também passou a ler de forma "fria" (sem criatividade), o que
+torna as leituras mais iguais entre si.
 
 ---
 
@@ -75,15 +85,23 @@ em "Ajustes Possíveis".
 - [x] `pytest backend-executors/tests` — 531 passaram (16/11/2026; `scripts/` já falhava em `main`)
 
 ### Cenário B1 — Bancada: terças da Val aceites
-- [ ] `p-ruben` (amanhã 11h = terça) — gravado terça 11h
-- [ ] `p-joaquim` (amanhã 11h = terça) — gravado terça 11h
-- [ ] `pos-marcacao` — remarcação à terça sem "não temos atendimento" e sem gravar sábado
+Bancada isolada (código da worktree, portas 8110–8112, snapshot dos bancos de `ambiente/`, perfil
+local 5 = c14); segunda 16/11, por isso "amanhã" = terça 17/11. Tentativas `20261116-145x-CONSENSO-*`.
+- [x] `p-ruben` (amanhã 11h = terça) — gravado ter 17/11 11h com a Val
+- [x] `p-joaquim` (amanhã 11h = terça) — terça 11h aceite com a Val ("depois das 19h" recusado, propôs 16h);
+  não chegou a gravar porque o cliente simulado parou no "Posso confirmar?" (redação já conhecida, não é horário)
+- [x] `pos-marcacao` — terça 14h gravada; remarcação para qui 19/11 15h gravada; nenhum sábado
+- **Validado em:** 16/11/2026
 
 ### Cenário B2 — Medição das leituras (20× o texto c14, sem cache)
-- [ ] 20/20 tabelas com Val seg–sáb 11–17h e Daniel seg–sex 11–19h30; contar quantas pediram 3.ª leitura
+- [x] 20/20 tabelas com Val seg–sáb 11–17h e Daniel seg–sex 11–19h30; 0 precisaram da 3.ª leitura
+  (40 leituras com `temperature=0`, todas iguais)
+- **Validado em:** 16/11/2026
 
 ### Cenário B3 — Log
-- [ ] `event=professional_hours_extracted ... reads=2 agreed=true` no log do executors da bancada
+- [x] `event=professional_hours_extracted hash=5fab7b849fec reads=2 agreed=true` com Val seg–sáb e
+  Daniel seg–sex (mesmo hash do caso original)
+- **Validado em:** 16/11/2026
 
 ---
 
