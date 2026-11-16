@@ -277,6 +277,33 @@ def ensure_followup_reconcile_guard_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def ensure_agent_fix_requests_table(conn: sqlite3.Connection) -> None:
+    """Pedidos de correção do sistema enviados pela skill de configuração de agentes (idempotente)."""
+    cur = conn.cursor()
+    cur.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS agent_fix_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            user_email TEXT,
+            titulo TEXT NOT NULL,
+            sintoma TEXT NOT NULL,
+            evidencia TEXT,
+            cenarios_json TEXT,
+            bancada TEXT,
+            estado TEXT NOT NULL DEFAULT 'novo'
+                CHECK (estado IN ('novo','em_curso','feito','descartado')),
+            nota_admin TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_agent_fix_requests_user ON agent_fix_requests(user_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_agent_fix_requests_estado ON agent_fix_requests(estado, created_at);
+        """
+    )
+
+
 def ensure_notifications_table(conn: sqlite3.Connection) -> None:
     """Cria tabela de notificações in-app por usuário (idempotente)."""
     cur = conn.cursor()
@@ -1356,6 +1383,9 @@ def init_db() -> None:
 
         # Tabela de training do playground
         ensure_playground_training_table(conn)
+
+        # Pedidos de correção da skill de configuração de agentes
+        ensure_agent_fix_requests_table(conn)
 
         # Agente Espião
         ensure_spy_agent_tables(conn)

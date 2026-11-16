@@ -1,7 +1,8 @@
 """Acesso à produção pelas rotas públicas, com o login da própria conta (sem Railway, sem .env).
 
 É o transporte `"http"` do `bancada.json` (modo colaborador). Faz as mesmas ações que o
-`prod_turno.py` faz dentro do container, com o mesmo formato de saída, e mais `aplicar` e `treino`.
+`prod_turno.py` faz dentro do container, com o mesmo formato de saída, e mais `aplicar`, `treino`, `mensagens`, `conta`
+e `pedido`/`pedidos` (pedidos de correção para o Daniel).
 
 Credenciais: `.claude/agentes/_acesso.json` = {"email": ..., "senha": ...} (fora do git). A senha e
 o token nunca são impressos.
@@ -95,7 +96,7 @@ def _call(method: str, url: str, tok: str, body=None, timeout: int = 300):
 
 
 def executar(b: dict, args: dict) -> dict:
-    """Mesmas ações e mesma saída que prod_turno.py, mais `aplicar` e `treino`."""
+    """Mesmas ações e mesma saída que prod_turno.py, mais as do modo colaborador (ver o topo)."""
     tok, uid = login(b)
     _trava(b, uid)
     core, crm = urls(b)
@@ -143,6 +144,12 @@ def executar(b: dict, args: dict) -> dict:
         if op == "zerar":
             return _call("DELETE", f"{crm}/api/playground/training", tok)
         return {"_erro": "op desconhecida", "_corpo": op}
+    if acao == "pedido":
+        # pedido de correção do sistema para o Daniel (o que a configuração não resolve)
+        campos = ("titulo", "sintoma", "evidencia", "cenarios_json", "bancada")
+        return _call("POST", f"{crm}/api/suporte/pedidos-correcao", tok, {k: args.get(k) for k in campos}, timeout=60)
+    if acao == "pedidos":
+        return _call("GET", f"{crm}/api/suporte/pedidos-correcao", tok)
     if acao == "mensagens":
         return _call("GET", f"{crm}/api/assistente-ia/messages/{args['lead_id']}", tok)
     if acao == "conta":

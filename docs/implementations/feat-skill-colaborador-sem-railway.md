@@ -97,7 +97,7 @@ página `AdminPedidos.tsx` no frontend-admin; leitura pelo lado do Daniel na ski
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | transporte http nos scripts da skill, `verificar_ambiente.py`, `preparar_bancada.py --colaborador` |
+| 1 | `16a6cda` | transporte http nos scripts da skill, `verificar_ambiente.py`, `preparar_bancada.py --colaborador` |
 
 ### Relatório da Fase 2 — o que mudou na prática
 A skill já consegue trabalhar sem Railway: com o email e a senha da conta de teste, lê e muda o perfil (com
