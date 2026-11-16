@@ -83,7 +83,10 @@ página `AdminPedidos.tsx` no frontend-admin; leitura pelo lado do Daniel na ski
 - [ ] a mesma bateria numa conta de teste de produção, sem `railway` no PATH, dá as mesmas rotas e categorias que pelo transporte `railway`
 
 ### Cenário C4 — Pedidos de correção
-- [ ] a skill cria um pedido; o Daniel vê-o e muda-lhe o estado no frontend-admin; a skill vê o estado novo
+- [x] a skill cria um pedido; o Daniel vê-o e muda-lhe o estado no frontend-admin; a skill vê o estado novo
+  (16/11/2026, local, por API: `--prod-acao pedido` → id 1 `novo`; `GET/PATCH /admin/pedidos-correcao` com
+  JWT admin → `feito` + nota; `--prod-acao pedidos` vê `feito`; sem token → 401. Página `AdminPedidos.tsx`
+  validada por `tsc -b`; o desenho no browser não foi visto)
 
 ---
 
@@ -104,3 +107,25 @@ A skill já consegue trabalhar sem Railway: com o email e a senha da conta de te
 cópia de segurança), corre conversas de teste com um cliente simulado gerado pelo próprio sistema e limpa as
 marcações de teste. Se a bancada apontar para outra conta que não a do login, recusa. Falta pôr a skill a
 usar este modo sozinha (Fase 3) e o caminho para pedir correções ao Daniel (Fase 4).
+
+### Commits Fase 4 (feita antes da 3: a skill precisa da rota de pedidos)
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | `9f10942` | tabela, serviço e rotas dos pedidos de correção; página no frontend-admin; ações `pedido`/`pedidos` |
+
+### Relatório da Fase 4 — o que mudou na prática
+Quando a configuração não chega, a skill do colega envia um pedido de correção ao sistema, com a evidência.
+O Daniel vê-o no painel admin ("Pedidos de correção"), copia um prompt pronto para a sua conversa do Claude e
+marca o estado; a skill do colega vê o estado e continua quando estiver "feito".
+
+### Commits Fase 3
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(a registar)_ | skill `configuracao-personalizada` escolhe o modo sozinha; `modo-colaborador.md`; docs da bancada e guia da equipa sem Railway |
+
+### Relatório da Fase 3 — o que mudou na prática
+O primeiro passo da skill é um checklist do PC. Sem Railway, ela entra no modo colaborador: pede só o email e a
+senha da conta de teste, monta a bancada pelas rotas públicas, testa no Playground dessa conta, e o que é
+código vira pedido de correção. Nunca pede Railway, chaves nem acesso ao servidor.

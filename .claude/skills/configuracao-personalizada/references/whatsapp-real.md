@@ -58,7 +58,7 @@ quem é a sessão. Nunca escrevas para outro contacto que não seja o número da
 | Onde | O quê |
 |---|---|
 | CRM (produção, só leitura) | o lead novo, as mensagens, a categoria e o estágio, `bot_disabled` |
-| `railway logs -s "worker backend-executors"` | a decisão da Mãe, a fase, as falhas da IA, as novas tentativas; o backend-crm não regista eventos de negócio no stdout |
+| `railway logs -s "worker backend-executors"` (só modo dono; no modo colaborador, `--prod-acao mensagens`) | a decisão da Mãe, a fase, as falhas da IA, as novas tentativas; o backend-crm não regista eventos de negócio no stdout |
 | Marcação / pagamento / handoff | o que o objetivo pede foi gravado com os dados aceites pelo cliente (dia, hora, serviço, valor) |
 | Efeitos secundários | o evento no Google Calendar, os lembretes agendados (os jobs de follow-up), a notificação ao profissional ou vendedor |
 | O telemóvel de teste | o texto que chegou é o mesmo que o CRM registou; não houve mensagens duplicadas nem cortadas |

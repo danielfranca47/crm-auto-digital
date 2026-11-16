@@ -8,7 +8,7 @@ pronto a preencher. Não faças perguntas uma a uma.
 
 | # | O quê | Obrigatório? | Se faltar |
 |---|---|---|---|
-| 1 | **Conta de trabalho**: o email da conta de teste de produção do colaborador, onde o agente vai ser montado e testado | sim | perguntar; sem ela não há onde configurar. Nunca usar a conta de um cliente como conta de trabalho |
+| 1 | **Conta de trabalho**: o email da conta de teste de produção do colaborador, onde o agente vai ser montado e testado | sim | perguntar; sem ela não há onde configurar. Nunca usar a conta de um cliente como conta de trabalho. **Modo colaborador:** também a senha dessa conta (ver `modo-colaborador.md`, secção 1) |
 | 1b | **Cliente**: o nome da empresa e, se já tiver conta, o email dela (só para ler o que tem hoje e para a entrega) | o nome, sim; o email, se existir | perguntar se o cliente já tem conta; se não tiver, a conta é criada na entrega (fase 8) |
 | 2 | **Como o agente deve atender**: o objetivo e o estilo ("da abordagem até à marcação confirmada", "até pagar", "até passar ao vendedor") | sim | perguntar o objetivo final da conversa e o que **não** pode acontecer |
 | 3 | **Referências do atendimento bom**: os **números de telefone** de 2–5 conversas que correram bem (preferido), prints ou um prompt descritivo | pelo menos uma | pedir os números; explicar que é a forma mais fiel |

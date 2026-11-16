@@ -7,6 +7,8 @@ ao serviço `backend-crm`, com `sqlite3` aberto com `mode=ro`. Procura o lead pe
 dígitos, com e sem indicativo) na tabela de leads, e as mensagens desse lead. Confirma os nomes de
 tabelas e colunas com `PRAGMA table_info` antes da consulta. Não assumas o schema de memória.
 
+Sem Railway (modo colaborador), esta leitura não existe: vai direto ao WhatsApp Web ou aos prints.
+
 As conversas feitas **à mão** no WhatsApp normalmente não estão no CRM. Nesse caso, vai ao WhatsApp
 Web.
 
