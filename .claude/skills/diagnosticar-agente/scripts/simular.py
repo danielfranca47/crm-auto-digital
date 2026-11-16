@@ -9,6 +9,12 @@ Uso (<pasta> = .claude/agentes/<slug>):
   python simular.py <pasta> --aplicar configs/cNN.json      # PUT /ai-profiles/me na conta de teste LOCAL
   python simular.py <pasta> --perfil [campo ...]            # perfil LOCAL
   python simular.py <pasta> --prod-acao <acao> [json]       # perfil|conhecimento|sync|limpar em produção (só leitura, exceto limpar)
+  python simular.py <pasta> --aplicar-prod configs/cNN.json # só transporte http: backup + PATCH do perfil da conta do login
+
+Transporte (bancada.json "transporte"): "railway" (omissão — railway ssh, PC do dono) ou "http"
+(modo colaborador — rotas públicas com o login de .claude/agentes/_acesso.json; ver prod_http.py).
+Em "http" tudo corre no Playground de produção da conta de teste do login e o cliente simulado é
+gerado pelo servidor; não é preciso Railway nem .env.
 
 --prod usa o Playground de PRODUÇÃO da conta: nada é enviado por WhatsApp; as marcações
 [Playground] do lead são apagadas no fim.
@@ -57,8 +63,16 @@ def token(b: dict) -> str:
 
 # ---------------------------------------------------------------- produção (railway ssh)
 
+def http(b: dict) -> bool:
+    return b.get("transporte") == "http"
+
+
 def prod(b: dict, args: dict) -> dict:
-    """Corre prod_turno.py dentro do container do backend-core e devolve o RESULT."""
+    """Corre prod_turno.py dentro do container do backend-core e devolve o RESULT (ou, no transporte
+    http, a mesma ação pelas rotas públicas)."""
+    if http(b):
+        import prod_http  # mesmo diretório
+        return prod_http.executar(b, {"ai_profile_id": b["conta"].get("prod_ai_profile_id"), **args})
     args = {"user_id": b["conta"]["prod_user_id"], "email": b["conta"]["email"],
             "ai_profile_id": b["conta"]["prod_ai_profile_id"], "crm_url": b["prod"]["crm_url"], **args}
     s = base64.b64encode((AQUI / "prod_turno.py").read_bytes()).decode()
@@ -98,8 +112,18 @@ def _llm_key(pasta: Path) -> str:
     return re.search(r"^LLM_API_KEY=(.+)$", env.read_text(encoding="utf-8"), re.M).group(1).strip()
 
 
+def _tem_llm_key(pasta: Path) -> bool:
+    try:
+        return bool(_llm_key(pasta))
+    except (OSError, AttributeError):
+        return False
+
+
 def cliente_ia(pasta: Path, b: dict, persona: str, conversa: list[tuple[str, str]]) -> str:
     """Próxima mensagem do cliente simulado (gpt-4o-mini) a partir da persona do cenário."""
+    if http(b) or not _tem_llm_key(pasta):
+        import prod_http  # gerada no servidor: sem chave local
+        return prod_http.cliente_simulado(b, persona, conversa)
     ag = b["agente"]
     hist = "\n".join(f"{'CLIENTE' if q == 'c' else ag['nome'].upper()}: {t}" for q, t in conversa)
     prompt = (
@@ -120,6 +144,7 @@ def cliente_ia(pasta: Path, b: dict, persona: str, conversa: list[tuple[str, str
 
 def simular(pasta: Path, cenario: str, rotulo: str, em_prod: bool = False) -> Path:
     b = bancada(pasta)
+    em_prod = em_prod or http(b)  # no modo colaborador não há bancada local
     c = json.loads((pasta / "cenarios.json").read_text(encoding="utf-8"))[cenario]
     persona = c.get("persona")
     msgs = [c["primeira"]] if persona else list(c["mensagens"])
@@ -269,6 +294,23 @@ def aplicar(pasta: Path, patch_path: str) -> None:
     r.raise_for_status()
 
 
+def aplicar_prod(pasta: Path, patch_path: str) -> None:
+    """Transporte http: backup do perfil da conta do login e PATCH com o configs/cNN.json."""
+    b = bancada(pasta)
+    if not http(b):
+        raise SystemExit("no transporte railway usa aplicar_producao.sh")
+    atual = prod(b, {"acao": "perfil"})
+    if not isinstance(atual, dict) or "_erro" in atual:
+        raise SystemExit(f"backup falhou — nada aplicado: {atual}")
+    (pasta / "ambiente").mkdir(parents=True, exist_ok=True)
+    backup = pasta / "ambiente" / f"prod_backup_{datetime.now():%Y%m%d-%H%M%S}.json"
+    backup.write_text(json.dumps(atual, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"backup: {backup}")
+    patch = json.loads((pasta / patch_path).read_text(encoding="utf-8"))
+    r = prod(b, {"acao": "aplicar", "patch": patch})
+    print("ERRO" if "_erro" in r else "OK", r)
+
+
 def perfil(pasta: Path) -> dict:
     b = bancada(pasta)
     r = requests.get(f"{b['local']['core']}/ai-profiles/me", headers={"Authorization": f"Bearer {token(b)}"}, timeout=30)
@@ -278,6 +320,16 @@ def perfil(pasta: Path) -> dict:
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")  # consola do Windows (cp1252) não imprime ≠, emojis
+    sys.stderr.reconfigure(encoding="utf-8")
+    import prod_http
+
+    def _erro_simples(tipo, valor, tb):  # problemas de acesso: uma frase para o colaborador, sem traceback
+        if issubclass(tipo, prod_http.AcessoErro):
+            print(f"❌ {valor}", file=sys.stderr)
+            sys.exit(2)
+        sys.__excepthook__(tipo, valor, tb)
+
+    sys.excepthook = _erro_simples
     pasta = Path(sys.argv[1]).resolve()
     a = sys.argv[2:]
     em_prod = "--prod" in a
@@ -287,6 +339,8 @@ if __name__ == "__main__":
     elif a[0] == "--perfil":
         p = perfil(pasta)
         print(json.dumps({k: p.get(k) for k in a[1:]} if len(a) > 1 else p, ensure_ascii=False, indent=1))
+    elif a[0] == "--aplicar-prod":
+        aplicar_prod(pasta, a[1])
     elif a[0] == "--prod-acao":
         print(json.dumps(prod(bancada(pasta), {"acao": a[1], **(json.loads(a[2]) if len(a) > 2 else {})}), ensure_ascii=False, indent=1))
     elif a[0] == "--resumo":

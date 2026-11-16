@@ -71,13 +71,13 @@ página `AdminPedidos.tsx` no frontend-admin; leitura pelo lado do Daniel na ski
 ## Checks de Validação
 
 ### Cenário C1 — Rota do cliente simulado
-- [ ] `pytest tests/` do backend-crm passa
-- [ ] chamada real à rota (local) devolve uma fala coerente com a persona e `fim: true` no fim
+- [x] `pytest tests/` do backend-crm passa (16/11/2026: 294 passed)
+- [x] chamada real à rota (local) devolve uma fala coerente com a persona e `fim: true` no fim (16/11/2026: 5 chamadas no cenário p-marcar)
 
 ### Cenário C2 — Bateria sem Railway
-- [ ] bancada `transporte: http` corre 2 cenários contra o backend local, com o cliente simulado do servidor
-- [ ] a trava recusa uma bancada cujo `prod_user_id` não é o da conta com login
-- [ ] `verificar_ambiente.py` num PC sem `.env` e sem `railway` dá o checklist em linguagem simples
+- [x] bancada `transporte: http` corre cenários contra o backend local, com o cliente simulado do servidor (16/11/2026: p-marcar, 5 turnos, marcação criada e limpa; `--aplicar-prod` com backup; `treino listar`)
+- [x] a trava recusa uma bancada cujo `prod_user_id` não é o da conta com login (16/11/2026: conta 4 vs. login 15 → recusa, código 2)
+- [x] `verificar_ambiente.py` num PC sem `.env` e sem `railway` dá o checklist em linguagem simples (16/11/2026: `DIAG_MODO_COLABORADOR=1`, com e sem `_acesso.json`)
 
 ### Cenário C3 — Produção (depois do deploy)
 - [ ] a mesma bateria numa conta de teste de produção, sem `railway` no PATH, dá as mesmas rotas e categorias que pelo transporte `railway`
@@ -91,4 +91,16 @@ página `AdminPedidos.tsx` no frontend-admin; leitura pelo lado do Daniel na ski
 
 | # | Commit | O que foi implementado |
 |---|---|---|
-| 1 | _(a registar)_ | rota e serviço do cliente simulado + testes |
+| 1 | `b5b79c6` | rota e serviço do cliente simulado + testes |
+
+### Commits Fase 2
+
+| # | Commit | O que foi implementado |
+|---|---|---|
+| 1 | _(a registar)_ | transporte http nos scripts da skill, `verificar_ambiente.py`, `preparar_bancada.py --colaborador` |
+
+### Relatório da Fase 2 — o que mudou na prática
+A skill já consegue trabalhar sem Railway: com o email e a senha da conta de teste, lê e muda o perfil (com
+cópia de segurança), corre conversas de teste com um cliente simulado gerado pelo próprio sistema e limpa as
+marcações de teste. Se a bancada apontar para outra conta que não a do login, recusa. Falta pôr a skill a
+usar este modo sozinha (Fase 3) e o caminho para pedir correções ao Daniel (Fase 4).
