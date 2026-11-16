@@ -78,6 +78,13 @@ real no WhatsApp e, no fim, diz-te como **exportar** o agente (com ou sem treina
 **importá-lo** na conta do cliente. A exportação não leva a Base de Conhecimento, o WhatsApp nem o
 Google; ele dá-te o conteúdo pronto a colar e verifica a conta do cliente com o email dela.
 
+**Contas de teste dos colaboradores** (produção, plano Interno — sem limites de IA, leads e Playground;
+criadas pelo Daniel ou pelo Claude a pedido dele):
+
+| Colaborador | user_id prod | Plano válido até |
+|---|---|---|
+| Gabriel Volkhart | 5 | 11/11/2027 |
+
 **Fica contigo:** a autorização no início (uma vez), o que só uma pessoa faz (QR, telemóvel de teste,
 exportar e importar) e as dúvidas de negócio. As correções que mexem nas instruções da IA, no envio de
 mensagens, na base de dados ou em pagamentos afetam todos os clientes e só são publicadas com o "sim"
