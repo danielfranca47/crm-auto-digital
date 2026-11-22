@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radiador HB20 Automático | Maximus Thermo — Belém e Ananindeua</title>
+<meta name="description" content="Radiador original (não é réplica) para Hyundai HB20 com câmbio automático. Núcleo em alumínio, pronto pra sair hoje. Saindo de Ananindeua, entregamos em Belém e Ananindeua.">
+<meta name="robots" content="noindex, follow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --iron:#14161c;
+    --iron-2:#1d212a;
+    --iron-3:#282d38;
+    --aluminum:#eae7e0;
+    --aluminum-2:#dcd8cf;
+    --copper:#b85c2e;
+    --copper-dark:#9a4a23;
+    --coolant:#1f7a67;
+    --ink:#191b1f;
+    --muted:#656a74;
+    --muted-on-dark:#9298a6;
+    --line:#d7d3c8;
+    --wa:#25d366;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Inter',Arial,sans-serif;
+    background:var(--aluminum);
+    color:var(--ink);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:'Oswald',Arial,sans-serif;
+    font-weight:600;
+    letter-spacing:.2px;
+    margin:0;
+  }
+  img{max-width:100%;display:block;}
+  video{max-width:100%;width:100%;height:auto;display:block;border-radius:2px;}
+  a{color:inherit;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px;}
+  :focus-visible{outline:3px solid var(--copper);outline-offset:2px;}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important;}
+  }
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:10px;
+    padding:16px 28px;
+    font-family:'Inter',sans-serif;
+    font-weight:600;font-size:16px;
+    text-decoration:none;border:none;cursor:pointer;
+    border-radius:4px;
+    transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-wa{background:var(--wa);color:#07210f;box-shadow:0 10px 24px rgba(37,211,102,.28);}
+  .btn-wa:hover{background:#2ee274;}
+  .btn-outline-dark{background:transparent;color:var(--aluminum);border:1.5px solid rgba(234,231,224,.35);}
+  .btn-outline-dark:hover{border-color:var(--aluminum);background:rgba(234,231,224,.06);}
+  .btn-outline-light{background:transparent;color:var(--ink);border:1.5px solid var(--ink);}
+  .btn-outline-light:hover{background:var(--ink);color:var(--aluminum);}
+
+  /* ---------- Sticky mobile bar ---------- */
+  .sticky-cta{
+    position:fixed;bottom:0;left:0;right:0;z-index:60;
+    background:var(--iron);
+    padding:10px 16px;
+    display:none;gap:10px;
+    box-shadow:0 -6px 20px rgba(0,0,0,.35);
+  }
+  .sticky-cta .btn{flex:1;padding:13px 16px;font-size:14.5px;}
+
+  /* ---------- Header ---------- */
+  header{
+    background:var(--iron);
+    border-bottom:1px solid var(--iron-3);
+  }
+  header .wrap{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 24px;gap:16px;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand img{height:42px;width:auto;border-radius:6px;}
+  .brand-name{font-family:'Oswald';font-size:15px;color:var(--aluminum);letter-spacing:.3px;line-height:1.25;}
+  .brand-name small{display:block;font-family:'Inter';font-size:11px;color:var(--muted-on-dark);font-weight:400;}
+  .header-phone{
+    display:flex;align-items:center;gap:9px;
+    font-weight:600;font-size:15px;color:var(--aluminum);text-decoration:none;
+    padding:9px 14px;border:1px solid var(--iron-3);border-radius:4px;
+  }
+  .header-phone:hover{border-color:var(--copper);}
+
+  /* ---------- Hero ---------- */
+  .hero{
+    position:relative;
+    background:var(--iron);
+    color:var(--aluminum);
+    overflow:hidden;
+    padding:54px 0 64px;
+  }
+  .fin-art{
+    position:absolute;inset:0;
+    opacity:.5;
+    pointer-events:none;
+  }
+  .fin-art line{
+    stroke:#3a4150;
+    stroke-width:1;
+    stroke-dasharray:400;
+    stroke-dashoffset:400;
+    animation:drawfin 1.8s ease-out forwards;
+  }
+  @keyframes drawfin{to{stroke-dashoffset:0;}}
+
+  .hero-grid{
+    position:relative;
+    display:grid;
+    grid-template-columns:1.05fr .95fr;
+    gap:48px;
+    align-items:center;
+  }
+  .plate{
+    display:inline-flex;align-items:center;gap:10px;
+    background:var(--iron-2);
+    border:1px solid var(--iron-3);
+    border-radius:3px;
+    padding:9px 14px 9px 10px;
+    position:relative;
+    margin-bottom:22px;
+  }
+  .plate::before,.plate::after{
+    content:'';position:absolute;width:5px;height:5px;border-radius:50%;
+    background:#454c5c;top:4px;
+    box-shadow:inset 0 1px 1px rgba(0,0,0,.5);
+  }
+  .plate::before{left:4px;}
+  .plate::after{right:4px;}
+  .plate-label{font-size:10.5px;color:var(--muted-on-dark);line-height:1.2;}
+  .plate-code{font-family:'Inter';font-weight:700;font-size:14px;color:var(--aluminum);letter-spacing:.4px;}
+
+  h1{
+    font-size:clamp(30px,4.4vw,46px);
+    line-height:1.14;
+    color:var(--aluminum);
+  }
+  h1 em{
+    display:block;
+    font-style:normal;
+    font-weight:500;
+    font-size:.56em;
+    color:var(--muted-on-dark);
+    margin-top:10px;
+  }
+  .hero-lede{
+    max-width:480px;
+    margin:22px 0 10px;
+    font-size:16.5px;
+    color:#c3c7d1;
+  }
+  .hero-detail{
+    max-width:480px;
+    margin:0 0 28px;
+    font-size:14px;
+    color:var(--muted-on-dark);
+  }
+  .hero-lede strong,.hero-detail strong{color:var(--aluminum);font-weight:600;}
+  .cta-row{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px;}
+  .hero-foot{font-size:13px;color:var(--muted-on-dark);max-width:460px;}
+
+  .hero-photo-col{position:relative;}
+  .hero-photo{
+    background:var(--aluminum);
+    border-radius:6px;
+    padding:20px;
+    position:relative;
+  }
+  .annot{
+    position:absolute;
+    font-size:11.5px;
+    line-height:1.3;
+    color:var(--iron);
+    font-weight:600;
+    max-width:128px;
+    background:rgba(234,231,224,.92);
+    padding:3px 7px;
+    border-radius:3px;
+  }
+  .annot-dot{
+    position:absolute;width:9px;height:9px;border-radius:50%;
+    background:var(--coolant);
+    border:2px solid #fff;
+    box-shadow:0 0 0 3px rgba(31,122,103,.35);
+  }
+  .annot-line{
+    position:absolute;border-top:1.5px dashed var(--coolant);
+    opacity:.85;
+  }
+  .annot-1-dot{top:33%;left:85.5%;}
+  .annot-1-line{top:calc(33% + 4px);left:36%;width:49.5%;}
+  .annot-1-label{top:calc(33% - 11px);left:2%;text-align:left;}
+
+  /* ---------- Sections ---------- */
+  section{padding:58px 0;}
+  .section-head{max-width:560px;margin-bottom:34px;}
+  .kicker{
+    font-size:13px;color:var(--copper-dark);font-weight:600;margin-bottom:8px;
+  }
+  h2{font-size:clamp(22px,3vw,30px);color:var(--ink);}
+  .section-sub{color:var(--muted);font-size:15.5px;margin-top:10px;max-width:520px;}
+
+  /* Compatibility */
+  .compat{
+    display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;
+  }
+  .compat dl{margin:0;}
+  .compat-row{
+    display:grid;grid-template-columns:150px 1fr;gap:18px;
+    padding:16px 0;border-bottom:1px solid var(--line);
+  }
+  .compat-row:first-child{padding-top:0;}
+  .compat-row dt{font-size:12.5px;color:var(--muted);text-transform:none;font-weight:600;}
+  .compat-row dd{margin:0;font-size:15px;}
+  .diagram{
+    background:#fff;border:1px solid var(--line);border-radius:6px;padding:28px;
+  }
+  .diag-photo{position:relative;border-radius:4px;overflow:hidden;background:#fff;}
+  .diag-photo img{width:100%;height:auto;}
+  .diag-dot{
+    position:absolute;width:11px;height:11px;border-radius:50%;
+    background:var(--copper);
+    box-shadow:0 0 0 4px rgba(184,92,46,.22);
+    transform:translate(-50%,-50%);
+  }
+  .diag-dot-coolant{background:var(--coolant);box-shadow:0 0 0 4px rgba(31,122,103,.22);}
+  .diag-tag{
+    position:absolute;
+    background:rgba(255,255,255,.95);
+    border:1px solid var(--line);
+    color:var(--ink);
+    font-size:11.5px;font-weight:700;
+    padding:3px 8px;border-radius:3px;
+    white-space:nowrap;
+    max-width:150px;
+    box-shadow:0 2px 6px rgba(20,24,60,.1);
+    border-left:3px solid var(--copper);
+  }
+  .diag-tag-coolant{border-left-color:var(--coolant);}
+  .diag-num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:16px;height:16px;border-radius:50%;
+    background:var(--copper);color:#fff;
+    font-family:'Inter';font-size:10px;font-weight:700;
+    margin-right:7px;flex-shrink:0;
+  }
+  .diag-num-coolant{background:var(--coolant);}
+  .diag-tag .diag-num{vertical-align:middle;margin-right:5px;}
+  .legend{list-style:none;margin:18px 0 0;padding:0;display:flex;flex-direction:column;gap:9px;}
+  .legend li{display:flex;align-items:center;gap:10px;font-size:13.8px;color:var(--muted);}
+  .legend .sw{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .sw-copper{background:var(--copper);}
+  .sw-coolant{background:var(--coolant);}
+  .note-plate{
+    margin-top:22px;
+    border-left:3px solid var(--copper);
+    background:#fdf4ee;
+    padding:14px 18px;
+    font-size:13.8px;
+    color:#5a3a26;
+  }
+
+  /* Compatibility checker */
+  .checker{
+    background:#fff;border:1px solid var(--line);border-radius:6px;
+    padding:22px 22px 24px;margin-bottom:28px;
+  }
+  .checker-title{font-family:'Oswald';font-size:16px;color:var(--ink);margin-bottom:14px;}
+  .checker-row{display:grid;grid-template-columns:1fr 100px 1fr;gap:12px;margin-bottom:16px;}
+  .checker label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:600;}
+  .checker select,.checker input{
+    font-family:'Inter';font-size:14.5px;color:var(--ink);
+    border:1.5px solid var(--line);border-radius:4px;padding:9px 10px;background:#fff;
+  }
+  .checker select:focus,.checker input:focus{border-color:var(--copper);}
+  .checker .btn{width:100%;}
+  .checker-result{
+    margin-top:16px;padding:14px 18px;border-radius:4px;font-size:14.3px;line-height:1.55;
+  }
+  .checker-result.is-ok{background:#eef7f4;border-left:3px solid var(--coolant);color:#163d33;}
+  .checker-result.is-no{background:#fdf4ee;border-left:3px solid var(--copper);color:#5a3a26;}
+  .checker-result a{font-weight:700;color:inherit;text-decoration:underline;}
+  @media (max-width:520px){
+    .checker-row{grid-template-columns:1fr;}
+  }
+
+  /* Why / spec list */
+  .spec-list{border-top:1px solid var(--line);}
+  .spec-item{
+    display:grid;grid-template-columns:230px 1fr;gap:24px;
+    padding:22px 0;border-bottom:1px solid var(--line);
+  }
+  .spec-item h3{font-size:17px;color:var(--ink);font-weight:600;}
+  .spec-item p{margin:6px 0 0;color:var(--muted);font-size:14.8px;max-width:480px;}
+  .spec-num{font-family:'Oswald';font-size:13px;color:var(--copper-dark);font-weight:600;}
+
+  /* Delivery */
+  .delivery-panel{
+    background:var(--iron);color:var(--aluminum);
+    border-radius:6px;padding:40px;
+    display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;
+  }
+  .route{display:flex;align-items:center;gap:0;margin:20px 0 26px;}
+  .route .pt{
+    display:flex;flex-direction:column;align-items:center;gap:8px;font-size:14px;font-weight:600;
+  }
+  .route .pt span.dot{width:11px;height:11px;border-radius:50%;background:var(--copper);display:block;}
+  .route .seg{flex:1;height:1.5px;background:repeating-linear-gradient(90deg,#454c5c 0 6px,transparent 6px 12px);margin:0 10px;position:relative;top:-11px;}
+  .delivery-panel p{color:#c3c7d1;font-size:15px;max-width:380px;}
+
+  /* FAQ */
+  .faq{border-top:1px solid var(--line);max-width:720px;}
+  details{border-bottom:1px solid var(--line);padding:18px 0;}
+  summary{
+    cursor:pointer;font-weight:600;font-size:15.5px;list-style:none;
+    display:flex;justify-content:space-between;align-items:center;gap:16px;
+  }
+  summary::-webkit-details-marker{display:none;}
+  summary::after{
+    content:'+';font-family:'Oswald';font-size:20px;color:var(--copper-dark);
+    transition:transform .2s ease;flex-shrink:0;
+  }
+  details[open] summary::after{transform:rotate(45deg);}
+  details p{margin:12px 0 0;color:var(--muted);font-size:14.8px;max-width:600px;}
+
+  /* Final CTA */
+  .final{
+    background:var(--copper);
+    color:#2a1309;
+    border-radius:6px;
+    padding:50px 40px;
+    text-align:center;
+  }
+  .final h2{color:#2a1309;}
+  .final p{color:#1a0b05;max-width:460px;margin:12px auto 26px;font-size:15.5px;}
+  .final .btn-wa{background:var(--iron);color:var(--aluminum);box-shadow:0 10px 24px rgba(0,0,0,.25);}
+  .final .btn-wa:hover{background:#000;}
+
+  footer{
+    background:var(--iron);color:var(--muted-on-dark);
+    padding:30px 0 100px;font-size:13px;
+  }
+  footer .wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between;}
+  footer img{height:32px;border-radius:5px;}
+
+  @media (max-width:880px){
+    .hero-grid{grid-template-columns:1fr;}
+    .hero-photo-col{max-width:460px;margin:24px auto 0;}
+    .compat{grid-template-columns:1fr;}
+    .delivery-panel{grid-template-columns:1fr;text-align:left;}
+    .spec-item{grid-template-columns:1fr;gap:4px;}
+    .annot,.annot-dot,.annot-line{display:none;}
+    .sticky-cta{display:flex;}
+    body{padding-bottom:70px;}
+  }
+  @media (max-width:520px){
+    .brand-name{display:none;}
+    .cta-row{flex-direction:column;}
+    .cta-row .btn{width:100%;}
+    .diag-tag{left:3% !important;max-width:150px;white-space:normal;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <img src="images/maximus-thermo-logo.jpg" alt="Maximus Thermo">
+      <span class="brand-name">Maximus Thermo<small>Revenda especializada em arrefecimento</small></span>
+    </div>
+    <a class="header-phone" href="tel:+559185362135">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      (91) 8536-2135
+    </a>
+  </div>
+</header>
+
+<section class="hero">
+  <svg class="fin-art" viewBox="0 0 1120 500" preserveAspectRatio="none" aria-hidden="true">
+    <!-- generated fin lines -->
+    <!-- lines drawn below via loop-equivalent manual list -->
+    <line x1="60" y1="40" x2="60" y2="460" style="animation-delay:.02s"/>
+    <line x1="90" y1="40" x2="90" y2="460" style="animation-delay:.05s"/>
+    <line x1="120" y1="40" x2="120" y2="460" style="animation-delay:.08s"/>
+    <line x1="150" y1="40" x2="150" y2="460" style="animation-delay:.11s"/>
+    <line x1="180" y1="40" x2="180" y2="460" style="animation-delay:.14s"/>
+    <line x1="210" y1="40" x2="210" y2="460" style="animation-delay:.17s"/>
+    <line x1="240" y1="40" x2="240" y2="460" style="animation-delay:.20s"/>
+    <line x1="270" y1="40" x2="270" y2="460" style="animation-delay:.23s"/>
+    <line x1="300" y1="40" x2="300" y2="460" style="animation-delay:.26s"/>
+    <line x1="330" y1="40" x2="330" y2="460" style="animation-delay:.29s"/>
+    <line x1="360" y1="40" x2="360" y2="460" style="animation-delay:.32s"/>
+    <line x1="390" y1="40" x2="390" y2="460" style="animation-delay:.35s"/>
+    <line x1="420" y1="40" x2="420" y2="460" style="animation-delay:.38s"/>
+    <line x1="450" y1="40" x2="450" y2="460" style="animation-delay:.41s"/>
+    <line x1="480" y1="40" x2="480" y2="460" style="animation-delay:.44s"/>
+    <line x1="510" y1="40" x2="510" y2="460" style="animation-delay:.47s"/>
+  </svg>
+
+  <div class="wrap hero-grid">
+    <div>
+      <div class="plate">
+        <div>
+          <div class="plate-label">Peça 100% original</div>
+          <div class="plate-code">Não é réplica</div>
+        </div>
+      </div>
+
+      <h1>Radiador HB20 Automático<em>Entrega rápida em Belém e Ananindeua</em></h1>
+
+      <p class="hero-lede">Peça original, não é réplica. Núcleo em alumínio, pronta pra sair hoje.</p>
+      <p class="hero-detail">Max, nosso consultor especializado, confirma que essa é a peça certa pro seu carro <strong>antes de você fechar.</strong></p>
+
+      <div class="cta-row">
+        <a class="btn btn-wa" href="https://wa.me/559185362135?text=Ol%C3%A1!%20Tenho%20interesse%20no%20Radiador%20HB20%20Autom%C3%A1tico.%20Vocês%20entregam%20em%20Bel%C3%A9m%2FAnanindeua%3F" target="_blank" rel="noopener">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.52 0-10 4.48-10 10 0 1.76.46 3.48 1.34 5L2 22l5.14-1.35A9.96 9.96 0 0 0 12.04 22c5.52 0 10-4.48 10-10s-4.48-10-10-10zm0 18.17c-1.56 0-3.08-.42-4.4-1.2l-.32-.19-3.26.86.87-3.18-.21-.33a8.17 8.17 0 0 1-1.25-4.33c0-4.51 3.68-8.17 8.18-8.17s8.17 3.66 8.17 8.17c0 4.51-3.67 8.17-8.17 8.17zm4.47-6.12c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.55.12-.16.24-.63.78-.77.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.43-1.34-1.67-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.55-1.32-.75-1.81-.2-.48-.4-.41-.55-.42-.14-.01-.3-.01-.46-.01s-.42.06-.64.3c-.22.24-.85.83-.85 2.02 0 1.19.87 2.34.99 2.5.12.16 1.71 2.61 4.14 3.66.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.43-.58 1.63-1.15.2-.56.2-1.04.14-1.15-.06-.1-.22-.16-.46-.28z"/></svg>
+          Falar no WhatsApp
+        </a>
+        <a class="btn btn-outline-dark" href="tel:+559185362135">Ligar (91) 8536-2135</a>
+      </div>
+      <p class="hero-foot">✓ Nota fiscal + garantia inclusas — atendimento direto, sem robô, sem fila de ticket.</p>
+    </div>
+
+    <div class="hero-photo-col">
+      <div class="hero-photo">
+        <video autoplay muted loop playsinline preload="auto" poster="images/radiador-hb20-automatico-final.jpg" aria-label="Animação mostrando o radiador HB20 automático se montando: tanque, núcleo e tanque se encaixando até formar a peça completa">
+          <source src="images/radiador-hb20-montagem.mp4" type="video/mp4">
+        </video>
+        <div class="annot-dot annot-1-dot"></div>
+        <div class="annot-line annot-1-line"></div>
+        <div class="annot annot-1-label">Conectores da caixa automática</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="compat">
+      <div>
+        <div class="section-head" style="margin-bottom:22px;">
+          <div class="kicker">Compatibilidade</div>
+          <h2>Essa peça serve no seu HB20?</h2>
+          <p class="section-sub">Essa é a versão original de fábrica pra câmbio automático — ela não serve em um HB20 de câmbio manual, e o contrário também não funciona.</p>
+        </div>
+        <form class="checker" id="checker-form">
+          <div class="checker-title">Confira em segundos</div>
+          <div class="checker-row">
+            <label>Modelo
+              <select name="modelo" required>
+                <option value="HB20">HB20</option>
+                <option value="outro">Outro modelo Hyundai/Kia</option>
+              </select>
+            </label>
+            <label>Ano
+              <input type="number" name="ano" inputmode="numeric" placeholder="Ex: 2019" min="2010" max="2026">
+            </label>
+            <label>Câmbio
+              <select name="cambio" required>
+                <option value="" disabled selected>Selecione</option>
+                <option value="automatico">Automático</option>
+                <option value="manual">Manual</option>
+              </select>
+            </label>
+          </div>
+          <button type="submit" class="btn btn-outline-light">Verificar compatibilidade</button>
+          <div id="checker-result" class="checker-result" aria-live="polite" hidden></div>
+        </form>
+
+        <dl>
+          <div class="compat-row">
+            <dt>Modelo</dt>
+            <dd>Hyundai HB20</dd>
+          </div>
+          <div class="compat-row">
+            <dt>Câmbio</dt>
+            <dd>Automático (com radiador de óleo integrado)</dd>
+          </div>
+          <div class="compat-row">
+            <dt>Tipo de peça</dt>
+            <dd>Original — não é réplica</dd>
+          </div>
+          <div class="compat-row">
+            <dt>Núcleo</dt>
+            <dd>Alumínio, caixas plásticas injetadas</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="diagram">
+        <div class="diag-photo">
+          <img src="images/compat-tank-closeup.jpg" alt="Close-up do tanque direito do radiador, mostrando os dois conectores do radiador de óleo da caixa automática e o bujão de dreno">
+          <span class="diag-dot" style="top:25%;left:47.8%;"></span>
+          <span class="diag-dot" style="top:49%;left:54.5%;"></span>
+          <span class="diag-dot diag-dot-coolant" style="top:85.5%;left:44%;"></span>
+          <span class="diag-tag" style="top:16%;left:52%;"><span class="diag-num">1</span>Entrada de óleo</span>
+          <span class="diag-tag" style="top:49%;left:62%;"><span class="diag-num">2</span>Saída de óleo</span>
+          <span class="diag-tag diag-tag-coolant" style="top:90%;left:3%;"><span class="diag-num diag-num-coolant">3</span>Dreno de água</span>
+        </div>
+        <ul class="legend">
+          <li><span class="diag-num">1</span>Entrada — óleo da caixa automática</li>
+          <li><span class="diag-num">2</span>Saída — óleo da caixa automática</li>
+          <li><span class="diag-num diag-num-coolant">3</span>Dreno de água</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="background:#fff;">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Por que comprar aqui</div>
+      <h2>Peça nova, original de fábrica, com garantia</h2>
+      <p class="section-sub">É assim que a gente trabalha na Maximus Thermo — e é isso que você leva pra casa.</p>
+    </div>
+    <div class="spec-list">
+      <div class="spec-item">
+        <h3><span class="spec-num">Garantia</span></h3>
+        <p>Peça nova, nota fiscal e garantia contra defeito de fabricação — sem letra miúda.</p>
+      </div>
+      <div class="spec-item">
+        <h3><span class="spec-num">Procedência</span></h3>
+        <p>Peça original, não é réplica. Trabalhamos só com fornecedores que a gente já testou — se não confiamos na peça, ela não entra no estoque.</p>
+      </div>
+      <div class="spec-item">
+        <h3><span class="spec-num">Conferência</span></h3>
+        <p>Antes de fechar o pedido, confirmamos ano, versão e chassi — evita o transtorno de devolução.</p>
+      </div>
+      <div class="spec-item">
+        <h3><span class="spec-num">Entrega</span></h3>
+        <p>Saímos de Ananindeua pra Belém e Ananindeua — prazo e cobertura completa logo abaixo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="delivery-panel">
+      <div>
+        <div class="kicker" style="color:#e8a87c;">Área de entrega</div>
+        <h2 style="color:var(--aluminum);">Saímos de Ananindeua, chegamos até você</h2>
+        <div class="route">
+          <div class="pt"><span class="dot"></span>Ananindeua</div>
+          <div class="seg"></div>
+          <div class="pt"><span class="dot"></span>Belém</div>
+        </div>
+        <p>Prazo exato depende do seu bairro — mandamos uma estimativa assim que você chama no WhatsApp.</p>
+      </div>
+      <a class="btn btn-outline-dark" href="https://wa.me/559185362135?text=Ol%C3%A1!%20Quero%20saber%20o%20prazo%20de%20entrega%20do%20radiador%20HB20%20autom%C3%A1tico." target="_blank" rel="noopener" style="justify-self:start;">
+        Consultar prazo e preço
+      </a>
+    </div>
+  </div>
+</section>
+
+<section style="background:#fff;">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Dúvidas</div>
+      <h2>Perguntas antes de comprar</h2>
+    </div>
+    <div class="faq">
+      <details open>
+        <summary>Como sei se é a peça certa pro meu HB20?</summary>
+        <p>Olhe se o seu HB20 tem câmbio automático — essa versão do radiador tem dois conectores extras de óleo da transmissão, visíveis na peça. Pra ter certeza, manda o chassi (VIN) pelo WhatsApp que a gente confirma antes de fechar.</p>
+      </details>
+      <details>
+        <summary>Qual o prazo de entrega em Belém e Ananindeua?</summary>
+        <p>Depende do seu endereço — na maioria dos casos saímos no mesmo dia ou no dia seguinte. O prazo exato é confirmado na hora, pelo WhatsApp.</p>
+      </details>
+      <details>
+        <summary>A peça tem garantia?</summary>
+        <p>Sim. Toda peça vendida pela Maximus Thermo sai com nota fiscal e garantia contra defeito de fabricação.</p>
+      </details>
+      <details>
+        <summary>Quais formas de pagamento vocês aceitam?</summary>
+        <p>A gente combina a forma de pagamento direto no atendimento — chama no WhatsApp que já te passamos as opções.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="final">
+      <h2>Seu HB20 automático esquentando? Resolve hoje.</h2>
+      <p>Fala com a Maximus Thermo agora, confirma o valor na hora e garante o radiador certo, com entrega em Belém e Ananindeua.</p>
+      <a class="btn btn-wa" href="https://wa.me/559185362135?text=Ol%C3%A1!%20Tenho%20interesse%20no%20Radiador%20HB20%20Autom%C3%A1tico." target="_blank" rel="noopener">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.52 0-10 4.48-10 10 0 1.76.46 3.48 1.34 5L2 22l5.14-1.35A9.96 9.96 0 0 0 12.04 22c5.52 0 10-4.48 10-10s-4.48-10-10-10zm0 18.17c-1.56 0-3.08-.42-4.4-1.2l-.32-.19-3.26.86.87-3.18-.21-.33a8.17 8.17 0 0 1-1.25-4.33c0-4.51 3.68-8.17 8.18-8.17s8.17 3.66 8.17 8.17c0 4.51-3.67 8.17-8.17 8.17zm4.47-6.12c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.55.12-.16.24-.63.78-.77.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.43-1.34-1.67-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.55-1.32-.75-1.81-.2-.48-.4-.41-.55-.42-.14-.01-.3-.01-.46-.01s-.42.06-.64.3c-.22.24-.85.83-.85 2.02 0 1.19.87 2.34.99 2.5.12.16 1.71 2.61 4.14 3.66.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.43-.58 1.63-1.15.2-.56.2-1.04.14-1.15-.06-.1-.22-.16-.46-.28z"/></svg>
+        Chamar no WhatsApp
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <img src="images/maximus-thermo-logo.jpg" alt="Maximus Thermo">
+      <span>Maximus Thermo — Revenda Especializada em Arrefecimento</span>
+    </div>
+    <div>(91) 8536-2135 · Belém e Ananindeua</div>
+  </div>
+</footer>
+
+<div class="sticky-cta">
+  <a class="btn btn-wa" href="https://wa.me/559185362135?text=Ol%C3%A1!%20Tenho%20interesse%20no%20Radiador%20HB20%20Autom%C3%A1tico." target="_blank" rel="noopener">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.52 0-10 4.48-10 10 0 1.76.46 3.48 1.34 5L2 22l5.14-1.35A9.96 9.96 0 0 0 12.04 22c5.52 0 10-4.48 10-10s-4.48-10-10-10zm0 18.17c-1.56 0-3.08-.42-4.4-1.2l-.32-.19-3.26.86.87-3.18-.21-.33a8.17 8.17 0 0 1-1.25-4.33c0-4.51 3.68-8.17 8.18-8.17s8.17 3.66 8.17 8.17c0 4.51-3.67 8.17-8.17 8.17zm4.47-6.12c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.55.12-.16.24-.63.78-.77.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.43-1.34-1.67-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.55-1.32-.75-1.81-.2-.48-.4-.41-.55-.42-.14-.01-.3-.01-.46-.01s-.42.06-.64.3c-.22.24-.85.83-.85 2.02 0 1.19.87 2.34.99 2.5.12.16 1.71 2.61 4.14 3.66.58.25 1.03.4 1.38.51.58.18 1.11.16 1.53.1.47-.07 1.43-.58 1.63-1.15.2-.56.2-1.04.14-1.15-.06-.1-.22-.16-.46-.28z"/></svg>
+    WhatsApp
+  </a>
+  <a class="btn btn-outline-dark" href="tel:+559185362135" style="color:var(--aluminum);">Ligar</a>
+</div>
+
+<script>
+(function(){
+  var form = document.getElementById('checker-form');
+  var result = document.getElementById('checker-result');
+  if(!form) return;
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var modelo = form.modelo.value;
+    var cambio = form.cambio.value;
+    var ano = form.ano.value.trim();
+    if(!cambio){ return; }
+    var anoTxt = ano ? (' ' + ano) : '';
+    var msg, cls;
+    if(modelo === 'HB20' && cambio === 'automatico'){
+      msg = '✅ <strong>Compatível!</strong> Seu HB20' + anoTxt + ' automático é a versão certa — a peça desta página é original, não é réplica. '
+          + 'Confirmamos pelo chassi antes do envio, só pra garantir 100%. '
+          + '<a href="https://wa.me/559185362135?text=' + encodeURIComponent('Olá! Verifiquei no site: tenho um HB20' + anoTxt + ' automático. Quero o radiador.') + '" target="_blank" rel="noopener">Falar no WhatsApp</a>';
+      cls = 'is-ok';
+    } else if(cambio === 'manual'){
+      msg = '⚠️ Essa peça é só pra HB20 com <strong>câmbio automático</strong>. Como o seu é manual, o radiador correto é outro. '
+          + 'Me chama no WhatsApp que te ajudo a achar a peça certa. '
+          + '<a href="https://wa.me/559185362135?text=' + encodeURIComponent('Olá! Tenho um HB20' + anoTxt + ' manual — qual o radiador certo pro meu carro?') + '" target="_blank" rel="noopener">Falar no WhatsApp</a>';
+      cls = 'is-no';
+    } else {
+      msg = '⚠️ Essa peça é específica pro Hyundai HB20. Me manda modelo, ano e câmbio pelo WhatsApp que confirmo a peça certa pro seu carro. '
+          + '<a href="https://wa.me/559185362135?text=' + encodeURIComponent('Olá! Quero saber qual radiador serve no meu carro.') + '" target="_blank" rel="noopener">Falar no WhatsApp</a>';
+      cls = 'is-no';
+    }
+    result.className = 'checker-result ' + cls;
+    result.innerHTML = msg;
+    result.hidden = false;
+  });
+})();
+</script>
+
+</body>
+</html>
