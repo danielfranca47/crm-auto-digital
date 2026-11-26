@@ -63,27 +63,33 @@ Para o desenho de módulos, usa `codebase-design`.
 Antes de implementar, escreve o teste que mostraria que a escolha está errada: cenário, número de
 repetições e resultado mínimo aceite, comparável com a medição de partida.
 
-Se a decisão for cara de reverter ou tocar envio a clientes, pagamento, base de dados ou instruções da IA,
-passa-a pela skill `doubt-driven-development` antes de a apresentar.
+**Concluído quando:** o teste está escrito com o limiar.
 
-**Concluído quando:** o teste está escrito com o limiar, e as objeções da revisão estão respondidas ou
-mostradas como em aberto.
+## 7. Decisão do agente consultor
 
-## 7. Decisão
+Quem decide é o **agente consultor**. Entrega-lhe os passos 1 a 6 e segue
+[consultor.md](consultor.md): ele tenta refutar a recomendação, decide e diz o que mudaria a decisão.
+Contrapõe com um facto novo quando discordares; a última posição dele é a decisão.
 
-Apresenta em linguagem simples, e quem decide é o utilizador:
+Mostra ao utilizador, em linguagem simples:
 
 ```markdown
 **Problema:** … (prova: …)
 **Serve:** M…
-**Recomendação:** …
+**Decisão do consultor:** …
+**Onde discordou de mim:** …
 **Porquê:** … (fonte: …; o que ela não cobre: …)
 **Alternativas deixadas:** …
 **Como saberemos que errámos:** …
 **Por confirmar:** …
+**Precisa do teu "sim":** … (ou "nada")
 ```
 
-Regista o resultado no sítio indicado em
+A decisão do consultor escolhe a solução. Os "sim" que o `CLAUDE.md` reserva ao utilizador (merge das
+categorias que sobem, risco de perda de dados) continuam a ser dele, tal como o âmbito do produto quando o
+consultor o marcar como escolha de negócio.
+
+Regista a decisão no sítio indicado em
 [registar-decisoes.md](../documentacao-projeto/references/registar-decisoes.md).
 
-**Concluído quando:** o utilizador respondeu e a resposta está registada.
+**Concluído quando:** a decisão está registada com a posição do consultor e o utilizador viu o resumo.
